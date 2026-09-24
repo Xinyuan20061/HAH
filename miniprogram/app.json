@@ -1,0 +1,61 @@
+{
+  "pages": [
+    "pages/home/index",
+    "pages/insights/index",
+    "pages/scan/index",
+    "pages/workout/index",
+    "pages/exercise-detail/index",
+    "pages/report/index",
+    "pages/media/index",
+    "pages/chat/index",
+    "pages/records/index",
+    "pages/plan/index",
+    "pages/goals/index",
+    "pages/profile/index",
+    "pages/profile/edit",
+    "pages/records/diet",
+    "pages/records/exercise",
+    "pages/checkin/index",
+    "pages/trends/index",
+    "pages/settings/ai/index",
+    "pages/evaluation/index",
+    "pages/settings/privacy/index"
+  ],
+  "window": {
+    "navigationBarTitleText": "HealthMate",
+    "navigationBarBackgroundColor": "#F5F4EF",
+    "navigationBarTextStyle": "black",
+    "backgroundColor": "#F5F4EF",
+    "backgroundTextStyle": "dark"
+  },
+  "tabBar": {
+    "color": "#87938F",
+    "selectedColor": "#173F35",
+    "backgroundColor": "#FBFAF6",
+    "borderStyle": "white",
+    "list": [
+      {
+        "pagePath": "pages/home/index",
+        "text": "首页"
+      },
+      {
+        "pagePath": "pages/chat/index",
+        "text": "健康助手"
+      },
+      {
+        "pagePath": "pages/records/index",
+        "text": "记录"
+      },
+      {
+        "pagePath": "pages/plan/index",
+        "text": "计划"
+      },
+      {
+        "pagePath": "pages/profile/index",
+        "text": "我的"
+      }
+    ]
+  },
+  "style": "v2",
+  "sitemapLocation": "sitemap.json"
+}

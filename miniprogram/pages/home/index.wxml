@@ -1,0 +1,65 @@
+<view class="home-page">
+  <view class="topbar">
+    <view><view class="brand">今天</view><view class="date-note">{{dateLabel}}</view></view>
+    <text class="text-link" bindtap="toCheckin">记录</text>
+  </view>
+
+  <block wx:if="{{loading}}"><view class="skeleton hero-skeleton"></view><view class="skeleton panel-skeleton"></view></block>
+  <view wx:elif="{{error}}" class="load-error"><view class="error-title">暂时没有加载出来</view><view class="error-copy">{{error}}</view><button bindtap="retry">重新连接</button></view>
+
+  <block wx:else>
+    <view class="focus-card focus-{{focus.tone}}" bindtap="goFocus">
+      <view class="focus-kicker">{{focus.eyebrow}}</view>
+      <view class="focus-title">{{focus.title}}</view>
+      <view class="focus-reason">{{focus.reason}}</view>
+      <view class="focus-action"><text>{{focus.cta}}</text><view class="arrow-line"></view></view>
+    </view>
+
+    <view wx:if="{{todayExperiment&&todayExperiment.status==='active'}}" class="today-experiment" bindtap="toInsights">
+      <view class="te-head"><view class="te-kicker">今天的微实验</view><view class="te-status">{{todayExperiment.statusLabel}}</view></view>
+      <view class="te-title">{{todayExperiment.title}}</view>
+      <view class="te-action"><text class="te-label">今天做</text><text>{{todayExperiment.dailyAction}}</text></view>
+      <view class="te-progress"><text>{{todayExperiment.progressValueDisplay}}</text><text>目标 {{todayExperiment.progressTargetDisplay}}</text></view>
+      <view class="te-track"><view style="width:{{todayExperiment.progressPct}}%"></view></view>
+    </view>
+
+    <view class="insight-entry {{insightCount?'attention':'clear'}}" bindtap="toInsights">
+      <view class="insight-mark">{{insightCount?'!':'✓'}}</view>
+      <view class="grow">
+        <view class="insight-entry-kicker">健康提醒</view>
+        <view class="insight-entry-title">{{insightCount?topInsight.title:'今天没有需要优先关注的变化'}}</view>
+        <view class="insight-entry-copy">{{insightCount?insightSummary:'保持真实记录，新的变化会在这里出现。'}}</view>
+      </view>
+      <text class="insight-arrow">›</text>
+    </view>
+
+    <view class="section-head"><view class="section-title-home">今日进度</view><text class="section-note">连续 {{streak.current||0}} 天</text></view>
+    <view class="metric-list">
+      <view class="metric-row-home"><view class="metric-name"><text>运动</text><text>{{summary.exercise_min||0}} / {{summary.exercise_target||30}} 分钟</text></view><view class="metric-track"><view style="width:{{exPct}}%"></view></view></view>
+      <view class="metric-row-home"><view class="metric-name"><text>饮水</text><text>{{summary.water_ml||0}} / {{summary.water_target||1800}} ml</text></view><view class="metric-track water"><view style="width:{{waterPct}}%"></view></view></view>
+      <view class="metric-row-home"><view class="metric-name"><text>睡眠</text><text>{{summary.sleep_hours||0}} / {{summary.sleep_target||8}} 小时</text></view><view class="metric-track sleep"><view style="width:{{sleepPct}}%"></view></view></view>
+    </view>
+
+    <view class="quick-row">
+      <view class="quick-action food" bindtap="toScan"><view class="quick-icon">餐</view><view><b>拍照识餐</b><text>估算后确认</text></view></view>
+      <view class="quick-action motion" bindtap="toMedia"><view class="quick-icon">动</view><view><b>动作反馈</b><text>次数与提示</text></view></view>
+    </view>
+
+    <view class="section-head"><view><view class="section-title-home">今日三件事</view><view class="section-note">完成 {{plan.done_count||0}} / {{plan.items.length||0}}</view></view><text class="text-link" bindtap="toPlan">查看计划</text></view>
+    <view class="plan-card">
+      <view wx:for="{{plan.items}}" wx:key="task_key" class="plan-item {{item.done?'done':''}}" bindtap="togglePlan" data-key="{{item.task_key}}" data-done="{{item.done}}"><view class="plan-check"><view></view></view><view class="plan-copy"><view>{{item.title}}</view></view></view>
+      <view wx:if="{{!plan.items.length}}" class="plan-empty">记录一项数据后生成今日计划。</view>
+    </view>
+
+    <view class="assistant-card" bindtap="toChat"><view class="assistant-line"></view><view class="grow"><view class="assistant-title">健康助手</view><view class="assistant-copy">聊聊记录、计划或下一步</view></view><text>→</text></view>
+  </block>
+</view>
+
+<view wx:if="{{showOnboarding}}" class="onboarding-mask">
+  <view class="onboarding-card compact-onboarding">
+    <view class="ob-kicker">欢迎使用 HealthMate</view>
+    <view class="ob-title">从今天开始</view>
+    <view class="ob-points"><view>先记录</view><view>再确认</view><view>随时可删除</view></view>
+    <button bindtap="finishOnboarding">进入首页</button>
+  </view>
+</view>

@@ -1,0 +1,2 @@
+{"sample_id":"example-squat-side-001","result":{"recognition":{"accepted":true,"selected_type":"squat"},"compositional_semantics":{"movement_patterns":[{"key":"knee_dominant"},{"key":"bilateral_lower_body"}],"observed_regions":[{"key":"lower_body"}]}}}
+{"sample_id":"example-unknown-001","result":{"recognition":{"accepted":false,"selected_type":null},"compositional_semantics":{"movement_patterns":[{"key":"horizontal_upper_body"}],"observed_regions":[{"key":"upper_body"}]}}}

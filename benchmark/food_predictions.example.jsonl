@@ -1,0 +1,1 @@
+{"sample_id":"demo-food-001","status":"completed","result":{"dish_name":"番茄炒蛋配米饭","items":[{"name":"番茄炒蛋","calories":260},{"name":"米饭","calories":250}],"calories":510,"calorie_range_low":430,"calorie_range_high":610,"confidence":0.82}}

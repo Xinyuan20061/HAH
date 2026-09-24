@@ -1,0 +1,25 @@
+<view class="page scan-page">
+  <view class="scan-hero"><view class="kicker">拍照识餐</view><view class="title">这一餐，大约多少？</view><view class="subtitle">拍清餐盘，确认后再保存。</view></view>
+  <view class="camera" bindtap="choose"><image wx:if="{{image}}" src="{{image}}" mode="aspectFill"/><view wx:else class="empty-camera"><view class="lens">＋</view><text class="b">拍照或选择照片</text></view><view wx:if="{{loading}}" class="scan-status"><view class="scan-dot"></view><text>{{jobStatus||'正在估算'}}</text></view></view>
+  <button wx:if="{{!result}}" class="analyze" bindtap="analyze" loading="{{loading}}">{{loading?'正在估算…':(jobId?'查看进度':(image?'开始识别':'选择餐食照片'))}}</button>
+  <view wx:if="{{jobStatus&&!loading&&!result}}" class="notice">{{jobStatus}}</view>
+  <view wx:if="{{state==='error'}}" class="state-panel state-error"><view class="state-title">这一步没有完成</view><view class="state-desc">{{error}}</view><button class="btn-soft mini" bindtap="retry">重新尝试</button></view>
+  <view wx:if="{{result}}" class="meal-result">
+    <view wx:if="{{result.summary}}" class="ai-summary-card"><view class="ai-summary-title">整体点评</view><view class="ai-summary-text">{{result.summary}}</view></view>
+    <view class="meal-head"><view><view class="source-badge">{{result.sourceLabel}} · 估算</view><view class="dish">{{form.dish_name}}</view><view class="muted">{{form.portion||'份量待确认'}} · {{form.cooking_method||'做法待确认'}}</view></view><view class="kcal"><text class="b">{{form.calories}}</text><text class="small">千卡</text></view></view>
+    <view class="macro simple-macro"><view><text class="b">{{form.protein}}g</text><text class="small">蛋白质</text></view><view><text class="b">{{form.carbs}}g</text><text class="small">碳水</text></view><view><text class="b">{{form.fat}}g</text><text class="small">脂肪</text></view></view>
+    <view class="result-actions"><button class="edit-btn" bindtap="toggleEdit">{{editing?'收起校正':'校正'}}</button><text bindtap="toggleDetails">{{showDetails?'收起详情':'查看详情'}}</text></view>
+    <view wx:if="{{editing}}" class="edit-grid">
+      <view class="field wide"><text>菜名</text><input value="{{form.dish_name}}" data-field="dish_name" bindinput="onField"/></view><view class="field"><text>份量</text><input value="{{form.portion}}" data-field="portion" bindinput="onField" placeholder="如 1 碗"/></view><view class="field"><text>做法</text><input value="{{form.cooking_method}}" data-field="cooking_method" bindinput="onField" placeholder="如 清蒸"/></view>
+      <view class="item-editor wide" wx:for="{{form.items}}" wx:key="index"><view class="item-editor-title">{{item.name}}</view><view class="item-editor-grid"><view class="field"><text>名称</text><input value="{{item.name}}" data-index="{{index}}" data-field="name" bindinput="onItemField"/></view><view class="field"><text>份量</text><input value="{{item.portion}}" data-index="{{index}}" data-field="portion" bindinput="onItemField"/></view><view class="field"><text>重量 g</text><input type="digit" value="{{item.weight_g}}" data-index="{{index}}" data-field="weight_g" bindinput="onItemField"/></view><view class="field"><text>热量</text><input type="digit" value="{{item.calories}}" data-index="{{index}}" data-field="calories" bindinput="onItemField"/></view></view></view>
+      <button wx:if="{{dirty}}" class="btn-soft wide" bindtap="applyCorrection">保存校正</button>
+    </view>
+    <view wx:if="{{showDetails}}" class="detail-panel">
+      <view class="detail-row"><text>热量范围</text><b>{{result.calorie_range_low}}–{{result.calorie_range_high}} 千卡</b></view><view class="detail-copy">{{result.portion_basis}}</view>
+      <view wx:if="{{result.items&&result.items.length}}" class="food-item" wx:for="{{result.items}}" wx:key="index"><view class="row space"><text>{{item.name}}</text><b>{{item.calories}} 千卡</b></view><view class="item-meta">{{item.portion||'份量待确认'}} · {{item.evidence||item.portion_basis}}</view></view>
+      <view wx:if="{{result.uncertainty_reasons&&result.uncertainty_reasons.length}}" class="uncertainty"><view class="evidence-title">需要确认</view><view wx:for="{{result.uncertainty_reasons}}" wx:key="*this">{{item}}</view></view>
+    </view>
+    <button class="save" bindtap="save" loading="{{saving}}">{{dirty?'保存校正并确认':'确认并保存'}}</button><view wx:if="{{state==='saved'}}" class="state-panel state-success"><view class="state-title">已保存到今日饮食</view></view>
+  </view>
+  <view class="notice">结果仅作日常参考，油盐和实际份量会影响数值。</view>
+</view>

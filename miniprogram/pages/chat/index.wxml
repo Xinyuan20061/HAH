@@ -1,0 +1,56 @@
+<view class="chat-page">
+  <scroll-view scroll-y class="messages" scroll-into-view="{{scrollId}}">
+    <view class="context">
+      <view class="context-head"><view class="ai-orb">H</view><view class="grow"><view class="ai-kicker">健康助手 · {{provider}}</view><view class="context-title">今天想先解决什么？</view></view><text class="settings" bindtap="settings">设置</text></view>
+      <view class="context-desc">助手会读取你的档案、最近记录、目标和周报事实。任何计划都不会自动写入，必须由你确认。</view>
+      <view class="chips"><text bindtap="quick" data-q="我今天晚饭怎么吃更合适？">晚饭怎么吃</text><text bindtap="quick" data-q="这周只能练三天，结合我的最近数据和目标安排一个本周计划">安排三天计划</text><text bindtap="quick" data-q="结合我的睡眠和运动记录，给我一个今天的恢复建议">恢复建议</text></view>
+    </view>
+    <block wx:for="{{messages}}" wx:for-item="msg" wx:for-index="msgIndex" wx:key="msgIndex">
+      <view class="msg {{msg.role}}">
+        <view class="avatar-mini" wx:if="{{msg.role==='assistant'}}">H</view>
+        <view class="bubble">
+          <text>{{msg.content}}</text><text wx:if="{{msg.role==='assistant'&&streaming&&msgIndex===messages.length-1}}" class="cursor">▍</text>
+          <view wx:if="{{msg.safetyLevel&&msg.safetyLevel!=='normal'}}" class="safety-note">安全提醒 · {{msg.safetyLevel}} · 已停止普通规划流程</view>
+          <view wx:if="{{msg.trace}}" class="trace-card">
+            <view class="trace-head"><view class="trace-icon">✓</view><view><view class="trace-kicker">为什么这样建议</view><view class="trace-owner">由{{msg.trace.specialistLabel}}整理</view></view></view>
+            <view wx:if="{{msg.trace.hasReasons}}" class="trace-reasons"><text wx:for="{{msg.trace.reasons}}" wx:key="*this">{{item}}</text></view>
+            <view wx:else class="trace-default">已结合你的最近记录、健康目标和安全边界；涉及计划的操作仍由你确认。</view>
+          </view>
+          <view wx:if="{{msg.agentPlan&&msg.planAdjustment}}" class="adjustment-card">
+            <view class="agent-plan-kicker">计划调整 · 参考程度{{msg.planAdjustment.confidence==='high'?'较高':msg.planAdjustment.confidence==='medium'?'中等':'较低'}}</view>
+            <view class="adjustment-summary">{{msg.planAdjustment.summary}}</view>
+            <view class="adjustment-reason" wx:for="{{msg.planAdjustment.reasons}}" wx:for-item="reason" wx:key="code"><text>{{reason.label}}</text><view>{{reason.evidence}}</view><view>{{reason.effect}}</view></view>
+            <view class="adjustment-applied" wx:if="{{msg.planAdjustment.applied_changes&&msg.planAdjustment.applied_changes.length}}">已应用：<text wx:for="{{msg.planAdjustment.applied_changes}}" wx:for-item="change" wx:key="*this">{{change}}；</text></view>
+          </view>
+          <view wx:if="{{msg.agentPlan}}" class="agent-plan">
+            <view class="agent-plan-kicker">计划草案 · 待确认</view><view class="action-flow"><text class="done">生成建议</text><view class="action-line"></view><text class="{{msg.applied?'done':'active'}}">用户确认</text><view class="action-line"></view><text class="{{msg.applied?'done':''}}">写入计划</text></view><view class="agent-plan-title">{{msg.agentPlan.title}}</view>
+            <view class="agent-item" wx:for="{{msg.agentPlan.items}}" wx:for-item="planItem" wx:for-index="planIndex" wx:key="title"><text class="dot">{{planIndex+1}}</text><view><view class="ap-title">{{planItem.title}}</view><view class="ap-desc">{{planItem.description}}</view></view></view>
+            <button wx:if="{{!msg.applied}}" data-run="{{msg.runId}}" bindtap="applyAgentPlan">加入本周计划</button><view wx:else class="applied">✓ 已确认并写入本周计划<text wx:if="{{msg.actionAuditId}}"> · 操作记录 #{{msg.actionAuditId}}</text></view>
+          </view>
+          <view wx:if="{{msg.exerciseRecommendations&&msg.exerciseRecommendations.length}}" class="exercise-recommendations">
+            <view class="agent-plan-kicker">目标匹配 · 动作效果知识</view>
+            <view class="exercise-rec" wx:for="{{msg.exerciseRecommendations}}" wx:for-item="exercise" wx:key="exercise_key">
+              <view class="row"><view><view class="resource-title">{{exercise.exercise_name}}</view><view class="resource-summary"><text wx:for="{{exercise.reasons}}" wx:key="*this">{{item}}；</text></view></view><view class="rec-score">{{exercise.match_score}}</view></view>
+              <view class="rec-support">{{exercise.video_analysis_supported?'当前支持视频评分':'已收录效果知识，视频评分待扩展'}}</view>
+            </view>
+          </view>
+          <view wx:if="{{msg.resources&&msg.resources.length}}" class="resource-list">
+            <view class="agent-plan-kicker">已审核教学资源</view>
+            <view class="resource-card" wx:for="{{msg.resources}}" wx:for-item="resource" wx:key="id"><view class="resource-platform">{{resource.platform}} · {{resource.difficulty}}</view><view class="resource-title">{{resource.title}}</view><view class="resource-summary">{{resource.summary}}</view><view class="resource-meta"><text>质量 {{resource.quality_score}}</text><button size="mini" data-url="{{resource.url}}" bindtap="copyResource">复制链接</button></view></view>
+          </view>
+          <view wx:if="{{msg.knowledgeSources&&msg.knowledgeSources.length}}" class="knowledge-list">
+            <view class="agent-plan-kicker">参考来源</view>
+            <view class="knowledge-card" wx:for="{{msg.knowledgeSources}}" wx:for-item="source" wx:key="id">
+              <view class="knowledge-label">{{source.citation_id}} · {{source.organization}}</view>
+              <view class="resource-title">{{source.title}}</view>
+              <view class="resource-summary">{{source.excerpt}}</view>
+              <view class="resource-meta"><text>{{source.section}}<text wx:if="{{source.published_at}}"> · {{source.published_at}}</text></text><button size="mini" data-url="{{source.url}}" bindtap="copyKnowledge">复制来源</button></view>
+            </view>
+          </view>
+        </view>
+      </view>
+    </block>
+    <view id="bottom" class="bottom-space"></view>
+  </scroll-view>
+  <view class="composer"><textarea value="{{input}}" bindinput="onInput" auto-height maxlength="2000" placeholder="问饮食、运动、睡眠，或一起制定计划…"/><button bindtap="send" loading="{{sending}}">{{sending?'':'发送'}}</button></view>
+</view>

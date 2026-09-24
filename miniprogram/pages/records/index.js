@@ -1,0 +1,1 @@
+Page({diet(){wx.navigateTo({url:'/pages/records/diet'})},exercise(){wx.navigateTo({url:'/pages/records/exercise'})},checkin(){wx.navigateTo({url:'/pages/checkin/index'})},trends(){wx.navigateTo({url:'/pages/trends/index'})},scan(){wx.navigateTo({url:'/pages/scan/index'})}})

@@ -1,0 +1,3 @@
+-r requirements-dev.txt
+# Install the CUDA or CPU build appropriate for the training machine.
+torch>=2.2,<3

@@ -1,0 +1,2 @@
+{"sample_id":"demo-squat-001","status":"completed","result":{"pose":{"available":true,"reps":2,"errors":[{"code":"depth_insufficient"}]},"frames":[{"event":"squat_bottom","timestamp":1.5},{"event":"squat_bottom","timestamp":3.2}],"score":{"available":true,"overall":68}}}
+{"sample_id":"demo-pushup-low-quality","status":"completed","result":{"pose":{"available":false,"message":"关键点数量或可见度不足"},"frames":[],"score":{"available":false}}}

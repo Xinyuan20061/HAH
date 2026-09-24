@@ -1,0 +1,6 @@
+{"query_id":"pa-weekly-minutes","query":"成年人每周应该运动多少分钟？","should_retrieve":true,"relevant_source_keys":["who-pa-adults-2020"],"category":"physical_activity","status":"example_only"}
+{"query_id":"pa-sedentary","query":"总是久坐、完全不活动有什么影响？","should_retrieve":true,"relevant_source_keys":["who-pa-general-2024"],"category":"physical_activity","status":"example_only"}
+{"query_id":"diet-balanced","query":"日常饮食怎么搭配更均衡？","should_retrieve":true,"relevant_source_keys":["nhc-dietary-guidelines-2022"],"category":"nutrition","status":"example_only"}
+{"query_id":"chronic-hypertension","query":"有高血压的人开始锻炼要注意什么？","should_retrieve":true,"relevant_source_keys":["cdc-pa-chronic-conditions"],"category":"chronic_condition","status":"example_only"}
+{"query_id":"negative-bike-chain","query":"自行车链条掉了怎么修？","should_retrieve":false,"relevant_source_keys":[],"category":"out_of_scope","status":"example_only"}
+{"query_id":"negative-programming","query":"Python列表怎么排序？","should_retrieve":false,"relevant_source_keys":[],"category":"out_of_scope","status":"example_only"}

@@ -1,0 +1,79 @@
+<view class="insights-page">
+  <view class="insight-hero">
+    <view class="hero-top"><view class="hero-kicker">每日健康简报</view><view class="live-dot"><text></text>基于最新记录</view></view>
+    <view class="hero-title">提前发现值得关注的变化</view>
+    <view class="hero-copy">只根据你已记录的数据做保守提醒，不把缺失数据当成异常。</view>
+    <view wx:if="{{dataQuality}}" class="quality-panel">
+      <view class="quality-row"><text>{{dataQuality.label}}</text><text>{{dataQuality.recorded_days}} / {{dataQuality.expected_days}} 天</text></view>
+      <view class="quality-track"><view style="width:{{dataQuality.coverage_pct}}%"></view></view>
+    </view>
+    <view wx:if="{{updatedAt}}" class="hero-time">更新于 {{updatedAt}}</view>
+  </view>
+
+  <view wx:if="{{loading}}" class="loading-stack">
+    <view class="skeleton-card"></view><view class="skeleton-card short"></view>
+  </view>
+  <view wx:elif="{{error}}" class="insight-state error-state">
+    <view class="state-symbol">!</view><view class="state-title">暂时没有加载出来</view><view class="state-copy">{{error}}</view><button bindtap="retry">重新连接</button>
+  </view>
+  <block wx:else>
+    <view wx:if="{{activeExperiment&&activeExperiment.status==='active'}}" class="experiment-live">
+      <view class="experiment-live-head"><view><view class="experiment-kicker">AGENT V4 · 个人微实验</view><view class="experiment-title">{{activeExperiment.title}}</view></view><view class="experiment-status">{{activeExperiment.statusLabel}}</view></view>
+      <view class="experiment-hypothesis">{{activeExperiment.hypothesis}}</view>
+      <view class="experiment-action"><view class="block-label">今天执行</view><view>{{activeExperiment.dailyAction}}</view></view>
+      <view class="experiment-progress-head"><text>当前 {{activeExperiment.progressValueDisplay}}</text><text>目标 {{activeExperiment.progressTargetDisplay}}</text></view>
+      <view class="experiment-track"><view style="width:{{activeExperiment.progressPct}}%"></view></view>
+      <view class="experiment-meta"><text>{{activeExperiment.start_date}} 至 {{activeExperiment.end_date}}</text><text wx:if="{{activeExperiment.days_remaining}}">剩 {{activeExperiment.days_remaining}} 天</text><text wx:else>可生成复盘</text></view>
+      <view class="experiment-controls"><button wx:if="{{activeExperiment.can_finish}}" class="review-button" bindtap="finishExperiment" disabled="{{experimentSending}}">生成实验复盘</button><button class="stop-button" bindtap="cancelExperiment" disabled="{{experimentSending}}">停止</button></view>
+      <view class="experiment-boundary">结果只描述相关变化，不证明因果。{{activeExperiment.boundary}}</view>
+    </view>
+
+    <view wx:if="{{!insights.length}}" class="insight-state clear-state">
+      <view class="clear-ring">✓</view><view class="state-title">今天没有需要优先干预的信号</view><view class="state-copy">保持真实记录即可。系统会持续关注运动、睡眠、体重和动作表现的变化。</view>
+      <button data-route="/pages/checkin/index" bindtap="openAction">记录今天</button>
+    </view>
+
+    <view wx:else class="insight-list">
+      <view class="list-heading"><view><view class="list-title">{{insights.length}} 条值得关注</view><view class="list-summary">{{summary}}</view></view></view>
+      <view wx:for="{{insights}}" wx:key="code" class="insight-card tone-{{item.tone}}">
+        <view class="card-head"><view class="topic-pill">{{item.label}}</view><view class="severity">{{item.severityLabel}}</view></view>
+        <view class="card-title">{{item.title}}</view>
+        <view class="evidence-block"><view class="block-label">观察到</view><view>{{item.evidence}}</view></view>
+        <view class="advice-block"><view class="block-label">建议先做</view><view>{{item.advice}}</view></view>
+        <view class="card-actions">
+          <button class="action-primary" data-route="{{item.route}}" bindtap="openAction">{{item.actionLabel}}</button>
+          <button class="action-link" data-prompt="{{item.askPrompt}}" bindtap="askAssistant">问健康助手</button>
+        </view>
+        <view wx:if="{{item.experimentProposal&&!activeExperiment}}" class="experiment-proposal">
+          <view class="experiment-kicker">把提醒变成可验证行动</view>
+          <view class="proposal-title">{{item.experimentProposal.title}}</view>
+          <view class="proposal-hypothesis">假设：{{item.experimentProposal.hypothesis}}</view>
+          <view wx:if="{{item.proposalHistory}}" class="proposal-history">你之前更常选择{{item.proposalHistory.preferredLabel}}（已启动 {{item.proposalHistory.preferredCount}} 次，共 {{item.proposalHistory.total}} 次）；仍可自由选择任一方案</view>
+          <view class="proposal-variants">
+            <view wx:for="{{item.experimentProposal.variants}}" wx:for-item="variant" wx:key="key" class="variant-card">
+              <view class="variant-head"><b>{{variant.label}}</b><text>{{variant.days}} 天</text></view>
+              <view class="variant-action">{{variant.action}}</view>
+              <button data-code="{{item.code}}" data-variant="{{variant.key}}" bindtap="startExperiment" disabled="{{experimentSending}}">选择并启动</button>
+            </view>
+          </view>
+          <view class="proposal-boundary">停止条件：{{item.experimentProposal.stop_condition}}</view>
+          <view class="proposal-boundary">{{item.experimentProposal.boundary}}</view>
+        </view>
+        <view class="feedback-panel">
+          <view wx:if="{{!item.feedback}}">
+            <view class="feedback-question">这条提醒对你准确吗？</view>
+            <view class="feedback-actions">
+              <button data-code="{{item.code}}" data-verdict="helpful" bindtap="submitFeedback" disabled="{{feedbackSendingCode===item.code}}">有帮助</button>
+              <button data-code="{{item.code}}" data-verdict="inaccurate" bindtap="submitFeedback" disabled="{{feedbackSendingCode===item.code}}">不准确</button>
+              <button data-code="{{item.code}}" data-verdict="resolved" bindtap="submitFeedback" disabled="{{feedbackSendingCode===item.code}}">已处理</button>
+            </view>
+          </view>
+          <view wx:else class="feedback-done"><text>✓</text>{{item.feedbackLabel}}<view>仅用于质量评测，不自动训练</view></view>
+        </view>
+      </view>
+    </view>
+
+    <view class="boundary-card"><view class="boundary-title">提醒边界</view><view wx:if="{{dataQuality}}" class="quality-message">{{dataQuality.message}}</view><view>{{policy || '仅依据有记录的数据做保守预警；不诊断疾病。身体不适时请停止训练并及时就医。'}}</view><view class="feedback-policy">你的反馈只用于质量评测，不会自动训练模型或改写健康记录。</view></view>
+  </block>
+  <view class="safe-area"></view>
+</view>

@@ -1,0 +1,77 @@
+<view class="page">
+  <view class="hero card hero-grad">
+    <view class="pill pill-dark">由你管理的服务</view>
+    <view class="hero-title">使用你自己的 DeepSeek API</view>
+    <view class="hero-sub">Key 不保存在小程序本地，也不会通过查询接口返回明文。聊天时由后端代你发起请求。</view>
+  </view>
+
+  <view class="card backend-card">
+    <view class="row space">
+      <view>
+        <view class="label-title">HealthMate 后端</view>
+        <view class="muted small backend-url">{{backendUrl}}</view>
+      </view>
+      <view class="backend-status {{backendOnline===true?'ok':backendOnline===false?'bad':''}}">
+        {{backendOnline===true?'已连接':backendOnline===false?'未连接':'检测中'}}
+      </view>
+    </view>
+    <view class="muted small backend-message">{{backendMessage}}</view>
+    <button class="btn-soft mini-btn" loading="{{checkingBackend}}" bindtap="checkBackend">检测后端连接</button>
+    <view class="dev-box" wx:if="{{!cloudMode}}">
+      <view class="muted small">开发/真机调试地址</view>
+      <input class="input" value="{{devBackendUrl}}" bindinput="onBackendInput" placeholder="http://192.168.x.x:8000/api/v1"/>
+      <view class="row dev-actions">
+        <button class="btn-soft mini-btn grow" bindtap="saveBackendUrl">使用此地址</button>
+        <button class="btn-soft mini-btn grow" bindtap="resetBackendUrl">恢复本机默认</button>
+      </view>
+      <view class="muted tiny">真机调试时 127.0.0.1 指向手机本身，请填写电脑局域网 IP 或已部署的 HTTPS 域名。</view>
+    </view>
+    <view class="dev-box" wx:else>
+      <view class="muted small">当前使用微信云托管私有链路（wx.cloud.callContainer），无需配置服务器合法域名。</view>
+      <view class="muted tiny">电脑端会通过云托管公网 HTTPS 地址领取任务；该地址只写在电脑端配置中。</view>
+    </view>
+  </view>
+
+  <view class="card">
+    <view class="row space switch-row">
+      <view>
+        <view class="label-title">启用个人配置</view>
+        <view class="muted small">关闭后保留配置，但聊天使用系统默认 Provider</view>
+      </view>
+      <switch checked="{{form.enabled}}" bindchange="toggle" color="#245B4B"/>
+    </view>
+  </view>
+
+  <view class="card">
+    <view class="field">
+      <view class="label-title">DeepSeek API Key</view>
+      <view class="muted small" wx:if="{{hasKey}}">已保存：{{keyHint}}。留空表示不更换现有 Key。</view>
+      <input class="input" password value="{{form.api_key}}" data-k="api_key" bindinput="inp" placeholder="sk-..."/>
+    </view>
+    <view class="field">
+      <view class="label-title">Base URL</view>
+      <input class="input" value="{{form.base_url}}" data-k="base_url" bindinput="inp" placeholder="https://api.deepseek.com"/>
+    </view>
+    <view class="field">
+      <view class="label-title">服务 ID</view>
+      <input class="input" value="{{form.model}}" data-k="model" bindinput="inp" placeholder="从 DeepSeek 控制台复制服务 ID"/>
+      <view class="model-chips">
+        <block wx:for="{{models}}" wx:key="*this">
+          <text class="{{form.model==item?'active':''}}" bindtap="useModel" data-model="{{item}}">{{item}}</text>
+        </block>
+      </view>
+    </view>
+  </view>
+
+  <view class="security card">
+    <view class="security-title">安全设计</view>
+    <view class="security-item">• API Key 只提交给你的 HealthMate 后端，数据库内加密保存。</view>
+    <view class="security-item">• 前端查询只返回是否已配置及脱敏提示，不返回 Key 明文。</view>
+    <view class="security-item">• Base URL 要求 HTTPS，并拦截明显的本机/私有地址。</view>
+    <view class="security-item">• 正式上线仍建议启用 HTTPS、密钥轮换、日志脱敏和访问限流。</view>
+  </view>
+
+  <button class="btn-soft test" loading="{{testing}}" bindtap="test">测试 DeepSeek 连接</button>
+  <button class="btn-primary save" loading="{{saving}}" bindtap="save">保存配置</button>
+  <view class="reset" bindtap="reset">恢复系统默认配置</view>
+</view>

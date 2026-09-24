@@ -1,0 +1,96 @@
+{
+  "schema_version": 1,
+  "generated_on": "2026-09-23",
+  "data_root": "D:\\HealthMateData",
+  "delivery_policy": "D:\\HealthMateData is external and excluded from packages",
+  "entries": [
+    {
+      "dataset_id": "rehab24-6-videos",
+      "path": "D:\\HealthMateData\\motion\\raw\\rehab24-6",
+      "kind": "directory",
+      "file_count": 130,
+      "total_bytes": 2653930445,
+      "inventory_sha256": "f2d2faf9f659468d210d128b5b3531061883684041271e9b7ae58268305b0d73",
+      "hash_scope": "sorted relative path + byte size; not a content digest",
+      "license": {
+        "status": "review_required_before_redistribution",
+        "note": "本地副本未包含许可正文；提交或展示原视频前须按来源页面复核。"
+      },
+      "purpose": "六类动作固定测试集与后续微调候选数据",
+      "included_in_delivery": false
+    },
+    {
+      "dataset_id": "rehab24-6-segmentation",
+      "path": "D:\\HealthMateData\\motion\\REHAB24-6_Segmentation.csv",
+      "kind": "file",
+      "total_bytes": 53290,
+      "content_sha256": "72c70bc7e56eafb132452a850f7a56d21c3cb4a602bab1e98370f9b606567100",
+      "hash_scope": "full file content",
+      "license": {
+        "status": "review_required_before_redistribution",
+        "note": "与 REHAB24-6 视频使用相同许可，发布前复核。"
+      },
+      "purpose": "动作区间真值与受试者级划分",
+      "included_in_delivery": false
+    },
+    {
+      "dataset_id": "rehab24-6-2d-joints",
+      "path": "D:\\HealthMateData\\motion\\raw\\rehab24-6-2d",
+      "kind": "directory",
+      "file_count": 260,
+      "total_bytes": 775923200,
+      "inventory_sha256": "aa5ed186d55e83c409090ccbd6d60097cee7c4a59df3154bb35970c6253e7fe0",
+      "hash_scope": "sorted relative path + byte size; not a content digest",
+      "license": {
+        "status": "review_required_before_redistribution",
+        "note": "派生数据仍受原数据条款约束，发布前复核。"
+      },
+      "purpose": "骨骼序列训练/验证候选输入",
+      "included_in_delivery": false
+    },
+    {
+      "dataset_id": "squat-quality-images",
+      "path": "D:\\HealthMateData\\motion\\raw\\squat",
+      "kind": "directory",
+      "file_count": 3806,
+      "total_bytes": 828497184,
+      "inventory_sha256": "6e062cfbd03d7da76ab8dc7eb97988453c58ceba34217c0f3857a10598387e39",
+      "hash_scope": "sorted relative path + byte size; not a content digest",
+      "license": {
+        "status": "review_required_before_redistribution",
+        "note": "本地副本未包含许可正文；未随交付包分发。"
+      },
+      "purpose": "深蹲质量规则的离线参考，不进入六类分类准确率",
+      "included_in_delivery": false
+    },
+    {
+      "dataset_id": "slowfast-r50-kinetics400-pretrained",
+      "path": "D:\\HealthMateData\\motion\\pretrained\\slowfast_r50_8xb8-8x8x1-steplr-256e_kinetics400-rgb_20220818-b62a501f.pth",
+      "kind": "file",
+      "total_bytes": 138756885,
+      "content_sha256": "b62a501f249b6834a14d6fc2cce422274900764c7296806a3b4b0edd500ac775",
+      "hash_scope": "full file content",
+      "license": {
+        "status": "review_required_before_redistribution",
+        "note": "第三方预训练权重；使用和再分发前复核上游 MMAction2 条款。"
+      },
+      "purpose": "六类视频模型的预训练初始化候选，禁止当作已微调模型",
+      "included_in_delivery": false
+    },
+    {
+      "dataset_id": "nutrition5k-local-evaluation-subset",
+      "path": "D:\\HealthMateData\\food",
+      "kind": "directory",
+      "file_count": 51,
+      "total_bytes": 19088167,
+      "inventory_sha256": "62df20aa17e355b462c349a0e894154a0af7956325261763167b0426f6ed5186",
+      "hash_scope": "sorted relative path + byte size; not a content digest",
+      "license": {
+        "status": "review_required_before_redistribution",
+        "note": "本地副本未包含许可正文；评估脚本只读，数据不进入交付包。"
+      },
+      "purpose": "42 张 RGB 样本及营养真值的识餐基线评估",
+      "included_in_delivery": false
+    }
+  ]
+}

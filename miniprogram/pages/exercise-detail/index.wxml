@@ -1,0 +1,15 @@
+<view class="page" wx:if="{{exercise}}">
+  <view class="hero">
+    <view class="kicker">动作指南</view>
+    <view class="hero-row"><view><view class="title">{{exercise.name}}</view><view class="subtitle">{{exercise.category}} · {{exercise.level}} · {{exercise.duration}}</view></view><view class="motion-dot"><view></view></view></view>
+    <view class="muscles"><text wx:for="{{exercise.muscles}}" wx:key="*this">{{item}}</text></view>
+  </view>
+  <view class="section-title">动作步骤</view>
+  <view class="card steps"><view wx:for="{{exercise.steps}}" wx:key="index"><text class="num">0{{index+1}}</text><text>{{item}}</text></view></view>
+  <view class="section-title">动作提示</view>
+  <view class="cue-grid"><view class="card cue" wx:for="{{exercise.cues}}" wx:key="*this"><text class="cue-mark">✦</text><text>{{item}}</text></view></view>
+  <view class="section-title">常见错误</view>
+  <view class="card mistakes"><view wx:for="{{exercise.mistakes}}" wx:key="*this"><text>×</text><text>{{item}}</text></view></view>
+  <view class="card breath"><view class="icon">↕</view><view><view class="b">呼吸节奏</view><view class="muted">{{exercise.breathing}}</view></view></view>
+  <view class="safety">{{exercise.safety}}</view>
+</view>

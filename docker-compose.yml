@@ -1,0 +1,53 @@
+# Local integration only. Production backend runs in WeChat CloudRun.
+# Supply the required values in a root .env (ignored), using random hex secrets.
+x-api-environment: &api-environment
+  ENV: development
+  DATABASE_URL: mysql+pymysql://healthmate:${MYSQL_PASSWORD:?Set MYSQL_PASSWORD}@mysql:3306/healthmate?charset=utf8mb4
+  STORAGE_BACKEND: local
+  PUBLIC_BASE_URL: http://127.0.0.1:8000
+  SECRET_KEY: ${SECRET_KEY:?Set SECRET_KEY}
+  CREDENTIALS_ENCRYPTION_KEY: ${CREDENTIALS_ENCRYPTION_KEY:?Set an independent CREDENTIALS_ENCRYPTION_KEY}
+  WORKER_TOKEN: ${WORKER_TOKEN:?Set WORKER_TOKEN}
+  DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+  RUN_MIGRATIONS_ON_START: 'false'
+  PORT: '8000'
+
+services:
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: healthmate
+      MYSQL_USER: healthmate
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?Set MYSQL_PASSWORD}
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    ports: ['127.0.0.1:3307:3306']
+    volumes: ['mysql_data:/var/lib/mysql']
+    healthcheck:
+      test: ['CMD', 'mysqladmin', 'ping', '-h', 'localhost']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  migrate:
+    build: ./backend
+    profiles: ['tools']
+    environment: *api-environment
+    depends_on:
+      mysql:
+        condition: service_healthy
+    command: ['sh', '-c', 'python scripts/preflight.py && alembic upgrade head']
+
+  api:
+    build: ./backend
+    environment: *api-environment
+    ports: ['127.0.0.1:8000:8000']
+    volumes: ['dev_uploads:/app/uploads']
+    depends_on:
+      mysql:
+        condition: service_healthy
+    # Default image entrypoint starts API; it does not execute DDL.
+
+volumes:
+  mysql_data: {}
+  dev_uploads: {}

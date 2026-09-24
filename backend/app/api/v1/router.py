@@ -1,0 +1,46 @@
+from fastapi import APIRouter
+from . import (
+    auth,
+    users,
+    records,
+    health,
+    chat,
+    vision,
+    ai_config,
+    media,
+    insights,
+    timeline,
+    system,
+    agent,
+    evaluation,
+    privacy,
+    safety,
+    worker,
+    resources,
+    fitness,
+    knowledge,
+)
+
+api_router = APIRouter()
+for r in [
+    auth.router,
+    users.router,
+    records.router,
+    health.router,
+    chat.router,
+    vision.router,
+    ai_config.router,
+    media.router,
+    insights.router,
+    timeline.router,
+    system.router,
+    agent.router,
+    evaluation.router,
+    privacy.router,
+    safety.router,
+    worker.router,
+    resources.router,
+    fitness.router,
+    knowledge.router,
+]:
+    api_router.include_router(r)

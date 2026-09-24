@@ -1,0 +1,1 @@
+.intro{margin-bottom:28rpx}.intro .muted{margin-top:10rpx;line-height:1.6}.label{font-size:24rpx;color:#61706B;margin:22rpx 0 8rpx}.two{display:grid;grid-template-columns:1fr 1fr;gap:18rpx}.btn-primary{margin-top:28rpx}
