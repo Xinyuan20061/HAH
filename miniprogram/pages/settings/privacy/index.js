@@ -35,7 +35,7 @@ Page({
     wx.showModal({
       title: '删除账户与数据',
       content: '此操作会永久删除账户、健康记录、处理任务、识餐校正记录，并先删除微信云存储中的关联媒体。操作不可撤销。',
-      confirmText: '继续', confirmColor: '#B24B4B',
+      confirmText: '继续', confirmColor: '#c0392b',
       success: r => { if (r.confirm) this.secondDelete() }
     })
   },
@@ -43,7 +43,7 @@ Page({
     wx.showModal({
       title: '再次确认',
       content: '请确认：删除后当前登录凭证将失效；若云文件删除失败，系统会中止账户删除以便重试。',
-      confirmText: '永久删除', confirmColor: '#B24B4B',
+      confirmText: '永久删除', confirmColor: '#c0392b',
       success: async r => {
         if (!r.confirm) return
         this.setData({ deleting: true })

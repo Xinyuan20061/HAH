@@ -3,25 +3,25 @@
   <view wx:if="{{loading}}" class="skeleton-grid"><view wx:for="{{[1,2,3,4]}}" wx:key="*this" class="sk-card shimmer"></view></view>
   <block wx:else>
     <view class="adaptive card">
-      <view class="row space"><view><view class="kicker">近 14 天自适应评估</view><view class="adaptive-title">目标应该跟着执行能力一起变化</view></view><button class="mini-btn" loading="{{dynamicLoading}}" bindtap="evaluateDynamic">评估</button></view>
+      <view class="row space"><view><view class="kicker">近 14 天自适应评估</view><view class="adaptive-title">目标应该跟着执行能力一起变化</view></view><button class="mini-btn tappable" loading="{{dynamicLoading}}" bindtap="evaluateDynamic" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">评估</button></view>
       <view class="muted adaptive-desc">至少需要 5 个有记录日期。系统不会把漏记当成失败；单次只小幅调整饮水、运动和步数。</view>
       <block wx:if="{{dynamic}}">
         <view class="rule-policy">{{dynamic.policy}}</view>
         <view class="suggestion" wx:for="{{dynamic.items}}" wx:key="target_key">
           <view class="row space"><view><view class="b">{{item.label}}</view><view class="muted" wx:if="{{item.has_rate}}">有效记录 {{item.observed_days}} 天 · 达标率 {{item.completion_pct}}%</view><view class="muted" wx:else>有效记录 {{item.observed_days}} 天 · 数据不足</view></view><view class="decision {{item.decision}}">{{item.decision_label}}</view></view>
-          <view class="target-change" wx:if="{{item.decision==='increase'||item.decision==='reduce'}}"><text>{{item.previous_target}}</text><text>→</text><text>{{item.recommended_target}}</text><button data-id="{{item.adjustment_id}}" bindtap="applyDynamic">应用</button></view>
+          <view class="target-change" wx:if="{{item.decision==='increase'||item.decision==='reduce'}}"><text>{{item.previous_target}}</text><text>→</text><text>{{item.recommended_target}}</text><button class="tappable" data-id="{{item.adjustment_id}}" bindtap="applyDynamic" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">应用</button></view>
           <view class="reason">{{item.reason}}</view>
         </view>
-        <view class="ai-explain" bindtap="explainDynamic"><text>{{explainLoading?'正在整理…':dynamicExplain||'查看调整原因'}}</text><text>✦</text></view>
+        <view class="ai-explain tappable" bindtap="explainDynamic" hover-class="tap" hover-start-time="0" hover-stay-time="80"><text>{{explainLoading?'正在整理…':dynamicExplain||'查看调整原因'}}</text><text>✦</text></view>
       </block>
     </view>
     <view class="goal-card card" wx:for="{{cards}}" wx:key="k">
-      <view class="row space"><view class="goal-name"><view class="gicon">{{item.icon}}</view><view><view class="b">{{item.name}}</view><view class="muted">今天 {{item.current}} {{item.unit}}</view></view></view><view class="target"><text>{{item.value}}</text><text>{{item.unit}}</text></view></view>
+      <view class="row space"><view class="goal-name"><view class="gicon">{{item.icon}}</view><view><view class="b">{{item.name}}</view><view class="muted">今天 {{item.current}} {{item.unit}}</view></view></view><view class="target {{snapKey===item.k?'snap':''}}"><text>{{item.value}}</text><text>{{item.unit}}</text></view></view>
       <view class="progress"><view style="width:{{item.pct}}%"></view></view>
-      <slider data-i="{{index}}" min="{{item.min}}" max="{{item.max}}" step="{{item.step}}" value="{{item.value}}" bindchange="slide" activeColor="#225f4d" backgroundColor="#e9efec" block-size="18"/>
+      <slider data-i="{{index}}" min="{{item.min}}" max="{{item.max}}" step="{{item.step}}" value="{{item.value}}" bindchanging="slideLive" bindchange="slide" activeColor="#506336" backgroundColor="#e9efd9" block-color="#506336" block-size="18"/>
     </view>
-    <view class="card weekly"><view class="row space"><view><view class="b">每周打卡目标</view><view class="muted">用于 Streak 与周报习惯完成度</view></view><view class="week-v">{{goals.weekly_checkin_target}} / 7</view></view><slider min="1" max="7" step="1" value="{{goals.weekly_checkin_target}}" bindchange="checkinTarget" activeColor="#225f4d" block-size="18"/></view>
-    <button class="save" loading="{{saving}}" bindtap="save">保存目标体系</button>
+    <view class="card weekly"><view class="row space"><view><view class="b">每周打卡目标</view><view class="muted">用于 Streak 与周报习惯完成度</view></view><view class="week-v {{checkinSnap?'snap':''}}">{{goals.weekly_checkin_target}} / 7</view></view><slider min="1" max="7" step="1" value="{{goals.weekly_checkin_target}}" bindchanging="checkinLive" bindchange="checkinTarget" activeColor="#506336" block-color="#506336" block-size="18"/></view>
+    <button class="save tappable" loading="{{saving}}" bindtap="save" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">保存目标体系</button>
     <view class="note">热量、蛋白质等目标仅用于日常健康管理参考；特殊疾病、孕期、术后恢复或专业运动需求应由合格专业人员个体化评估。</view>
   </block>
 </view>

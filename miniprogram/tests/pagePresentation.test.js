@@ -29,7 +29,32 @@ test('food and motion result views retain correction, details, goals and six act
 test('home and profile expose proactive health reminders', () => {
   const home = page('home')
   const profile = page('profile')
-  assert.match(home, /bindtap="toInsights"/)
-  assert.match(home, /健康提醒/)
+  // 首页提醒入口现在是数据驱动的导航项（NAV_ITEMS + 弹层渲染），不再是一个固定 bindtap，
+  // 因此同时校验「导航表里有 insights 条目」和「模板确实把这个列表渲染出来」。
+  const homeScript = fs.readFileSync(path.join(__dirname, '..', 'pages', 'home', 'index.js'), 'utf8')
+  assert.match(homeScript, /label:\s*'健康提醒'[\s\S]{0,90}route:\s*'\/pages\/insights\/index'/)
+  assert.match(home, /wx:for="\{\{navItems\}\}"/)
+  assert.match(home, /insightCount/)
   assert.match(profile, /bindtap="insights"/)
+})
+
+// 这两组样式曾长期存在于 WXSS 却从未接进 WXML（见 scripts/audit_miniprogram_ui.mjs 的 dead-css 报告），
+// 因此在这里锁住"模板必须引用它们"，避免再次脱节。
+test('food scan keeps the four-step flow rendered and driven by step', () => {
+  const scan = page('scan')
+  for (const label of ['识别', '校正', '确认', '入库']) {
+    assert.ok(scan.includes(label), `识餐流程缺少步骤文案：${label}`)
+  }
+  assert.match(scan, /class="flow"/)
+  assert.match(scan, /\{\{step>=1\?/)
+  assert.match(scan, /\{\{step>=4\?/)
+})
+
+test('food scan renders the calorie range bar from real data', () => {
+  const scan = page('scan')
+  assert.match(scan, /class="range-line"/)
+  assert.match(scan, /rangeBar\.bandLeft/)
+  assert.match(scan, /rangeBar\.pointPct/)
+  const script = fs.readFileSync(path.join(__dirname, '..', 'pages', 'scan', 'index.js'), 'utf8')
+  assert.match(script, /buildRangeBar/)
 })

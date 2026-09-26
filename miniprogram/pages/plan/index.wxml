@@ -2,23 +2,23 @@
   <view class="title">今天</view><view class="subtitle">{{headline}}</view>
   <view class="today-count">{{doneCount}} / {{items.length||3}} 完成<text wx:if="{{items.length}}" class="undo-hint">误触可点「恢复」</text></view>
   <view class="plan-simple">
-    <view class="task {{item.done?'done':''}}" wx:for="{{items}}" wx:key="task_key" bindtap="toggle" data-key="{{item.task_key}}" data-done="{{item.done}}">
+    <view class="task {{item.done?'done':''}} tappable" wx:for="{{items}}" wx:key="task_key" bindtap="toggle" data-key="{{item.task_key}}" data-done="{{item.done}}" hover-class="tap" hover-start-time="0" hover-stay-time="80">
       <view class="check">{{item.done?'✓':index+1}}</view>
       <view class="grow"><view class="task-title">{{item.title}}<text wx:if="{{item.custom}}" class="tag-custom">手动</text></view><view wx:if="{{item.desc}}" class="muted task-desc">{{item.desc}}</view></view>
       <view class="task-side">
-        <view wx:if="{{item.done}}" class="restore-btn" catchtap="restore" data-key="{{item.task_key}}">恢复</view>
-        <view wx:if="{{item.custom}}" class="del-btn" catchtap="removeCustom" data-key="{{item.task_key}}">×</view>
+        <view wx:if="{{item.done}}" class="restore-btn tappable" catchtap="restore" data-key="{{item.task_key}}" hover-class="tap" hover-start-time="0" hover-stay-time="80">恢复</view>
+        <view wx:if="{{item.custom}}" class="del-btn tappable" catchtap="removeCustom" data-key="{{item.task_key}}" hover-class="tap" hover-start-time="0" hover-stay-time="80">×</view>
       </view>
     </view>
     <view wx:if="{{!items.length}}" class="empty">计划正在生成。</view>
   </view>
-  <view class="add-bar" bindtap="toggleAdd">{{showAdd?'收起添加':'＋ 添加计划'}}</view>
+  <view class="add-bar tappable" bindtap="toggleAdd" hover-class="tap" hover-start-time="0" hover-stay-time="80">{{showAdd?'收起添加':'＋ 添加计划'}}</view>
   <view wx:if="{{showAdd}}" class="add-panel">
     <input class="add-input" placeholder="想添加的计划，如：晚饭后散步 20 分钟" value="{{addTitle}}" bindinput="onTitle" maxlength="60"/>
     <textarea class="add-textarea" placeholder="补充说明（可选）" value="{{addDesc}}" bindinput="onDesc" maxlength="300"/>
-    <view class="add-actions"><button class="btn-soft" bindtap="toggleAdd">取消</button><button class="btn-primary" bindtap="saveCustom" loading="{{saving}}">加入今日计划</button></view>
+    <view class="add-actions"><button class="btn-soft tappable" bindtap="toggleAdd" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">取消</button><button class="btn-primary tappable" bindtap="saveCustom" loading="{{saving}}" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">加入今日计划</button></view>
   </view>
-  <view class="week-link" bindtap="toggleWeek">{{showWeek?'收起本周':'查看本周'}}<text>›</text></view>
-  <view wx:if="{{showWeek&&agentPlan}}" class="week-panel"><view class="row space"><view class="task-title">{{agentPlan.title}}</view><text>{{agentPlan.done_count}} / {{agentPlan.items.length}}</text></view><view class="week-task {{item.done?'done':''}}" wx:for="{{agentPlan.items}}" wx:key="id" bindtap="toggleAgent" data-id="{{item.id}}" data-done="{{item.done}}"><view class="check">{{item.done?'✓':index+1}}</view><view class="grow"><view class="task-title">{{item.title}}</view><view class="muted task-desc">{{item.planned_date}} · {{item.description}}</view></view></view></view>
+  <view class="week-link tappable" bindtap="toggleWeek" hover-class="tap" hover-start-time="0" hover-stay-time="80">{{showWeek?'收起本周':'查看本周'}}<text>›</text></view>
+  <view wx:if="{{showWeek&&agentPlan}}" class="week-panel"><view class="row space"><view class="task-title">{{agentPlan.title}}</view><text>{{agentPlan.done_count}} / {{agentPlan.items.length}}</text></view><view class="week-task {{item.done?'done':''}} tappable" wx:for="{{agentPlan.items}}" wx:key="id" bindtap="toggleAgent" data-id="{{item.id}}" data-done="{{item.done}}" hover-class="tap" hover-start-time="0" hover-stay-time="80"><view class="check">{{item.done?'✓':index+1}}</view><view class="grow"><view class="task-title">{{item.title}}</view><view class="muted task-desc">{{item.planned_date}} · {{item.description}}</view></view></view></view>
   <view class="notice">出现疼痛或明显不适时，请暂停并咨询专业人员。</view>
 </view>

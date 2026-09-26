@@ -16,13 +16,13 @@
       </view>
     </view>
     <view class="muted small backend-message">{{backendMessage}}</view>
-    <button class="btn-soft mini-btn" loading="{{checkingBackend}}" bindtap="checkBackend">检测后端连接</button>
+    <button class="btn-soft mini-btn tappable" loading="{{checkingBackend}}" bindtap="checkBackend" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">检测后端连接</button>
     <view class="dev-box" wx:if="{{!cloudMode}}">
       <view class="muted small">开发/真机调试地址</view>
       <input class="input" value="{{devBackendUrl}}" bindinput="onBackendInput" placeholder="http://192.168.x.x:8000/api/v1"/>
       <view class="row dev-actions">
-        <button class="btn-soft mini-btn grow" bindtap="saveBackendUrl">使用此地址</button>
-        <button class="btn-soft mini-btn grow" bindtap="resetBackendUrl">恢复本机默认</button>
+        <button class="btn-soft mini-btn grow tappable" bindtap="saveBackendUrl" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">使用此地址</button>
+        <button class="btn-soft mini-btn grow tappable" bindtap="resetBackendUrl" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">恢复本机默认</button>
       </view>
       <view class="muted tiny">真机调试时 127.0.0.1 指向手机本身，请填写电脑局域网 IP 或已部署的 HTTPS 域名。</view>
     </view>
@@ -38,7 +38,7 @@
         <view class="label-title">启用个人配置</view>
         <view class="muted small">关闭后保留配置，但聊天使用系统默认 Provider</view>
       </view>
-      <switch checked="{{form.enabled}}" bindchange="toggle" color="#245B4B"/>
+      <switch checked="{{form.enabled}}" bindchange="toggle" color="#506336"/>
     </view>
   </view>
 
@@ -57,7 +57,7 @@
       <input class="input" value="{{form.model}}" data-k="model" bindinput="inp" placeholder="从 DeepSeek 控制台复制服务 ID"/>
       <view class="model-chips">
         <block wx:for="{{models}}" wx:key="*this">
-          <text class="{{form.model==item?'active':''}}" bindtap="useModel" data-model="{{item}}">{{item}}</text>
+          <view class="{{form.model==item?'active':''}} tappable" bindtap="useModel" data-model="{{item}}" hover-class="tap" hover-start-time="0" hover-stay-time="80">{{item}}</view>
         </block>
       </view>
     </view>
@@ -71,7 +71,7 @@
     <view class="security-item">• 正式上线仍建议启用 HTTPS、密钥轮换、日志脱敏和访问限流。</view>
   </view>
 
-  <button class="btn-soft test" loading="{{testing}}" bindtap="test">测试 DeepSeek 连接</button>
-  <button class="btn-primary save" loading="{{saving}}" bindtap="save">保存配置</button>
-  <view class="reset" bindtap="reset">恢复系统默认配置</view>
+  <button class="btn-soft test tappable" loading="{{testing}}" bindtap="test" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">测试 DeepSeek 连接</button>
+  <button class="btn-primary save tappable" loading="{{saving}}" bindtap="save" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">保存配置</button>
+  <view class="reset tappable" bindtap="reset" hover-class="tap" hover-start-time="0" hover-stay-time="80">恢复系统默认配置</view>
 </view>

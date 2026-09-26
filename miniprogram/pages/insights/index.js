@@ -126,7 +126,7 @@ Page({
       title: '停止当前微实验？',
       content: '停止后不会删除你已经记录的健康数据。',
       confirmText: '停止实验',
-      confirmColor: '#9c4f45',
+      confirmColor: '#c0392b',
       success: result => resolve(result.confirm),
       fail: () => resolve(false)
     }))

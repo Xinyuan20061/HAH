@@ -23,15 +23,15 @@
   ],
   "window": {
     "navigationBarTitleText": "HealthMate",
-    "navigationBarBackgroundColor": "#F5F4EF",
+    "navigationBarBackgroundColor": "#F7F7F2",
     "navigationBarTextStyle": "black",
-    "backgroundColor": "#F5F4EF",
+    "backgroundColor": "#F7F7F2",
     "backgroundTextStyle": "dark"
   },
   "tabBar": {
-    "color": "#87938F",
-    "selectedColor": "#173F35",
-    "backgroundColor": "#FBFAF6",
+    "color": "#8E9389",
+    "selectedColor": "#111613",
+    "backgroundColor": "#FFFFFF",
     "borderStyle": "white",
     "list": [
       {

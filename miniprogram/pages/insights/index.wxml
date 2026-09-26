@@ -14,7 +14,7 @@
     <view class="skeleton-card"></view><view class="skeleton-card short"></view>
   </view>
   <view wx:elif="{{error}}" class="insight-state error-state">
-    <view class="state-symbol">!</view><view class="state-title">暂时没有加载出来</view><view class="state-copy">{{error}}</view><button bindtap="retry">重新连接</button>
+    <view class="state-symbol">!</view><view class="state-title">暂时没有加载出来</view><view class="state-copy">{{error}}</view><button class="tappable" bindtap="retry" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">重新连接</button>
   </view>
   <block wx:else>
     <view wx:if="{{activeExperiment&&activeExperiment.status==='active'}}" class="experiment-live">
@@ -24,13 +24,13 @@
       <view class="experiment-progress-head"><text>当前 {{activeExperiment.progressValueDisplay}}</text><text>目标 {{activeExperiment.progressTargetDisplay}}</text></view>
       <view class="experiment-track"><view style="width:{{activeExperiment.progressPct}}%"></view></view>
       <view class="experiment-meta"><text>{{activeExperiment.start_date}} 至 {{activeExperiment.end_date}}</text><text wx:if="{{activeExperiment.days_remaining}}">剩 {{activeExperiment.days_remaining}} 天</text><text wx:else>可生成复盘</text></view>
-      <view class="experiment-controls"><button wx:if="{{activeExperiment.can_finish}}" class="review-button" bindtap="finishExperiment" disabled="{{experimentSending}}">生成实验复盘</button><button class="stop-button" bindtap="cancelExperiment" disabled="{{experimentSending}}">停止</button></view>
+      <view class="experiment-controls"><button wx:if="{{activeExperiment.can_finish}}" class="review-button tappable" bindtap="finishExperiment" disabled="{{experimentSending}}" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">生成实验复盘</button><button class="stop-button tappable" bindtap="cancelExperiment" disabled="{{experimentSending}}" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">停止</button></view>
       <view class="experiment-boundary">结果只描述相关变化，不证明因果。{{activeExperiment.boundary}}</view>
     </view>
 
     <view wx:if="{{!insights.length}}" class="insight-state clear-state">
       <view class="clear-ring">✓</view><view class="state-title">今天没有需要优先干预的信号</view><view class="state-copy">保持真实记录即可。系统会持续关注运动、睡眠、体重和动作表现的变化。</view>
-      <button data-route="/pages/checkin/index" bindtap="openAction">记录今天</button>
+      <button class="tappable" data-route="/pages/checkin/index" bindtap="openAction" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">记录今天</button>
     </view>
 
     <view wx:else class="insight-list">
@@ -41,8 +41,8 @@
         <view class="evidence-block"><view class="block-label">观察到</view><view>{{item.evidence}}</view></view>
         <view class="advice-block"><view class="block-label">建议先做</view><view>{{item.advice}}</view></view>
         <view class="card-actions">
-          <button class="action-primary" data-route="{{item.route}}" bindtap="openAction">{{item.actionLabel}}</button>
-          <button class="action-link" data-prompt="{{item.askPrompt}}" bindtap="askAssistant">问健康助手</button>
+          <button class="action-primary tappable" data-route="{{item.route}}" bindtap="openAction" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">{{item.actionLabel}}</button>
+          <button class="action-link tappable" data-prompt="{{item.askPrompt}}" bindtap="askAssistant" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">问健康助手</button>
         </view>
         <view wx:if="{{item.experimentProposal&&!activeExperiment}}" class="experiment-proposal">
           <view class="experiment-kicker">把提醒变成可验证行动</view>
@@ -53,7 +53,7 @@
             <view wx:for="{{item.experimentProposal.variants}}" wx:for-item="variant" wx:key="key" class="variant-card">
               <view class="variant-head"><b>{{variant.label}}</b><text>{{variant.days}} 天</text></view>
               <view class="variant-action">{{variant.action}}</view>
-              <button data-code="{{item.code}}" data-variant="{{variant.key}}" bindtap="startExperiment" disabled="{{experimentSending}}">选择并启动</button>
+              <button class="tappable" data-code="{{item.code}}" data-variant="{{variant.key}}" bindtap="startExperiment" disabled="{{experimentSending}}" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">选择并启动</button>
             </view>
           </view>
           <view class="proposal-boundary">停止条件：{{item.experimentProposal.stop_condition}}</view>
@@ -63,9 +63,9 @@
           <view wx:if="{{!item.feedback}}">
             <view class="feedback-question">这条提醒对你准确吗？</view>
             <view class="feedback-actions">
-              <button data-code="{{item.code}}" data-verdict="helpful" bindtap="submitFeedback" disabled="{{feedbackSendingCode===item.code}}">有帮助</button>
-              <button data-code="{{item.code}}" data-verdict="inaccurate" bindtap="submitFeedback" disabled="{{feedbackSendingCode===item.code}}">不准确</button>
-              <button data-code="{{item.code}}" data-verdict="resolved" bindtap="submitFeedback" disabled="{{feedbackSendingCode===item.code}}">已处理</button>
+              <button class="tappable" data-code="{{item.code}}" data-verdict="helpful" bindtap="submitFeedback" disabled="{{feedbackSendingCode===item.code}}" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">有帮助</button>
+              <button class="tappable" data-code="{{item.code}}" data-verdict="inaccurate" bindtap="submitFeedback" disabled="{{feedbackSendingCode===item.code}}" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">不准确</button>
+              <button class="tappable" data-code="{{item.code}}" data-verdict="resolved" bindtap="submitFeedback" disabled="{{feedbackSendingCode===item.code}}" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">已处理</button>
             </view>
           </view>
           <view wx:else class="feedback-done"><text>✓</text>{{item.feedbackLabel}}<view>仅用于质量评测，不自动训练</view></view>

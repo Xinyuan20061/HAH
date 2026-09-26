@@ -1,7 +1,7 @@
 <view class="page eval-page">
   <view class="hero card hero-grad"><view class="kicker">运行与评测</view><view class="hero-title">结果好不好，要用真实数据说明</view><view class="hero-sub">运行指标来自实际事件；准确率来自固定标注测试集，不用空值冒充 0。</view></view>
   <view wx:if="{{loading}}" class="state-card"><view class="state-spinner"></view><view><view class="state-title">正在汇总真实运行事件</view><view class="state-desc">识餐、Agent、视频任务、周报与安全拦截</view></view></view>
-  <view wx:if="{{error}}" class="state-card state-card-error"><view><view class="state-title">评测面板暂时不可用</view><view class="state-desc">{{error}}</view></view><button class="btn-soft compact" bindtap="retry">重试</button></view>
+  <view wx:if="{{error}}" class="state-card state-card-error"><view><view class="state-title">评测面板暂时不可用</view><view class="state-desc">{{error}}</view></view><button class="btn-soft compact tappable" bindtap="retry" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">重试</button></view>
   <block wx:if="{{dash}}">
     <view class="section-title">30 日运行指标</view>
     <view class="metric-grid"><view class="metric-card" wx:for="{{metrics}}" wx:key="key"><view class="metric-label">{{item.label}}</view><view class="metric-value {{item.value===null?'empty-value':''}}">{{item.display}}</view><view class="metric-sample">样本 n={{item.sample_size}}</view></view></view>

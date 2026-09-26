@@ -1,1 +1,9 @@
-.intro{margin:8rpx 0 28rpx}.label{font-size:23rpx;color:#61706B;margin:22rpx 0 8rpx}.grid{display:grid;grid-template-columns:1fr 1fr;gap:18rpx}.save{margin-top:28rpx}.templates{display:grid;grid-template-columns:1fr 1fr;gap:14rpx}.template{background:#fff;border-radius:24rpx;padding:22rpx;border:1rpx solid #E8EEEB}.template-name{font-weight:700;margin-bottom:7rpx}.template .muted{font-size:20rpx}.record{display:flex;align-items:center;padding:24rpx}.record-name{font-weight:700;margin-right:10rpx}.record-meta{font-size:21rpx;margin-top:7rpx}.delete{font-size:21rpx;color:#A65A5A;padding:14rpx}
+.intro{margin:8rpx 0 32rpx}.label{font-size:23rpx;color:#5f665f;margin:24rpx 0 8rpx}.grid{display:grid;grid-template-columns:1fr 1fr;gap:20rpx}.save{margin-top:32rpx}.templates{display:grid;grid-template-columns:1fr 1fr;gap:16rpx}.template{background:#fff;border-radius:24rpx;padding:24rpx;border:1rpx solid #e9efd9}.template-name{font-weight:700;margin-bottom:8rpx}.template .muted{font-size:20rpx}.record{display:flex;align-items:center;padding:24rpx}.record-name{font-weight:700;margin-right:12rpx}.record-meta{font-size:21rpx;margin-top:8rpx}.delete{font-size:21rpx;color:#A65A5A;padding:16rpx}
+
+/* ── Curved Card Deletion ──────────────────────────────────────────────────
+   卡片跟手时按 inline transform 走弧线，基础过渡写在 .record 上，
+   这样「弹回」也有动画；跟手期间用 .dragging 关掉过渡，否则会有拖尾延迟。
+   过渡写在基础类而不是复合选择器里，回弹才不会瞬跳。 */
+.record {transition: transform .34s cubic-bezier(.34,1.56,.64,1), opacity .28s ease-out; }
+.dragging {transition: none; }
+.leaving {opacity: 0; transition: transform .42s cubic-bezier(.4,0,1,.4), opacity .42s ease-out; }

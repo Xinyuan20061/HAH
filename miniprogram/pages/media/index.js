@@ -26,7 +26,7 @@ Page({
     trainingIntent: { confirmed: false, target_body_parts: [], goals: [] }, savingIntent: false, targetIndex: 0, goalIndex: 0,
     targetOptions: ['胸部', '背部', '肩部', '手臂', '核心', '股四头肌', '臀部', '腘绳肌'],
     goalOptions: ['力量', '增肌', '肌耐力', '平衡与稳定', '核心稳定'],
-    cloudMode: api.isCloud(), showDetails: false, showGoal: false
+    cloudMode: api.isCloud(), showDetails: false, detailsHeight: '0px', showGoal: false
   },
   async onLoad() {
     this._unloaded = false
@@ -195,7 +195,33 @@ Page({
     } finally { if (!this._unloaded) this.setData({ analyzing: false }) }
   },
   pickFrame(e) { const i = Number(e.currentTarget.dataset.i); this.setData({ activeFrame: this.data.analysis.frames[i] }, () => this.drawSkeleton()) },
-  toggleDetails() { this.setData({ showDetails: !this.data.showDetails }, () => this.drawSkeleton()) },
+
+  // Animated Text Disclosure：按真实内容高度过渡，而不是固定时长淡入
+  measureDetails(cb) {
+    wx.createSelectorQuery().in(this).select('#detailsBody').boundingClientRect((r) => {
+      cb(r && r.height ? Math.ceil(r.height) : 0)
+    }).exec()
+  },
+  toggleDetails() {
+    const open = !this.data.showDetails
+    if (open) {
+      this.setData({ showDetails: true })
+      this.measureDetails((h) => this.setData({ detailsHeight: h + 'px' }))
+      setTimeout(() => this.drawSkeleton(), 360)
+      return
+    }
+    // 收起：先量出当前高度并固化成具体值，下一帧再收到 0，才能连续过渡
+    this.measureDetails((h) => {
+      this.setData({ detailsHeight: h + 'px' }, () => {
+        setTimeout(() => this.setData({ detailsHeight: '0px', showDetails: false }), 20)
+      })
+    })
+  },
+  // 展开动画结束后落成 auto：内容再长高也不会被裁掉
+  onDisclosureEnd(e) {
+    if (!e || !e.detail || e.detail.propertyName !== 'height') return
+    if (this.data.showDetails && this.data.detailsHeight !== 'auto') this.setData({ detailsHeight: 'auto' })
+  },
   toggleGoal() { this.setData({ showGoal: !this.data.showGoal }) },
   drawScoreRadar() {
     const score = this.data.analysis && this.data.analysis.score
@@ -210,9 +236,9 @@ Page({
       const cx = item.width / 2, cy = item.height / 2, radius = Math.min(item.width, item.height) * .31
       const point = (i, ratio) => { const a = -Math.PI / 2 + i * Math.PI / 2; return [cx + Math.cos(a) * radius * ratio, cy + Math.sin(a) * radius * ratio] }
       ctx.clearRect(0, 0, item.width, item.height); ctx.font = '12px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
-      for (let ring = 1; ring <= 4; ring++) { ctx.beginPath(); for (let i = 0; i < 4; i++) { const p = point(i, ring / 4); i ? ctx.lineTo(...p) : ctx.moveTo(...p) } ctx.closePath(); ctx.strokeStyle = '#dfe9e4'; ctx.stroke() }
-      ctx.beginPath(); values.forEach((v, i) => { const p = point(i, Math.max(0, Math.min(100, Number(v))) / 100); i ? ctx.lineTo(...p) : ctx.moveTo(...p) }); ctx.closePath(); ctx.fillStyle = 'rgba(45,115,95,.22)'; ctx.fill(); ctx.strokeStyle = '#2d735f'; ctx.lineWidth = 2; ctx.stroke()
-      labels.forEach((label, i) => { const p = point(i, 1.27); ctx.fillStyle = '#566760'; ctx.fillText(label, ...p) })
+      for (let ring = 1; ring <= 4; ring++) { ctx.beginPath(); for (let i = 0; i < 4; i++) { const p = point(i, ring / 4); i ? ctx.lineTo(...p) : ctx.moveTo(...p) } ctx.closePath(); ctx.strokeStyle = '#eeeee6'; ctx.stroke() }
+      ctx.beginPath(); values.forEach((v, i) => { const p = point(i, Math.max(0, Math.min(100, Number(v))) / 100); i ? ctx.lineTo(...p) : ctx.moveTo(...p) }); ctx.closePath(); ctx.fillStyle = 'rgba(196,226,103,.32)'; ctx.fill(); ctx.strokeStyle = '#506336'; ctx.lineWidth = 2; ctx.stroke()
+      labels.forEach((label, i) => { const p = point(i, 1.27); ctx.fillStyle = '#5f665f'; ctx.fillText(label, ...p) })
     })
   },
   drawSkeleton() {
@@ -222,11 +248,11 @@ Page({
       const item = res && res[0]; if (!item || !item.node) return
       const canvas = item.node, ctx = canvas.getContext('2d'), dpr = (wx.getWindowInfo ? wx.getWindowInfo().pixelRatio : 1) || 1
       canvas.width = item.width * dpr; canvas.height = item.height * dpr; ctx.scale(dpr, dpr)
-      ctx.fillStyle = '#173f34'; ctx.fillRect(0, 0, item.width, item.height)
+      ctx.fillStyle = '#111613'; ctx.fillRect(0, 0, item.width, item.height)
       const visible = points.filter(p => Number(p.visibility) >= .35), map = {}; visible.forEach(p => { map[p.id] = { x: Number(p.x) * item.width, y: Number(p.y) * item.height } })
       const links = [['left_shoulder','right_shoulder'],['left_shoulder','left_elbow'],['left_elbow','left_wrist'],['right_shoulder','right_elbow'],['right_elbow','right_wrist'],['left_shoulder','left_hip'],['right_shoulder','right_hip'],['left_hip','right_hip'],['left_hip','left_knee'],['left_knee','left_ankle'],['right_hip','right_knee'],['right_knee','right_ankle']]
-      ctx.strokeStyle = '#d8ff84'; ctx.lineWidth = 3; ctx.lineCap = 'round'; links.forEach(([a,b]) => { if (!map[a] || !map[b]) return; ctx.beginPath(); ctx.moveTo(map[a].x,map[a].y); ctx.lineTo(map[b].x,map[b].y); ctx.stroke() })
-      Object.values(map).forEach(p => { ctx.beginPath(); ctx.arc(p.x,p.y,5,0,Math.PI*2); ctx.fillStyle='#fff'; ctx.fill(); ctx.strokeStyle='#2d735f'; ctx.lineWidth=2; ctx.stroke() })
+      ctx.strokeStyle = '#c4e267'; ctx.lineWidth = 3; ctx.lineCap = 'round'; links.forEach(([a,b]) => { if (!map[a] || !map[b]) return; ctx.beginPath(); ctx.moveTo(map[a].x,map[a].y); ctx.lineTo(map[b].x,map[b].y); ctx.stroke() })
+      Object.values(map).forEach(p => { ctx.beginPath(); ctx.arc(p.x,p.y,5,0,Math.PI*2); ctx.fillStyle='#fff'; ctx.fill(); ctx.strokeStyle='#506336'; ctx.lineWidth=2; ctx.stroke() })
     })
   }
 })

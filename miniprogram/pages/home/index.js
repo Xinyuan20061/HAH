@@ -1,32 +1,32 @@
 const api = require('../../utils/request')
 const { ensureLogin } = require('../../utils/auth')
-const { normalizeExperiment } = require('../../utils/insightPresentation')
+const config = require('../../config/index')
 
 const TAB_ROUTES = new Set(['/pages/home/index','/pages/chat/index','/pages/records/index','/pages/plan/index','/pages/profile/index'])
+
+const NAV_ITEMS = [
+  { key: 'scan', label: '拍照识餐', icon: '餐', route: '/pages/scan/index' },
+  { key: 'media', label: '动作反馈', icon: '动', route: '/pages/media/index' },
+  { key: 'insights', label: '健康提醒', icon: '醒', route: '/pages/insights/index' },
+  { key: 'trends', label: '7 日趋势', icon: '趋', route: '/pages/trends/index' },
+  { key: 'goals', label: '健康目标', icon: '标', route: '/pages/goals/index' },
+  { key: 'report', label: '健康周报', icon: '报', route: '/pages/report/index' },
+  { key: 'workout', label: '训练计划', icon: '练', route: '/pages/workout/index' },
+  { key: 'profile', label: '身体档案', icon: '档', route: '/pages/profile/edit' }
+]
 
 Page({
   data: {
     loading: true,
     error: '',
     showOnboarding: false,
-    onboardingStep: 0,
     dateLabel: '',
-    slides: [],
-    summary: {},
-    plan: { items: [], done_count: 0 },
+    heroImage: config.HOME_HERO_IMAGE,
+    heroImageError: false,
     streak: {},
-    focus: { title: '先记录一项真实数据', reason: '真实记录是个性化建议的起点。', cta: '开始记录', route: '/pages/checkin/index', tone: 'calm', eyebrow: '建议先做' },
-    dataQuality: { sources_observed: 0, sources_total: 3 },
-    aiSystem: {},
     insightCount: 0,
-    insightSummary: '',
-    topInsight: null,
-    todayExperiment: null,
-    latest: {},
-    score: '--',
-    exPct: 0,
-    waterPct: 0,
-    sleepPct: 0
+    navOpen: false,
+    navItems: NAV_ITEMS
   },
   onLoad() {
     const now = new Date()
@@ -37,7 +37,6 @@ Page({
     })
   },
   onShow() { this.load() },
-  pct(value, target) { return Math.min(100, Math.round((Number(value)||0) / (Number(target)||1) * 100)) },
   async load() {
     this.setData({ loading: true, error: '' })
     try {
@@ -46,24 +45,10 @@ Page({
         api.get('/health/command-center', { allowCache: true }),
         api.get('/agent/insights', { allowCache: true }).catch(() => null)
       ])
-      const summary = center.today || {}
       const insights = insightPayload && Array.isArray(insightPayload.insights) ? insightPayload.insights : []
       this.setData({
-        summary,
-        plan: center.plan || { items: [], done_count: 0 },
         streak: center.streak || {},
-        focus: center.focus || this.data.focus,
-        dataQuality: center.data_quality || this.data.dataQuality,
-        aiSystem: center.ai_system || {},
-        insightCount: insights.length,
-        insightSummary: insightPayload && insightPayload.summary || '',
-        topInsight: insights[0] || null,
-        todayExperiment: normalizeExperiment(insightPayload && insightPayload.active_experiment),
-        latest: center.latest || {},
-        score: center.data_quality && center.data_quality.score !== null ? center.data_quality.score : '--',
-        exPct: this.pct(summary.exercise_min, summary.exercise_target),
-        waterPct: this.pct(summary.water_ml, summary.water_target),
-        sleepPct: this.pct(summary.sleep_hours, summary.sleep_target)
+        insightCount: insights.length
       })
     } catch (e) {
       this.setData({ error: e.message || '请检查网络和云托管服务状态' })
@@ -72,33 +57,17 @@ Page({
     }
   },
   retry() { this.load() },
+  onHeroError() { this.setData({ heroImageError: true }) },
   openRoute(route) {
     if (!route) return
     if (TAB_ROUTES.has(route)) wx.switchTab({ url: route })
     else wx.navigateTo({ url: route })
   },
-  goFocus() { this.openRoute(this.data.focus.route) },
-  async togglePlan(e) {
-    const key = e.currentTarget.dataset.key
-    const done = e.currentTarget.dataset.done === true || e.currentTarget.dataset.done === 'true'
-    if (!key) return
-    try {
-      await api.put(`/health/plan/today/${key}`, { done: !done })
-      await this.load()
-    } catch (err) {
-      wx.showToast({ title: err.message || '更新失败', icon: 'none' })
-    }
+  openNav() { this.setData({ navOpen: true }) },  closeNav() { this.setData({ navOpen: false }) },
+  openNavItem(e) {
+    this.setData({ navOpen: false })
+    this.openRoute(e.currentTarget.dataset.route)
   },
-  nextOnboarding() {
-    if (this.data.onboardingStep < 2) this.setData({ onboardingStep: this.data.onboardingStep + 1 })
-    else this.finishOnboarding()
-  },
-  finishOnboarding() { wx.setStorageSync('onboarding_v5', true); this.setData({ showOnboarding: false }) },
-  toChat() { wx.switchTab({ url: '/pages/chat/index' }) },
-  toInsights() { wx.navigateTo({ url: '/pages/insights/index' }) },
   toCheckin() { wx.navigateTo({ url: '/pages/checkin/index' }) },
-  toPlan() { wx.switchTab({ url: '/pages/plan/index' }) },
-  toScan() { wx.navigateTo({ url: '/pages/scan/index' }) },
-  toWorkout() { wx.navigateTo({ url: '/pages/workout/index' }) },
-  toMedia() { wx.navigateTo({ url: '/pages/media/index' }) }
+  finishOnboarding() { wx.setStorageSync('onboarding_v5', true); this.setData({ showOnboarding: false }) }
 })

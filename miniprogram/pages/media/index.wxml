@@ -1,10 +1,10 @@
 <view class="page media-page">
   <view class="media-hero"><view class="kicker">动作反馈</view><view class="title">录一段，看看动作</view><view class="subtitle">保持全身入镜，建议拍摄 5–20 秒。</view></view>
 
-  <view class="drop" bindtap="choose"><view class="upload-icon">＋</view><text class="b">{{file?'已选择视频':'选择动作视频'}}</text><text class="small">{{file?name:'支持 MP4 / MOV'}}</text></view>
+  <view class="drop tappable" bindtap="choose" hover-class="tap" hover-start-time="0" hover-stay-time="80"><view class="upload-icon">＋</view><text class="b">{{file?'已选择视频':'选择动作视频'}}</text><text class="small">{{file?name:'支持 MP4 / MOV'}}</text></view>
   <video wx:if="{{file&&type==='video'}}" src="{{file}}" controls class="preview"></video>
   <picker mode="selector" range="{{exerciseOptions}}" value="{{exerciseIndex}}" bindchange="changeExercise"><view class="motion-picker">动作：{{exerciseOptions[exerciseIndex]}}<text>切换</text></view></picker>
-  <button wx:if="{{!analysis}}" class="btn primary single-action" bindtap="analyze" loading="{{analyzing}}">{{analyzing?'正在处理…':'开始查看'}}</button>
+  <button wx:if="{{!analysis}}" class="btn primary single-action tappable" bindtap="analyze" loading="{{analyzing}}" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">{{analyzing?'正在处理…':'开始查看'}}</button>
   <view wx:if="{{jobStatus&&!analyzing&&!analysis}}" class="state-card"><view class="state-desc">{{jobStatus}}</view></view>
 
   <view wx:if="{{analysis}}" class="motion-result">
@@ -16,9 +16,9 @@
     <view class="rep-line"><view><b>{{analysis.pose&&analysis.pose.available?analysis.pose.reps:'--'}}</b><text>次数</text></view><view><b>{{analysis.periodLabel}}</b><text>平均周期</text></view></view>
 
     <view class="tip-block"><view class="tip-title">动作提示</view><view wx:for="{{analysis.tips}}" wx:key="*this">{{item}}</view></view>
-    <view class="detail-toggle" bindtap="toggleDetails">{{showDetails?'收起详情':'查看详情'}}<text>›</text></view>
+    <view class="detail-toggle tappable" bindtap="toggleDetails" hover-class="tap" hover-start-time="0" hover-stay-time="80">{{showDetails?'收起详情':'查看详情'}}<text>›</text></view>
 
-    <view wx:if="{{showDetails}}" class="motion-details">
+    <view class="disclosure {{showDetails?'open':''}}" style="height:{{detailsHeight}}" bindtransitionend="onDisclosureEnd"><view class="disclosure-body" id="detailsBody"><view class="motion-details">
       <view wx:if="{{analysis.recognition}}" class="detail-section"><view class="detail-title">动作判断</view><view class="detail-copy">{{analysis.recognition.reason}}</view><view class="candidate" wx:for="{{analysis.recognition.candidates}}" wx:key="exercise_type"><view class="row space"><text>{{item.exerciseName}}</text><b>{{item.matchPct}}</b></view><view class="candidate-track"><view style="width:{{item.matchPct}}%"></view></view></view></view>
       <view wx:if="{{analysis.pose&&analysis.pose.available}}" class="detail-section"><view class="detail-title">角度范围</view><view class="angle-grid"><view><text>最小{{analysis.primaryLabel}}</text><b>{{analysis.primaryMin}}°</b></view><view><text>最大{{analysis.primaryLabel}}</text><b>{{analysis.primaryMax}}°</b></view><view><text>有效画面</text><b>{{analysis.pose.sample_count}}</b></view></view></view>
       <view wx:if="{{activeFrame}}" class="frame-detail-card">
@@ -28,12 +28,12 @@
         <view wx:if="{{activeFrame.explanation}}" class="frame-explanation">{{activeFrame.explanation}}</view>
         <view class="frame-coach"><b>{{activeFrame.finding}}</b><text>{{activeFrame.advice}}</text></view>
       </view>
-      <scroll-view wx:if="{{analysis.frames.length}}" scroll-x class="frame-strip" enable-flex><view class="frame-item {{activeFrame.index===item.index?'on':''}}" wx:for="{{analysis.frames}}" wx:key="index" data-i="{{index}}" bindtap="pickFrame"><image wx:if="{{item.hasPreview}}" src="{{item.fullUrl}}" mode="aspectFill"/><view wx:else class="frame-metric"><text>{{item.primaryAngle===null?'--':item.primaryAngle}}</text><text>{{analysis.primaryLabel}}</text></view><view class="frame-time">{{item.label}}</view></view></scroll-view>
+      <scroll-view wx:if="{{analysis.frames.length}}" scroll-x class="frame-strip" enable-flex><view class="frame-item {{activeFrame.index===item.index?'on':''}} tappable" wx:for="{{analysis.frames}}" wx:key="index" data-i="{{index}}" bindtap="pickFrame" hover-class="tap" hover-start-time="0" hover-stay-time="80"><image wx:if="{{item.hasPreview}}" src="{{item.fullUrl}}" mode="aspectFill"/><view wx:else class="frame-metric"><text>{{item.primaryAngle===null?'--':item.primaryAngle}}</text><text>{{analysis.primaryLabel}}</text></view><view class="frame-time">{{item.label}}</view></view></scroll-view>
       <view wx:if="{{analysis.score&&analysis.score.available}}" class="detail-section"><view class="detail-title">评分详情</view><view class="score-grid"><view><text>完成</text><b>{{analysis.score.completeness}}</b></view><view><text>稳定</text><b>{{analysis.score.stability}}</b></view><view><text>节奏</text><b>{{analysis.score.rhythm_control}}</b></view><view><text>需调整</text><b>{{analysis.score.risk_index}}</b></view></view></view>
-    </view>
+    </view></view></view>
 
-    <view class="goal-entry" bindtap="toggleGoal">设置今日目标<text>›</text></view>
-    <view wx:if="{{showGoal}}" class="goal-editor"><view class="intent-grid"><picker mode="selector" range="{{targetOptions}}" value="{{targetIndex}}" bindchange="changeTarget"><view class="intent-picker"><text>目标部位</text><b>{{targetOptions[targetIndex]}}</b></view></picker><picker mode="selector" range="{{goalOptions}}" value="{{goalIndex}}" bindchange="changeGoal"><view class="intent-picker"><text>训练目标</text><b>{{goalOptions[goalIndex]}}</b></view></picker></view><button class="btn-soft" bindtap="saveTrainingIntent" loading="{{savingIntent}}">保存目标</button></view>
+    <view class="goal-entry tappable" bindtap="toggleGoal" hover-class="tap" hover-start-time="0" hover-stay-time="80">设置今日目标<text>›</text></view>
+    <view wx:if="{{showGoal}}" class="goal-editor"><view class="intent-grid"><picker mode="selector" range="{{targetOptions}}" value="{{targetIndex}}" bindchange="changeTarget"><view class="intent-picker"><text>目标部位</text><b>{{targetOptions[targetIndex]}}</b></view></picker><picker mode="selector" range="{{goalOptions}}" value="{{goalIndex}}" bindchange="changeGoal"><view class="intent-picker"><text>训练目标</text><b>{{goalOptions[goalIndex]}}</b></view></picker></view><button class="btn-soft tappable" bindtap="saveTrainingIntent" loading="{{savingIntent}}" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">保存目标</button></view>
   </view>
   <view class="notice">动作提示仅作一般健身参考；出现疼痛或明显不适时请停止。</view>
 </view>

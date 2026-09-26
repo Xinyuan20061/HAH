@@ -89,7 +89,6 @@ Page({
     if (!f.base_url || !f.model) return wx.showToast({ title: '请填写 Base URL 和服务 ID', icon: 'none' })
     if (!this.data.hasKey && !String(f.api_key || '').trim()) return wx.showToast({ title: '请填写 API Key', icon: 'none' })
 
-    // 第一次录入 Key 时默认启用，避免“已保存但实际未使用”的误解。
     if (!this.data.hasKey && String(f.api_key || '').trim() && !f.enabled) f.enabled = true
 
     this.setData({ saving: true })

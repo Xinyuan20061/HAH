@@ -7,23 +7,22 @@
     <view class="head-info">
       <view class="name-row">
         <text class="name">{{user.nickname||'微信用户'}}</text>
-        <text class="edit-link" bindtap="openEdit">编辑昵称</text>
+        <view class="edit-link tappable" bindtap="openEdit" hover-class="tap" hover-start-time="0" hover-stay-time="80">编辑昵称</view>
       </view>
-      <view class="muted">管理资料与数据</view>
     </view>
   </view>
   <view class="menu-list">
-    <view class="menu-row" bindtap="edit"><view><view class="info-title">身体资料</view><view class="muted menu-desc" wx:if="{{profile}}">{{profile.height_cm}} cm · {{profile.weight_kg}} kg · {{goalText}}</view></view><text>›</text></view>
-    <view class="menu-row" bindtap="goals"><view><view class="info-title">健康目标</view><view class="muted menu-desc">饮水、睡眠、运动与营养</view></view><text>›</text></view>
-    <view class="menu-row" bindtap="trends"><view><view class="info-title">7 日趋势</view><view class="muted menu-desc">查看近期变化</view></view><text>›</text></view>
-    <view class="menu-row" bindtap="insights"><view><view class="info-title">健康提醒</view><view class="muted menu-desc">查看值得关注的变化与下一步</view></view><text>›</text></view>
-    <view class="menu-row" bindtap="aiSettings"><view><view class="info-title">识别与回答偏好</view><view class="muted menu-desc">{{ai.enabled&&ai.has_api_key?'已使用个人配置':'使用默认配置'}}</view></view><text>›</text></view>
-    <view class="menu-row" bindtap="privacy"><view><view class="info-title">隐私与安全</view><view class="muted menu-desc">导出或删除数据</view></view><text>›</text></view>
-    <view class="menu-row" bindtap="evaluation"><view><view class="info-title">运行与评测</view><view class="muted menu-desc">查看真实运行结果</view></view><text>›</text></view>
+    <view class="menu-row tappable" bindtap="edit" hover-class="tap" hover-start-time="0" hover-stay-time="80"><view><view class="info-title">身体资料</view><view class="muted menu-desc" wx:if="{{profile}}">{{profile.height_cm}} cm · {{profile.weight_kg}} kg · {{goalText}}</view></view><text>›</text></view>
+    <view class="menu-row tappable" bindtap="goals" hover-class="tap" hover-start-time="0" hover-stay-time="80"><view><view class="info-title">健康目标</view></view><text>›</text></view>
+    <view class="menu-row tappable" bindtap="trends" hover-class="tap" hover-start-time="0" hover-stay-time="80"><view><view class="info-title">7 日趋势</view></view><text>›</text></view>
+    <view class="menu-row tappable" bindtap="insights" hover-class="tap" hover-start-time="0" hover-stay-time="80"><view><view class="info-title">健康提醒</view></view><text>›</text></view>
+    <view class="menu-row tappable" bindtap="aiSettings" hover-class="tap" hover-start-time="0" hover-stay-time="80"><view><view class="info-title">识别与回答偏好</view><view class="muted menu-desc">{{ai.enabled&&ai.has_api_key?'已使用个人配置':'使用默认配置'}}</view></view><text>›</text></view>
+    <view class="menu-row tappable" bindtap="privacy" hover-class="tap" hover-start-time="0" hover-stay-time="80"><view><view class="info-title">隐私与安全</view></view><text>›</text></view>
+    <view class="menu-row tappable" bindtap="evaluation" hover-class="tap" hover-start-time="0" hover-stay-time="80"><view><view class="info-title">运行与评测</view></view><text>›</text></view>
   </view>
   <view class="notice">健康建议不替代医生诊断。</view>
 
-  <view class="mask" wx:if="{{editing}}" bindtap="closeEdit"></view>
+  <view class="mask tappable" wx:if="{{editing}}" bindtap="closeEdit" hover-class="tap" hover-start-time="0" hover-stay-time="80"></view>
   <view class="edit-panel" wx:if="{{editing}}">
     <view class="panel-title">编辑资料</view>
     <button class="avatar-btn big" open-type="chooseAvatar" bindchooseavatar="onChooseAvatar" aria-label="选择头像">
@@ -34,8 +33,8 @@
     <input class="nick-input" type="nickname" placeholder="填写昵称" value="{{nickDraft}}" bindinput="onNickInput" maxlength="30"/>
     <view class="hint">点一下昵称输入框，键盘可直接带出微信昵称</view>
     <view class="panel-btns">
-      <button class="btn ghost" bindtap="closeEdit">取消</button>
-      <button class="btn primary" bindtap="saveProfile" loading="{{saving}}">保存</button>
+      <button class="btn ghost tappable" bindtap="closeEdit" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">取消</button>
+      <button class="btn primary tappable" bindtap="saveProfile" loading="{{saving}}" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">保存</button>
     </view>
   </view>
 </view>
