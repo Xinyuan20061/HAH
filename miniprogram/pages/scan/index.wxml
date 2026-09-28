@@ -1,4 +1,6 @@
-<view class="page scan-page">
+<include src="/components/page-transition/first-paint.wxml"/>
+<page-transition/>
+<view class="page scan-page ui-page-content">
   <view class="scan-hero"><view class="kicker">拍照识餐</view><view class="title">这一餐，大约多少？</view><view class="subtitle">拍清餐盘，确认后再保存。</view></view>
 
   <view class="flow">
@@ -10,7 +12,7 @@
     <view class="flow-line"><view class="flow-fill {{step>=4?'on':''}}"></view></view>
     <view class="flow-item {{step>=4?'on':''}}"><text>4</text>入库</view>
   </view>
-  <view class="camera tappable" bindtap="choose" hover-class="tap" hover-start-time="0" hover-stay-time="80"><image wx:if="{{image}}" src="{{image}}" mode="aspectFill"/><view wx:else class="empty-camera"><view class="lens"><image src="/assets/icons/camera.png" mode="aspectFit"/></view><text class="b">拍照或选择照片</text></view><view wx:if="{{loading}}" class="scan-status"><view class="scan-dot"></view><text>{{jobStatus||'正在估算'}}</text></view></view>
+  <view class="camera tappable" bindtap="choose" hover-class="tap" hover-start-time="0" hover-stay-time="80"><image wx:if="{{image}}" src="{{image}}" mode="aspectFill"/><view wx:else class="empty-camera"><view class="lens ui-fixed-circle"><image src="/assets/icons/camera.png" mode="aspectFit"/></view><text class="b">拍照或选择照片</text></view><view wx:if="{{loading}}" class="scan-status"><view class="scan-dot"></view><text>{{jobStatus||'正在估算'}}</text></view></view>
   <button wx:if="{{!result}}" class="analyze tappable" bindtap="analyze" loading="{{loading}}" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">{{loading?'正在估算…':(jobId?'查看进度':(image?'开始识别':'选择餐食照片'))}}</button>
   <view wx:if="{{jobStatus&&!loading&&!result}}" class="notice">{{jobStatus}}</view>
   <view wx:if="{{state==='error'}}" class="state-panel state-error"><view class="state-title">这一步没有完成</view><view class="state-desc">{{error}}</view><button class="btn-soft mini tappable" bindtap="retry" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">重新尝试</button></view>

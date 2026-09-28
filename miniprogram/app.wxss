@@ -1,4 +1,4 @@
-page {background: #f7f7f2;color: #111613;font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;font-size: 32rpx;line-height: 1.65;animation: appPageIn .28s ease-out;
+page {background: #f7f7f2;color: #111613;font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;font-size: 32rpx;line-height: 1.65;
 }
 
 .page {min-height: 100vh;padding: 40rpx 32rpx 72rpx;box-sizing: border-box; }
@@ -14,16 +14,35 @@ page {background: #f7f7f2;color: #111613;font-family: -apple-system, BlinkMacSys
 
 /* Compact shared icon language. The glyph looks small while its round surface
    keeps a comfortable hit area and a consistent 32rpx page rhythm. */
-.ui-icon-box {display: flex;align-items: center;justify-content: center;width: 64rpx;height: 64rpx;flex: none;border-radius: 50%;background: #e9efd9; }
+.ui-icon-box {display: flex;align-items: center;justify-content: center;width: 64rpx;min-width:64rpx;max-width:64rpx;height: 64rpx;min-height:64rpx;max-height:64rpx;box-sizing:border-box;flex:0 0 64rpx;overflow:hidden;border-radius:999rpx;background: #e9efd9; }
 .ui-icon-box.soft {background: #f7f7f2; }
 .ui-icon-box.lime {background: #c4e267; }
 .ui-icon-image {display: block;width: 38rpx;height: 38rpx; }
-.ui-icon-box.large {width: 80rpx;height: 80rpx; }
+.ui-icon-box.large {width:80rpx;min-width:80rpx;max-width:80rpx;height:80rpx;min-height:80rpx;max-height:80rpx;flex-basis:80rpx; }
 .ui-icon-box.large .ui-icon-image {width: 46rpx;height: 46rpx; }
 .ui-chevron {display: block;width: 34rpx;height: 34rpx;flex: none;opacity: .72; }
-.ui-round-button {display: flex;align-items: center;justify-content: center;width: 60rpx;height: 60rpx;min-width: 60rpx;margin: 0;padding: 0;border-radius: 50%;background: #e9efd9; }
+.ui-round-button {display:flex;align-items:center;justify-content:center;width:60rpx;min-width:60rpx;max-width:60rpx;height:60rpx;min-height:60rpx;max-height:60rpx;box-sizing:border-box;flex:0 0 60rpx;margin:0;padding:0;overflow:hidden;border-radius:999rpx;background:#e9efd9; }
 .ui-round-button::after {border: 0; }
 .ui-round-button image {display: block;width: 32rpx;height: 32rpx; }
+
+/* Every icon-only round surface opts into this contract. It prevents a flex
+   parent or a native control default from stretching a square into a pill. */
+.ui-fixed-circle {box-sizing:border-box;flex:none;overflow:hidden;border-radius:999rpx; }
+
+/* Compile-time-inlined first paint. Its complete logo state exists in the
+   page's first render batch, before any custom-component lifecycle runs. */
+.first-route-veil {position:fixed;left:0;top:0;right:0;bottom:0;z-index:10000;display:flex;align-items:center;justify-content:center;background:#f7f7f2;pointer-events:none;animation:firstRouteVeilOut .18s .32s ease-out forwards; }
+.first-route-brand {display:flex;align-items:center;flex-direction:column;margin-top:-48rpx; }
+.first-route-logo {display:block;width:88rpx;height:88rpx;animation:firstRouteLogoThink .6s ease-in-out 1; }
+.first-route-thinking {display:flex;align-items:center;gap:8rpx;height:16rpx;margin-top:24rpx; }
+.first-route-thinking view {width:8rpx;height:8rpx;border-radius:999rpx;background:#506336;animation:firstRouteThinkingDot .6s ease-in-out 1; }
+.first-route-thinking view:nth-child(2) {animation-delay:.12s; }
+.first-route-thinking view:nth-child(3) {animation-delay:.24s; }
+
+/* Every page starts behind the first-paint guard and the route veil, then rises
+   into place while the veil fades. `backwards` hides content during the delay
+   without leaving a transform on the page root after the animation finishes. */
+.ui-page-content {animation: pageContentReveal .36s .32s cubic-bezier(.2,.8,.2,1) backwards; }
 
 .btn-primary, .btn-soft {min-height: 100rpx;border-radius: 18rpx !important;font-size: 31rpx !important;font-weight: 650 !important;letter-spacing: .2rpx; }
 .btn-primary {color:#111613 !important;background: #c4e267 !important; }
@@ -100,6 +119,10 @@ button[disabled] {opacity: .45; }
 .skeleton-line {height: 24rpx;border-radius: 999rpx;background: linear-gradient(90deg,#e9efd9 25%,#f7f7f2 37%,#e9efd9 63%);background-size: 400% 100%;animation: skeletonMove 1.4s ease infinite; }
 @keyframes stateSpin { to {transform: rotate(360deg); } }
 @keyframes skeletonMove { 0% {background-position: 100% 0; } 100% {background-position: 0 0; } }
+@keyframes firstRouteVeilOut { from {opacity:1; } to {opacity:0; } }
+@keyframes firstRouteLogoThink { 0%,100% {transform:scale(.96); } 50% {transform:scale(1.04); } }
+@keyframes firstRouteThinkingDot { 0%,60%,100% {opacity:.24;transform:translateY(0); } 30% {opacity:1;transform:translateY(-4rpx); } }
+@keyframes pageContentReveal { from {opacity:0;transform:translateY(12rpx); } to {opacity:1;transform:translateY(0); } }
 
 /* ═══════════ 交互动画基础 ═══════════
    点按反馈：元素上加 hover-class="tap|tap-chip|tap-card|tap-btn"，
@@ -114,7 +137,6 @@ button[disabled] {opacity: .45; }
 
 /* 浮层/面板入场：元素由 wx:if 挂载时动画自动播放，不需要改 JS */
 @keyframes fadeIn { from {opacity: 0 } to {opacity: 1 } }
-@keyframes appPageIn { from {opacity: 0 } to {opacity: 1 } }
 @keyframes sheetUp { from {opacity: 0;transform: translateY(48rpx) } to {opacity: 1;transform: translateY(0) } }
 @keyframes expandDown { from {opacity: 0;transform: translateY(-12rpx) } to {opacity: 1;transform: translateY(0) } }
 

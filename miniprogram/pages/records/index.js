@@ -3,22 +3,32 @@ const { ensureLogin } = require('../../utils/auth')
 const energyChart = require('../../utils/energyChart')
 
 const MEALS = [
-  { key: 'breakfast', label: '早餐', color: '#c4e267' },
-  { key: 'lunch', label: '午餐', color: '#e9efd9' },
-  { key: 'dinner', label: '晚餐', color: '#506336' },
-  { key: 'snack', label: '加餐', color: '#5f665f' }
+  { key: 'breakfast', label: '早餐', shortLabel: '早', color: '#c4e267' },
+  { key: 'lunch', label: '午餐', shortLabel: '午', color: '#e9efd9' },
+  { key: 'dinner', label: '晚餐', shortLabel: '晚', color: '#506336' },
+  { key: 'snack', label: '加餐', shortLabel: '加', color: '#5f665f' }
 ]
 
 Page({
   data: {
     loading: true, error: '', dashboard: null, today: null, target: null, resting: null, meals: [],
-    activeSummary: '触摸柱形查看单日餐次与运动数据', balanceTitle: '', netText: '--', netBadgeStyle: '',
-    intakeBarStyle: 'width:0%', targetMarkStyle: 'left:0%'
+    activeSummary: '触摸柱形查看单日餐次与运动数据', netText: '--',
+    budgetText: '', budgetFillStyle: 'width:0%', budgetWindowStyle: 'left:0%;width:0%'
   },
   onLoad() { this._loadedOnce = false },
   onShow() { this.load() },
-  onUnload() { this._unloaded = true; this._energyCharts = null },
+  onHide() { this.resetChart() },
+  onUnload() { this._unloaded = true; this.resetChart() },
+  resetChart() {
+    if (this._chartTimer) clearTimeout(this._chartTimer)
+    this._chartTimer = null
+    this._energyCharts = null
+  },
   async load() {
+    // `loading` temporarily removes the canvas via wx:if. A chart context from
+    // the previous render therefore points at a detached node and must never be
+    // reused when this cached page is shown again.
+    this.resetChart()
     const requestId = Date.now()
     this._requestId = requestId
     this.setData({ loading: true, error: '' })
@@ -28,20 +38,26 @@ Page({
       if (this._unloaded || this._requestId !== requestId) return
       const today = dashboard.today || {}
       const target = dashboard.target || {}
-      const chartMax = Math.max(Number(today.intake) || 0, Number(target.upper) || 1) * 1.08
-      const meals = MEALS.map(item => ({
-        ...item,
-        value: Number(today[item.key]) || 0,
-        style: `width:${Math.min(100, (Number(today[item.key]) || 0) / chartMax * 100).toFixed(1)}%;background:${item.color}`
-      }))
+      const targetToday = Math.max(1, Number(target.today) || 1)
+      const meals = MEALS.map((item, index) => {
+        const value = Math.round(Number(today[item.key]) || 0)
+        const width = value ? Math.max(4, Math.min(100, value / targetToday * 100)) : 0
+        return { ...item, value, rowStyle: `width:${width.toFixed(1)}%;background:${item.color};animation-delay:${index * 60}ms` }
+      })
       const balance = this.balanceCopy(today.balance, today.net)
+      const budget = this.budgetCopy(today, target)
       this.setData({
         loading: false, dashboard, today, target, resting: dashboard.resting || {}, meals,
-        balanceTitle: balance.title, netText: balance.net, netBadgeStyle: balance.style,
-        intakeBarStyle: `width:${Math.min(100, (Number(today.intake) || 0) / chartMax * 100).toFixed(1)}%`,
-        targetMarkStyle: `left:${Math.min(98, (Number(target.today) || 0) / chartMax * 100).toFixed(1)}%`,
+        netText: balance.net,
+        budgetText: budget.text, budgetFillStyle: budget.fillStyle,
+        budgetWindowStyle: budget.windowStyle,
         activeSummary: this.daySummary(today)
-      }, () => setTimeout(() => this.renderChart(), 60))
+      }, () => {
+        this._chartTimer = setTimeout(() => {
+          this._chartTimer = null
+          this.renderChart()
+        }, 60)
+      })
       this._loadedOnce = true
     } catch (error) {
       if (this._unloaded || this._requestId !== requestId) return
@@ -55,6 +71,24 @@ Page({
     if (balance === 'negative') return { title: '今日已知摄入低于已知消耗', net: `${value}`, style: 'background:#e9efd9;color:#506336' }
     return { title: '今日已知能量基本平衡', net: `${value > 0 ? '+' : ''}${value}`, style: 'background:#c4e267;color:#111613' }
   },
+  budgetCopy(today, target) {
+    const intake = Math.max(0, Number(today.intake) || 0)
+    const lower = Math.max(0, Number(target.lower) || 0)
+    const upper = Math.max(lower + 1, Number(target.upper) || 1)
+    const max = Math.ceil(Math.max(upper, intake) * 1.08 / 50) * 50
+    const pct = value => Math.min(100, Math.max(0, value / max * 100))
+    let text = '处于今日建议区间'
+    if (intake < lower) {
+      text = `距建议下限 ${Math.round(lower - intake)} kcal`
+    } else if (intake > upper) {
+      text = `超出建议上限 ${Math.round(intake - upper)} kcal`
+    }
+    return {
+      text,
+      fillStyle: `width:${pct(intake).toFixed(1)}%`,
+      windowStyle: `left:${pct(lower).toFixed(1)}%;width:${Math.max(2, pct(upper) - pct(lower)).toFixed(1)}%`
+    }
+  },
   daySummary(day) {
     if (!day) return '触摸柱形查看单日数据'
     const recorded = day.observed && day.observed.diet
@@ -65,16 +99,12 @@ Page({
   renderChart() {
     const dashboard = this.data.dashboard
     if (!dashboard || !dashboard.days) return
-    const options = { days: dashboard.days }
+    const options = { days: dashboard.days, compact: true }
     if (this._energyCharts && this._energyCharts.week) energyChart.draw(this, 'week', options)
     else energyChart.init(this, '#energyCanvas', 'week', options)
   },
-  chartTouch(event) {
-    const index = energyChart.touch(this, 'week', event)
-    if (index < 0) return
-    this.setData({ activeSummary: this.daySummary(this.data.dashboard.days[index]) })
-  },
   retry() { this.load() },
+  trends() { wx.navigateTo({ url: '/pages/trends/index' }) },
   scan() { wx.navigateTo({ url: '/pages/scan/index' }) },
   checkin() { wx.navigateTo({ url: '/pages/checkin/index' }) },
   exercise() { wx.navigateTo({ url: '/pages/records/exercise' }) },

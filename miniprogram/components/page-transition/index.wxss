@@ -1,0 +1,68 @@
+.route-veil {
+  position: fixed;
+  left: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f7f7f2;
+  opacity: 1;
+  transition: opacity .18s ease-out;
+}
+
+.route-veil.leaving {opacity: 0;pointer-events: none;}
+.route-veil.paused .route-brand,
+.route-veil.paused .route-logo,
+.route-veil.paused .route-thinking view {animation-play-state: paused;}
+
+.route-brand {
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+  margin-top: -48rpx;
+  animation: routeBrandIn .28s cubic-bezier(.2,.8,.2,1) both;
+}
+
+.route-logo {
+  display: block;
+  width: 88rpx;
+  height: 88rpx;
+  animation: routeLogoThink 1.2s ease-in-out infinite;
+}
+
+.route-thinking {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  height: 16rpx;
+  margin-top: 24rpx;
+}
+
+.route-thinking view {
+  width: 8rpx;
+  height: 8rpx;
+  border-radius: 999rpx;
+  background: #506336;
+  animation: routeThinkingDot .9s ease-in-out infinite;
+}
+
+.route-thinking view:nth-child(2) {animation-delay: .12s;}
+.route-thinking view:nth-child(3) {animation-delay: .24s;}
+
+@keyframes routeBrandIn {
+  from {opacity: 0;transform: translateY(12rpx) scale(.96);}
+  to {opacity: 1;transform: translateY(0) scale(1);}
+}
+
+@keyframes routeLogoThink {
+  0%,100% {transform: scale(.96);}
+  50% {transform: scale(1.04);}
+}
+
+@keyframes routeThinkingDot {
+  0%,60%,100% {opacity: .24;transform: translateY(0);}
+  30% {opacity: 1;transform: translateY(-4rpx);}
+}

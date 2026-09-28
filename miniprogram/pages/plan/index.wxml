@@ -1,4 +1,6 @@
-<view class="page">
+<include src="/components/page-transition/first-paint.wxml"/>
+<page-transition/>
+<view class="page ui-page-content">
   <view class="title">今天</view><view class="subtitle">{{headline}}</view>
   <view class="today-count">{{doneCount}} / {{items.length||3}} 完成<text wx:if="{{items.length}}" class="undo-hint">误触可点「恢复」</text></view>
   <view class="plan-simple">
@@ -7,7 +9,7 @@
       <view class="grow"><view class="task-title">{{item.title}}<text wx:if="{{item.custom}}" class="tag-custom">手动</text></view><view wx:if="{{item.desc}}" class="muted task-desc">{{item.desc}}</view></view>
       <view class="task-side">
         <view wx:if="{{item.done}}" class="restore-btn tappable" catchtap="restore" data-key="{{item.task_key}}" hover-class="tap" hover-start-time="0" hover-stay-time="80">恢复</view>
-        <view wx:if="{{item.custom}}" class="del-btn tappable" catchtap="removeCustom" data-key="{{item.task_key}}" hover-class="tap" hover-start-time="0" hover-stay-time="80" aria-label="删除计划"><image src="/assets/icons/delete.png" mode="aspectFit"/></view>
+        <view wx:if="{{item.custom}}" class="del-btn ui-fixed-circle tappable" catchtap="removeCustom" data-key="{{item.task_key}}" hover-class="tap" hover-start-time="0" hover-stay-time="80" aria-label="删除计划"><image src="/assets/icons/delete.png" mode="aspectFit"/></view>
       </view>
     </view>
     <view wx:if="{{!items.length}}" class="empty">计划正在生成。</view>

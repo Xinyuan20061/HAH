@@ -21,10 +21,11 @@ test('profile avatars keep a circular one-to-one crop in both surfaces', () => {
   const view = read('pages/profile/index.wxml')
   const style = read('pages/profile/index.wxss')
   assert.match(view, /class="avatar-img"[^>]*mode="aspectFill"/)
-  assert.match(view, /class="avatar-img big"[^>]*mode="aspectFill"/)
-  assert.match(style, /\.avatar-btn\{[^}]*width:128rpx;[^}]*height:128rpx;[^}]*border-radius:50%/)
-  assert.match(style, /\.avatar-img,.avatar-text\{[^}]*width:112rpx;[^}]*height:112rpx;[^}]*border-radius:50%/)
-  assert.match(style, /\.avatar-img\.big,\.avatar-text\.big\{[^}]*width:136rpx;[^}]*height:136rpx;[^}]*border-radius:50%/)
+  assert.match(view, /class="avatar-shell [^"]*\bbig\b"/)
+  assert.match(style, /\.avatar-shell\{[^}]*width:128rpx;[^}]*min-width:128rpx;[^}]*max-width:128rpx;[^}]*height:128rpx;[^}]*min-height:128rpx;[^}]*max-height:128rpx;[^}]*border-radius:999rpx/)
+  assert.match(style, /\.avatar-img,.avatar-text\{[^}]*width:100%;[^}]*height:100%;[^}]*border-radius:999rpx/)
+  assert.match(style, /\.avatar-shell\.big\{[^}]*width:152rpx;[^}]*min-width:152rpx;[^}]*max-width:152rpx;[^}]*height:152rpx;[^}]*min-height:152rpx;[^}]*max-height:152rpx/)
+  assert.match(style, /\.avatar-picker\{[^}]*position:absolute;[^}]*width:100%;[^}]*height:100%;[^}]*opacity:0/)
 })
 
 test('low frequency profile settings are compact round utilities', () => {

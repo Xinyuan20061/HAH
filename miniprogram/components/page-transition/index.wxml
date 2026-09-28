@@ -1,0 +1,8 @@
+<view class="route-veil {{leaving?'leaving':''}} {{paused?'paused':''}}" aria-hidden="true">
+  <view class="route-brand">
+    <image class="route-logo" src="/assets/icons/spark.png" mode="aspectFit"/>
+    <view class="route-thinking">
+      <view></view><view></view><view></view>
+    </view>
+  </view>
+</view>

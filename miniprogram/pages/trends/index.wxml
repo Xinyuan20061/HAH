@@ -1,4 +1,6 @@
-<view class="page trends-page"><view class="title">过去 7 天</view><view class="subtitle intro">关注趋势，而不是某一天的波动。图表支持触摸查看单日数据。</view>
+<include src="/components/page-transition/first-paint.wxml"/>
+<page-transition/>
+<view class="page trends-page ui-page-content"><view class="title">过去 7 天</view><view class="subtitle intro">关注趋势，而不是某一天的波动。图表支持触摸查看单日数据。</view>
 <view wx:if="{{loading}}"><view class="sk-row"><view class="sk shimmer"></view><view class="sk shimmer"></view></view><view class="sk-chart shimmer"></view></view>
 <block wx:else>
   <view class="summary"><view class="sum card"><view class="sum-v">{{avg.water}}</view><view class="sum-u">ml / 记录日</view><view class="muted sum-k">记录日平均饮水</view></view><view class="sum card"><view class="sum-v">{{avg.sleep}}</view><view class="sum-u">h / 记录日</view><view class="muted sum-k">记录日平均睡眠</view></view></view>

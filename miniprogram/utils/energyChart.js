@@ -34,7 +34,10 @@ function draw(page, key, options, activeIndex = -1) {
   ctx.clearRect(0, 0, w, h)
   if (!days.length) return
 
-  const pad = { left: 34, right: 12, top: 30, bottom: 38 }
+  const compact = Boolean(options.compact)
+  const pad = compact
+    ? { left: 28, right: 8, top: 24, bottom: 32 }
+    : { left: 34, right: 12, top: 30, bottom: 38 }
   const positiveHeight = (h - pad.top - pad.bottom) * 0.76
   const negativeHeight = (h - pad.top - pad.bottom) - positiveHeight
   const baseline = pad.top + positiveHeight
@@ -43,7 +46,7 @@ function draw(page, key, options, activeIndex = -1) {
   const maxExercise = Math.max(1, ...days.map(day => Number(day.exercise) || 0)) * 1.18
   const xFor = index => pad.left + plotWidth * (index + 0.5) / days.length
   const yFor = value => baseline - (Number(value) || 0) / maxPositive * positiveHeight
-  const barWidth = Math.min(25, plotWidth / days.length * 0.54)
+  const barWidth = Math.min(compact ? 20 : 25, plotWidth / days.length * 0.54)
   const colors = { breakfast: '#c4e267', lunch: '#e9efd9', dinner: '#506336', snack: '#5f665f' }
 
   if (activeIndex >= 0 && days[activeIndex]) {
@@ -95,12 +98,6 @@ function draw(page, key, options, activeIndex = -1) {
       ctx.fillRect(x - barWidth / 2, cursor - height, barWidth, height)
       cursor -= height
     })
-    if ((Number(day.intake) || 0) > 0) {
-      ctx.beginPath()
-      ctx.arc(x, cursor, activeIndex === index ? 3.8 : 2.6, 0, Math.PI * 2)
-      ctx.fillStyle = activeIndex === index ? '#c4e267' : '#111613'
-      ctx.fill()
-    }
     const exercise = Number(day.exercise) || 0
     if (exercise > 0) {
       const exerciseHeight = Math.max(3, exercise / maxExercise * Math.max(18, negativeHeight - 8))
@@ -110,6 +107,35 @@ function draw(page, key, options, activeIndex = -1) {
     }
   })
   chart.centers = centers
+
+  // The stacked bars explain meal composition; the line makes the seven-day
+  // intake direction readable at a glance. Missing days start a new segment so
+  // the preview never invents continuity across unrecorded meals.
+  ctx.beginPath()
+  let segmentOpen = false
+  days.forEach((day, index) => {
+    const intake = Number(day.intake) || 0
+    if (!intake) {
+      segmentOpen = false
+      return
+    }
+    const x = xFor(index)
+    const y = yFor(intake)
+    if (segmentOpen) ctx.lineTo(x, y)
+    else ctx.moveTo(x, y)
+    segmentOpen = true
+  })
+  ctx.strokeStyle = '#506336'
+  ctx.lineWidth = compact ? 1.8 : 2
+  ctx.stroke()
+  days.forEach((day, index) => {
+    const intake = Number(day.intake) || 0
+    if (!intake) return
+    ctx.beginPath()
+    ctx.arc(xFor(index), yFor(intake), activeIndex === index ? 3.8 : 2.8, 0, Math.PI * 2)
+    ctx.fillStyle = activeIndex === index ? '#111613' : '#c4e267'
+    ctx.fill()
+  })
 
   ctx.beginPath()
   ctx.moveTo(pad.left, baseline)

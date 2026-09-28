@@ -1,54 +1,57 @@
-<view class="page records-page">
+<include src="/components/page-transition/first-paint.wxml"/>
+<page-transition/>
+<view class="page records-page ui-page-content">
   <view class="title">记录</view>
-  <view class="subtitle intro">一眼看清每天吃进多少、消耗多少，再决定下一餐。</view>
+  <view class="subtitle intro">先记录今天，再看清能量变化。</view>
 
-  <view wx:if="{{loading}}" class="records-loading">
-    <view class="sk-chart shimmer"></view><view class="sk-balance shimmer"></view>
+  <view class="quick-title"><text>快速记录</text><text>拍照识餐后自动更新能量概览</text></view>
+  <view class="quick-actions">
+    <view class="quick-action tappable" bindtap="scan" hover-class="tap-card" hover-start-time="0" hover-stay-time="80"><view class="quick-circle ui-fixed-circle primary"><image src="/assets/icons/camera.png" mode="aspectFit"/></view><text>拍照识餐</text></view>
+    <view class="quick-action tappable" bindtap="checkin" hover-class="tap-card" hover-start-time="0" hover-stay-time="80"><view class="quick-circle ui-fixed-circle"><image src="/assets/icons/check.png" mode="aspectFit"/></view><text>身体状态</text></view>
+    <view class="quick-action tappable" bindtap="exercise" hover-class="tap-card" hover-start-time="0" hover-stay-time="80"><view class="quick-circle ui-fixed-circle"><image src="/assets/icons/activity.png" mode="aspectFit"/></view><text>运动记录</text></view>
+    <view class="quick-action tappable" bindtap="motion" hover-class="tap-card" hover-start-time="0" hover-stay-time="80"><view class="quick-circle ui-fixed-circle"><image src="/assets/icons/upload.png" mode="aspectFit"/></view><text>动作反馈</text></view>
   </view>
+
+  <view wx:if="{{loading}}" class="sk-overview shimmer"></view>
   <view wx:elif="{{error}}" class="state-card state-card-error">
     <view class="grow"><view class="state-title">能量数据没有加载出来</view><view class="state-desc">{{error}}</view></view>
     <button class="retry tappable" bindtap="retry" hover-class="tap-btn">重试</button>
   </view>
 
-  <block wx:elif="{{dashboard}}">
-    <view class="energy-card card">
-      <view class="chart-head">
-        <view><view class="eyebrow">七日能量趋势</view><view class="chart-title">餐次摄入与运动消耗</view></view>
-        <view class="target-pill">智能阈值 {{target.today}}</view>
-      </view>
-      <view class="today-reading"><text class="reading-number">{{today.intake}}</text><text class="reading-unit"> kcal 今日摄入</text></view>
-      <view class="legend">
-        <view wx:for="{{meals}}" wx:key="key"><text class="legend-dot" style="background:{{item.color}}"></text>{{item.label}}</view>
-        <view><text class="legend-dot exercise-dot"></text>运动消耗</view><view><text class="legend-line"></text>建议值</view>
-      </view>
-      <canvas type="2d" id="energyCanvas" class="energy-canvas" bindtouchstart="chartTouch" bindtouchmove="chartTouch"></canvas>
-      <view class="chart-active">{{activeSummary}}</view>
-      <view class="target-note"><image src="/assets/icons/spark.png" mode="aspectFit"/>{{target.note}}</view>
+  <view wx:elif="{{dashboard}}" class="energy-overview tappable" bindtap="trends" hover-class="energy-overview-hover" hover-start-time="0" hover-stay-time="80" aria-label="查看完整七日趋势">
+    <view class="chart-head">
+      <view><view class="eyebrow">七日能量趋势</view><view class="chart-title">餐次摄入与运动消耗</view></view>
+      <view class="target-pill"><text>今日建议</text><text>{{target.today}} kcal</text></view>
     </view>
 
-    <view class="balance-card card">
-      <view class="balance-head"><view><view class="eyebrow">今日能量收支</view><view class="balance-title">{{balanceTitle}}</view></view><view class="net-badge" style="{{netBadgeStyle}}">{{netText}}<text wx:if="{{netText!=='--'}}"> kcal</text></view></view>
-      <view class="energy-equation">
-        <view><text>摄入</text><text class="equation-value">{{today.intake}}</text><text class="equation-unit">kcal</text></view><text class="operator">−</text>
-        <view><text>静息估算</text><text class="equation-value">{{resting.available ? today.resting : '--'}}</text><text class="equation-unit">kcal</text></view><text class="operator">−</text>
-        <view><text>运动</text><text class="equation-value">{{today.exercise}}</text><text class="equation-unit">kcal</text></view>
-      </view>
-      <view class="meal-section-title"><text>今日餐次</text><text>{{today.intake}} / {{target.today}} kcal</text></view>
+    <view class="overview-reading">
+      <view><text class="reading-number">{{today.intake}}</text><text class="reading-unit">kcal 今日摄入</text></view>
+      <view class="budget-state">{{budgetText}}</view>
+    </view>
+
+    <view class="legend">
+      <view wx:for="{{meals}}" wx:key="key"><text class="legend-dot" style="background:{{item.color}}"></text>{{item.label}}</view>
+      <view><text class="legend-dot exercise-dot"></text>运动</view><view><text class="legend-line"></text>建议</view>
+    </view>
+    <canvas type="2d" id="energyCanvas" class="energy-canvas"></canvas>
+    <view class="chart-active"><text>{{activeSummary}}</text><image src="/assets/icons/chevron.png" mode="aspectFit"/></view>
+
+    <view class="overview-divider"></view>
+    <view class="meal-head"><text>今日餐次</text><text>占今日建议的比例</text></view>
+    <view class="meal-rows">
       <view class="meal-row" wx:for="{{meals}}" wx:key="key">
         <view class="meal-label"><text class="legend-dot" style="background:{{item.color}}"></text>{{item.label}}</view>
-        <view class="meal-track"><view class="meal-fill" style="{{item.style}}"></view></view><text class="meal-value">{{item.value}}</text>
+        <view class="meal-track"><view class="meal-fill" style="{{item.rowStyle}}"></view></view>
+        <view class="meal-value">{{item.value}}<text>kcal</text></view>
       </view>
-      <view class="intake-track"><view class="intake-fill" style="{{intakeBarStyle}}"></view><view class="target-mark" style="{{targetMarkStyle}}"></view></view>
-      <view class="range-copy">今日建议区间 {{target.lower}}–{{target.upper}} kcal</view>
-      <view class="estimate-note">{{resting.note}} {{dashboard.disclaimer}}</view>
     </view>
 
-    <view class="quick-title">快速记录</view>
-    <view class="quick-actions">
-      <view class="quick-action tappable" bindtap="scan" hover-class="tap-card" hover-start-time="0" hover-stay-time="80"><view class="quick-circle primary"><image src="/assets/icons/camera.png" mode="aspectFit"/></view><text>拍照识餐</text></view>
-      <view class="quick-action tappable" bindtap="checkin" hover-class="tap-card" hover-start-time="0" hover-stay-time="80"><view class="quick-circle"><image src="/assets/icons/check.png" mode="aspectFit"/></view><text>身体状态</text></view>
-      <view class="quick-action tappable" bindtap="exercise" hover-class="tap-card" hover-start-time="0" hover-stay-time="80"><view class="quick-circle"><image src="/assets/icons/activity.png" mode="aspectFit"/></view><text>运动记录</text></view>
-      <view class="quick-action tappable" bindtap="motion" hover-class="tap-card" hover-start-time="0" hover-stay-time="80"><view class="quick-circle"><image src="/assets/icons/upload.png" mode="aspectFit"/></view><text>动作反馈</text></view>
+    <view class="overview-foot">
+      <view class="threshold-mini">
+        <view class="threshold-copy"><text>动态摄入阈值</text><text>{{target.lower}}–{{target.upper}} kcal</text></view>
+        <view class="threshold-track"><view class="threshold-window" style="{{budgetWindowStyle}}"></view><view class="threshold-fill" style="{{budgetFillStyle}}"></view></view>
+      </view>
+      <view class="net-inline"><text>今日净收支</text><view><text class="net-number">{{netText}}</text><text wx:if="{{netText!=='--'}}"> kcal</text></view></view>
     </view>
-  </block>
+  </view>
 </view>

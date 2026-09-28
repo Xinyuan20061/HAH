@@ -1,0 +1,8 @@
+<view class="first-route-veil" aria-hidden="true">
+  <view class="first-route-brand">
+    <image class="first-route-logo" src="/assets/icons/spark.png" mode="aspectFit"/>
+    <view class="first-route-thinking">
+      <view></view><view></view><view></view>
+    </view>
+  </view>
+</view>

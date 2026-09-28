@@ -1,7 +1,9 @@
-<view class="page media-page">
+<include src="/components/page-transition/first-paint.wxml"/>
+<page-transition/>
+<view class="page media-page ui-page-content">
   <view class="media-hero"><view class="kicker">动作反馈</view><view class="title">录一段，看看动作</view><view class="subtitle">保持全身入镜，建议拍摄 5–20 秒。</view></view>
 
-  <view class="drop tappable" bindtap="choose" hover-class="tap" hover-start-time="0" hover-stay-time="80"><view class="upload-icon"><image src="/assets/icons/upload.png" mode="aspectFit"/></view><text class="b">{{file?'已选择视频':'选择动作视频'}}</text><text class="small">{{file?name:'支持 MP4 / MOV'}}</text></view>
+  <view class="drop tappable" bindtap="choose" hover-class="tap" hover-start-time="0" hover-stay-time="80"><view class="upload-icon ui-fixed-circle"><image src="/assets/icons/upload.png" mode="aspectFit"/></view><text class="b">{{file?'已选择视频':'选择动作视频'}}</text><text class="small">{{file?name:'支持 MP4 / MOV'}}</text></view>
   <video wx:if="{{file&&type==='video'}}" src="{{file}}" controls class="preview"></video>
   <picker mode="selector" range="{{exerciseOptions}}" value="{{exerciseIndex}}" bindchange="changeExercise"><view class="motion-picker">动作：{{exerciseOptions[exerciseIndex]}}<text>切换</text></view></picker>
   <button wx:if="{{!analysis}}" class="btn primary single-action tappable" bindtap="analyze" loading="{{analyzing}}" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">{{analyzing?'正在处理…':'开始查看'}}</button>

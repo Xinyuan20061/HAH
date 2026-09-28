@@ -1,4 +1,6 @@
-<view class="insights-page">
+<include src="/components/page-transition/first-paint.wxml"/>
+<page-transition/>
+<view class="insights-page ui-page-content">
   <view class="insight-hero">
     <view class="hero-top"><view class="hero-kicker">每日健康简报</view><view class="live-dot"><text></text>基于最新记录</view></view>
     <view class="hero-title">提前发现值得关注的变化</view>

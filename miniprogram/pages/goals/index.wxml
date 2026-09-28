@@ -1,4 +1,6 @@
-<view class="page goals-page">
+<include src="/components/page-transition/first-paint.wxml"/>
+<page-transition/>
+<view class="page goals-page ui-page-content">
   <view class="hero"><view class="kicker">目标体系</view><view class="title">把“想变健康”拆成每天能完成的目标</view><view class="subtitle">目标会同步到首页、今日计划、健康助手与周报。</view></view>
   <view wx:if="{{loading}}" class="skeleton-grid"><view wx:for="{{[1,2,3,4]}}" wx:key="*this" class="sk-card shimmer"></view></view>
   <block wx:else>
@@ -16,7 +18,7 @@
       </block>
     </view>
     <view class="goal-card card" wx:for="{{cards}}" wx:key="k">
-      <view class="row space"><view class="goal-name"><view class="gicon"><image src="{{item.icon}}" mode="aspectFit"/></view><view><view class="b">{{item.name}}</view><view class="muted">今天 {{item.current}} {{item.unit}}</view></view></view><view class="target {{snapKey===item.k?'snap':''}}"><text>{{item.value}}</text><text>{{item.unit}}</text></view></view>
+      <view class="row space"><view class="goal-name"><view class="gicon ui-fixed-circle"><image src="{{item.icon}}" mode="aspectFit"/></view><view><view class="b">{{item.name}}</view><view class="muted">今天 {{item.current}} {{item.unit}}</view></view></view><view class="target {{snapKey===item.k?'snap':''}}"><text>{{item.value}}</text><text>{{item.unit}}</text></view></view>
       <view class="progress"><view style="width:{{item.pct}}%"></view></view>
       <slider data-i="{{index}}" min="{{item.min}}" max="{{item.max}}" step="{{item.step}}" value="{{item.value}}" bindchanging="slideLive" bindchange="slide" activeColor="#506336" backgroundColor="#e9efd9" block-color="#506336" block-size="18"/>
     </view>

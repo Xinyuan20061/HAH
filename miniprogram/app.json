@@ -28,6 +28,9 @@
     "backgroundColor": "#F7F7F2",
     "backgroundTextStyle": "dark"
   },
+  "usingComponents": {
+    "page-transition": "/components/page-transition/index"
+  },
   "tabBar": {
     "color": "#8E9389",
     "selectedColor": "#111613",

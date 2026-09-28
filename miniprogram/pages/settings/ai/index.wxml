@@ -1,4 +1,6 @@
-<view class="page">
+<include src="/components/page-transition/first-paint.wxml"/>
+<page-transition/>
+<view class="page ui-page-content">
   <view class="hero card hero-grad">
     <view class="pill pill-dark">由你管理的服务</view>
     <view class="hero-title">使用你自己的 DeepSeek API</view>

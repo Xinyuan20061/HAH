@@ -1,5 +1,7 @@
-<view class="page privacy-page">
-  <view class="privacy-hero card"><view class="shield"><image src="/assets/icons/shield.png" mode="aspectFit"/></view><view><view class="title">数据边界看得见，也能自己控制</view><view class="subtitle">这里不是一段“隐私政策文案”，而是直接连接真实的数据导出、删除和安全边界。</view></view></view>
+<include src="/components/page-transition/first-paint.wxml"/>
+<page-transition/>
+<view class="page privacy-page ui-page-content">
+  <view class="privacy-hero card"><view class="shield ui-fixed-circle"><image src="/assets/icons/shield.png" mode="aspectFit"/></view><view><view class="title">数据边界看得见，也能自己控制</view><view class="subtitle">这里不是一段“隐私政策文案”，而是直接连接真实的数据导出、删除和安全边界。</view></view></view>
   <view wx:if="{{loading}}" class="state-card"><view class="state-spinner"></view><view><view class="state-title">正在读取当前环境的数据策略</view><view class="state-desc">不会读取或展示 API Key 明文</view></view></view>
   <view wx:if="{{error}}" class="state-card state-card-error"><view><view class="state-title">暂时无法读取</view><view class="state-desc">{{error}}</view></view></view>
   <block wx:if="{{policy}}">
