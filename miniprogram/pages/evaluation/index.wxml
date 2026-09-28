@@ -1,8 +1,8 @@
 <include src="/components/page-transition/first-paint.wxml"/>
 <page-transition/>
 <view class="page eval-page ui-page-content">
-  <view class="hero card hero-grad"><view class="kicker">运行与评测</view><view class="hero-title">结果好不好，要用真实数据说明</view><view class="hero-sub">运行指标来自实际事件；准确率来自固定标注测试集，不用空值冒充 0。</view></view>
-  <view wx:if="{{loading}}" class="state-card"><view class="state-spinner"></view><view><view class="state-title">正在汇总真实运行事件</view><view class="state-desc">识餐、Agent、视频任务、周报与安全拦截</view></view></view>
+  <view class="hero card hero-grad"><view class="kicker">运行与评测</view><view class="hero-title">运行表现</view></view>
+  <view wx:if="{{loading}}" class="state-card"><view class="state-spinner"></view><view><view class="state-title">正在汇总运行数据</view></view></view>
   <view wx:if="{{error}}" class="state-card state-card-error"><view><view class="state-title">评测面板暂时不可用</view><view class="state-desc">{{error}}</view></view><button class="btn-soft compact tappable" bindtap="retry" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">重试</button></view>
   <block wx:if="{{dash}}">
     <view class="section-title">30 日运行指标</view>
@@ -20,21 +20,21 @@
       </view>
       <view class="agent-note">{{agent.note}}</view>
       <view class="feedback-evidence">
-        <view class="feedback-evidence-head"><view><view class="dist-title">主动提醒用户反馈</view><view class="feedback-evidence-sub">真实用户判断，不以系统自评分替代</view></view><view class="feedback-rate"><b>{{agent.helpfulRateDisplay}}</b><text>有帮助率</text></view></view>
+        <view class="feedback-evidence-head"><view><view class="dist-title">主动提醒用户反馈</view></view><view class="feedback-rate"><b>{{agent.helpfulRateDisplay}}</b><text>有帮助率</text></view></view>
         <view class="feedback-summary"><text>有效反馈 {{agent.feedbackSample}} 条</text><text>已处理 {{agent.resolvedCount}} 条</text></view>
         <view wx:if="{{agent.feedbackRows.length}}" class="feedback-bars"><view wx:for="{{agent.feedbackRows}}" wx:key="label" class="dist-row"><text>{{item.label}}</text><b>{{item.count}} 条</b></view></view>
-        <view wx:else class="dist-empty">暂无真实反馈；系统不会用空样本伪造满意度。</view>
+        <view wx:else class="dist-empty">暂无反馈</view>
         <view class="agent-note">{{agent.feedbackNote}}</view>
       </view>
       <view class="feedback-evidence experiment-evidence">
-        <view class="feedback-evidence-head"><view><view class="dist-title">个人微实验成效证据</view><view class="feedback-evidence-sub">用户确认启动，以真实记录追踪，不作因果承诺</view></view><view class="feedback-rate"><b>{{agent.experimentTargetRateDisplay}}</b><text>观察达标率</text></view></view>
+        <view class="feedback-evidence-head"><view><view class="dist-title">个人微实验</view><view class="feedback-evidence-sub">基于实际记录</view></view><view class="feedback-rate"><b>{{agent.experimentTargetRateDisplay}}</b><text>观察达标率</text></view></view>
         <view class="feedback-summary"><text>启动 {{agent.experimentStarted}} 次</text><text>完成 {{agent.experimentCompleted}} 次</text><text>可判断 {{agent.experimentConclusive}} 次</text></view>
-        <view wx:if="{{!agent.experimentConclusive}}" class="dist-empty">暂无已完成且数据充分的微实验；不会用进行中样本推断效果。</view>
+        <view wx:if="{{!agent.experimentConclusive}}" class="dist-empty">暂无可评估实验</view>
         <view class="agent-note">{{agent.experimentNote}}</view>
       </view>
     </block>
     <view class="section-title">离线 Benchmark</view>
-    <view wx:if="{{!benchmarks.length}}" class="state-card"><view><view class="state-title">还没有录入标注集评测</view><view class="state-desc">动作检测准确率、关键点稳定性、识餐准确率等必须在固定测试集上测量后再录入，这里不会伪造分数。</view></view></view>
+    <view wx:if="{{!benchmarks.length}}" class="state-card"><view><view class="state-title">还没有标注集评测</view><view class="state-desc">录入固定测试集结果后显示。</view></view></view>
     <view wx:else class="card benchmark-list"><view class="bench" wx:for="{{benchmarks}}" wx:key="metric_name"><view class="row space"><view><view class="bench-name">{{item.metric_name}}</view><view class="muted">{{item.task_type}} · n={{item.sample_size}}</view></view><view class="bench-value">{{item.value}}{{item.unit}}</view></view><view wx:if="{{item.notes}}" class="bench-note">{{item.notes}}</view></view></view>
     <view class="evidence card"><view class="info-title">评测口径</view><view wx:for="{{dash.notes}}" wx:key="*this" class="evidence-row">• {{item}}</view></view>
   </block>

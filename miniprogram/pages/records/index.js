@@ -13,7 +13,7 @@ Page({
   data: {
     loading: true, error: '', dashboard: null, today: null, target: null, resting: null, meals: [],
     activeSummary: '触摸柱形查看单日餐次与运动数据', netText: '--',
-    budgetText: '', budgetFillStyle: 'width:0%', budgetWindowStyle: 'left:0%;width:0%'
+    targetExceeded: false, budgetFillStyle: 'width:0%', budgetWindowStyle: 'left:0%;width:0%'
   },
   onLoad() { this._loadedOnce = false },
   onShow() { this.load() },
@@ -49,7 +49,7 @@ Page({
       this.setData({
         loading: false, dashboard, today, target, resting: dashboard.resting || {}, meals,
         netText: balance.net,
-        budgetText: budget.text, budgetFillStyle: budget.fillStyle,
+        targetExceeded: budget.exceeded, budgetFillStyle: budget.fillStyle,
         budgetWindowStyle: budget.windowStyle,
         activeSummary: this.daySummary(today)
       }, () => {
@@ -77,14 +77,8 @@ Page({
     const upper = Math.max(lower + 1, Number(target.upper) || 1)
     const max = Math.ceil(Math.max(upper, intake) * 1.08 / 50) * 50
     const pct = value => Math.min(100, Math.max(0, value / max * 100))
-    let text = '处于今日建议区间'
-    if (intake < lower) {
-      text = `距建议下限 ${Math.round(lower - intake)} kcal`
-    } else if (intake > upper) {
-      text = `超出建议上限 ${Math.round(intake - upper)} kcal`
-    }
     return {
-      text,
+      exceeded: intake > upper,
       fillStyle: `width:${pct(intake).toFixed(1)}%`,
       windowStyle: `left:${pct(lower).toFixed(1)}%;width:${Math.max(2, pct(upper) - pct(lower)).toFixed(1)}%`
     }

@@ -1,7 +1,7 @@
 <include src="/components/page-transition/first-paint.wxml"/>
 <page-transition/>
 <view class="page scan-page ui-page-content">
-  <view class="scan-hero"><view class="kicker">拍照识餐</view><view class="title">这一餐，大约多少？</view><view class="subtitle">拍清餐盘，确认后再保存。</view></view>
+  <view class="scan-hero"><view class="kicker">拍照识餐</view><view class="title">这一餐，大约多少？</view></view>
 
   <view class="flow">
     <view class="flow-item {{step>=1?'on':''}} {{step>1?'done':''}}"><text>{{step>1?'✓':'1'}}</text>识别</view>
@@ -36,5 +36,5 @@
     </view></view></view>
     <button class="save tappable" bindtap="save" loading="{{saving}}" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">{{dirty?'保存校正并确认':'确认并保存'}}</button><view wx:if="{{state==='saved'}}" class="state-panel state-success"><view class="state-title">已保存到今日饮食</view></view>
   </view>
-  <view class="notice">结果仅作日常参考，油盐和实际份量会影响数值。</view>
+  <view class="notice">热量为估算值，请确认份量。</view>
 </view>

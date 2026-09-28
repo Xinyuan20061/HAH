@@ -1,11 +1,11 @@
 <include src="/components/page-transition/first-paint.wxml"/>
 <page-transition/>
-<view class="page trends-page ui-page-content"><view class="title">过去 7 天</view><view class="subtitle intro">关注趋势，而不是某一天的波动。图表支持触摸查看单日数据。</view>
+<view class="page trends-page ui-page-content"><view class="title">过去 7 天</view><view class="subtitle intro">关注趋势，不纠结单日波动。</view>
 <view wx:if="{{loading}}"><view class="sk-row"><view class="sk shimmer"></view><view class="sk shimmer"></view></view><view class="sk-chart shimmer"></view></view>
 <block wx:else>
-  <view class="summary"><view class="sum card"><view class="sum-v">{{avg.water}}</view><view class="sum-u">ml / 记录日</view><view class="muted sum-k">记录日平均饮水</view></view><view class="sum card"><view class="sum-v">{{avg.sleep}}</view><view class="sum-u">h / 记录日</view><view class="muted sum-k">记录日平均睡眠</view></view></view>
-  <view class="summary"><view class="sum card"><view class="sum-v">{{avg.exercise}}</view><view class="sum-u">min / 记录日</view><view class="muted sum-k">记录日平均运动</view></view><view class="sum card"><view class="sum-v">{{avg.steps}}</view><view class="sum-u">步 / 记录日</view><view class="muted sum-k">记录日平均步数</view></view></view>
+  <view class="summary"><view class="sum card"><view class="sum-v">{{avg.water}}</view><view class="sum-u">ml</view><view class="muted sum-k">平均饮水</view></view><view class="sum card"><view class="sum-v">{{avg.sleep}}</view><view class="sum-u">h</view><view class="muted sum-k">平均睡眠</view></view></view>
+  <view class="summary"><view class="sum card"><view class="sum-v">{{avg.exercise}}</view><view class="sum-u">min</view><view class="muted sum-k">平均运动</view></view><view class="sum card"><view class="sum-v">{{avg.steps}}</view><view class="sum-u">步</view><view class="muted sum-k">平均步数</view></view></view>
   <view class="section-title">交互趋势图</view><view class="chart-card card"><view class="tabs"><view wx:for="{{tabs}}" wx:key="k" data-i="{{index}}" bindtap="pickMetric" class="{{item.k===metric?'on':''}} tappable" hover-class="tap" hover-start-time="0" hover-stay-time="80">{{item.n}}</view></view><view class="chart-meta"><text>{{metricName}}趋势</text><text>{{activeValue}}</text></view><canvas type="2d" id="trendCanvas" class="trend-canvas" bindtouchstart="chartTouch" bindtouchmove="chartTouch"></canvas></view>
   <view class="section-title">每日数据</view><view class="table card"><view class="table-row head"><text>日期</text><text>饮水</text><text>睡眠</text><text>运动</text><text>步数</text></view><view class="table-row" wx:for="{{displayDays}}" wx:key="date"><text>{{item.label}}</text><text>{{item.water_text}}</text><text>{{item.sleep_text}}</text><text>{{item.exercise_text}}</text><text>{{item.steps_text}}</text></view></view>
-  <view wx:if="{{!days.length}}" class="card empty">还没有趋势数据，从今天的健康打卡开始吧。</view>
+  <view wx:if="{{!days.length}}" class="card empty">还没有趋势数据。</view>
 </block></view>

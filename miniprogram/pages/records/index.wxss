@@ -14,15 +14,13 @@
 /* Trend, meals, threshold and net balance live in one restrained component. */
 .energy-overview{margin-top:32rpx;padding:32rpx 32rpx 24rpx;border-radius:28rpx;background:#fff;box-shadow:0 8rpx 26rpx rgba(17,22,19,.035);transition:opacity .16s ease-out}
 .energy-overview-hover{opacity:.78}
-.chart-head{display:flex;align-items:flex-start;justify-content:space-between;gap:20rpx}
-.eyebrow{color:#506336;font-size:19rpx;font-weight:700;letter-spacing:1rpx}
-.chart-title{margin-top:4rpx;font-size:29rpx;font-weight:760;line-height:1.35}
 .target-pill{display:flex;flex:none;flex-direction:column;align-items:flex-end;padding:8rpx 12rpx;border-radius:16rpx;background:#e9efd9;color:#506336;font-size:15rpx;line-height:1.4}
 .target-pill text:last-child{color:#111613;font-size:18rpx;font-weight:760}
-.overview-reading{display:flex;align-items:flex-end;justify-content:space-between;gap:20rpx;margin-top:16rpx}
+.target-pill.over{background:rgba(192,57,43,.12);color:#c0392b}
+.target-pill.over text:last-child{color:#c0392b}
+.overview-reading{display:flex;align-items:flex-end;justify-content:space-between;gap:20rpx}
 .reading-number{color:#111613;font-size:48rpx;font-weight:800;letter-spacing:-2rpx;line-height:1}
 .reading-unit{margin-left:8rpx;color:#5f665f;font-size:17rpx}
-.budget-state{max-width:248rpx;padding:8rpx 12rpx;border-radius:999rpx;background:#e9efd9;color:#506336;font-size:15rpx;line-height:1.4;text-align:right}
 .legend{display:flex;align-items:center;flex-wrap:wrap;gap:8rpx 12rpx;margin-top:16rpx;color:#5f665f;font-size:15rpx}
 .legend view{display:flex;align-items:center;gap:4rpx}
 .legend-dot{display:inline-block;width:10rpx;height:10rpx;border-radius:50%;flex:none}

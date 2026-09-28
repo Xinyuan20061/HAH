@@ -4,7 +4,6 @@
   <view class="insight-hero">
     <view class="hero-top"><view class="hero-kicker">每日健康简报</view><view class="live-dot"><text></text>基于最新记录</view></view>
     <view class="hero-title">提前发现值得关注的变化</view>
-    <view class="hero-copy">只根据你已记录的数据做保守提醒，不把缺失数据当成异常。</view>
     <view wx:if="{{dataQuality}}" class="quality-panel">
       <view class="quality-row"><text>{{dataQuality.label}}</text><text>{{dataQuality.recorded_days}} / {{dataQuality.expected_days}} 天</text></view>
       <view class="quality-track"><view style="width:{{dataQuality.coverage_pct}}%"></view></view>
@@ -31,12 +30,12 @@
     </view>
 
     <view wx:if="{{!insights.length}}" class="insight-state clear-state">
-      <view class="clear-ring"><image src="/assets/icons/check.png" mode="aspectFit"/></view><view class="state-title">今天没有需要优先干预的信号</view><view class="state-copy">保持真实记录即可。系统会持续关注运动、睡眠、体重和动作表现的变化。</view>
+      <view class="clear-ring"><image src="/assets/icons/check.png" mode="aspectFit"/></view><view class="state-title">今天没有需要优先干预的信号</view><view class="state-copy">保持记录即可。</view>
       <button class="tappable" data-route="/pages/checkin/index" bindtap="openAction" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">记录今天</button>
     </view>
 
     <view wx:else class="insight-list">
-      <view class="list-heading"><view><view class="list-title">{{insights.length}} 条值得关注</view><view class="list-summary">{{summary}}</view></view></view>
+      <view class="list-heading"><view><view class="list-title">{{insights.length}} 条值得关注</view></view></view>
       <view wx:for="{{insights}}" wx:key="code" class="insight-card tone-{{item.tone}}">
         <view class="card-head"><view class="topic-pill">{{item.label}}</view><view class="severity">{{item.severityLabel}}</view></view>
         <view class="card-title">{{item.title}}</view>
@@ -67,7 +66,6 @@
           <view class="experiment-kicker">把提醒变成可验证行动</view>
           <view class="proposal-title">{{item.experimentProposal.title}}</view>
           <view class="proposal-hypothesis">假设：{{item.experimentProposal.hypothesis}}</view>
-          <view wx:if="{{item.proposalHistory}}" class="proposal-history">你之前更常选择{{item.proposalHistory.preferredLabel}}（已启动 {{item.proposalHistory.preferredCount}} 次，共 {{item.proposalHistory.total}} 次）；仍可自由选择任一方案</view>
           <view class="proposal-variants">
             <view wx:for="{{item.experimentProposal.variants}}" wx:for-item="variant" wx:key="key" class="variant-card">
               <view class="variant-head"><b>{{variant.label}}</b><text>{{variant.days}} 天</text></view>
@@ -92,7 +90,7 @@
       </view>
     </view>
 
-    <view class="boundary-card"><view class="boundary-title">提醒边界</view><view wx:if="{{dataQuality}}" class="quality-message">{{dataQuality.message}}</view><view>{{policy || '仅依据有记录的数据做保守预警；不诊断疾病。身体不适时请停止训练并及时就医。'}}</view><view class="feedback-policy">你的反馈只用于质量评测，不会自动训练模型或改写健康记录。</view></view>
+    <view class="boundary-card"><view class="boundary-title">提醒边界</view><view wx:if="{{dataQuality}}" class="quality-message">{{dataQuality.message}}</view><view>{{policy || '不把缺失数据当成异常，也不作诊断。'}}</view></view>
   </block>
   <view class="safe-area"></view>
 </view>

@@ -21,8 +21,7 @@
 .activity-cell.today{position:relative;z-index:1;box-shadow:0 0 0 2rpx #111613;transform:scale(1.12)}
 .activity-months{position:relative;height:24rpx;margin-top:8rpx;color:#8c9189;font-size:13rpx}
 .month-label{position:absolute;top:0;white-space:nowrap;transform:translateX(-2rpx)}
-.activity-foot{display:flex;align-items:flex-end;justify-content:space-between;gap:20rpx;margin-top:8rpx;padding-top:16rpx;border-top:1rpx solid #eeeee6;color:#8c9189;font-size:13rpx;line-height:1.45}
-.activity-foot>text{max-width:260rpx}
+.activity-foot{display:flex;align-items:flex-end;justify-content:flex-end;gap:20rpx;margin-top:8rpx;padding-top:16rpx;border-top:1rpx solid #eeeee6;color:#8c9189;font-size:13rpx;line-height:1.45}
 .activity-legend{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:8rpx 12rpx;color:#5f665f}
 .activity-legend view{display:flex;align-items:center;gap:4rpx;white-space:nowrap}
 .legend-cell{display:inline-block;width:8rpx;height:8rpx;border:0;border-radius:3rpx;background:#eeeee6;box-sizing:border-box}
@@ -37,8 +36,6 @@
 .settings-title{margin-top:4rpx;color:#111613;font-size:29rpx;font-weight:780}
 .completion-pill{padding:8rpx 16rpx;border-radius:999rpx;background:#e9efd9;color:#506336;font-size:18rpx;font-weight:760;font-variant-numeric:tabular-nums}
 .plan-settings{padding:24rpx;border:1rpx solid #eeeee6;border-radius:28rpx;background:#fff;box-shadow:0 8rpx 26rpx rgba(17,22,19,.035)}
-.settings-note{margin-bottom:16rpx;color:#5f665f;font-size:17rpx;line-height:1.5}
-.settings-note text{color:#8c9189}
 .plan-simple{box-shadow:none}
 .task{display:flex;align-items:flex-start;padding:24rpx;transition:opacity .25s ease-out}
 .check{display:flex;align-items:center;justify-content:center;width:58rpx;height:58rpx;margin-right:20rpx;border-radius:50%;background:#e9efd9;color:#111613;font-weight:700;flex:none;transition:transform .25s cubic-bezier(.2,.8,.2,1),box-shadow .25s ease-out}

@@ -2,9 +2,9 @@
 <page-transition/>
 <view class="page ui-page-content">
   <view class="hero card hero-grad">
-    <view class="pill pill-dark">由你管理的服务</view>
-    <view class="hero-title">使用你自己的 DeepSeek API</view>
-    <view class="hero-sub">Key 不保存在小程序本地，也不会通过查询接口返回明文。聊天时由后端代你发起请求。</view>
+    <view class="pill pill-dark">个人服务</view>
+    <view class="hero-title">使用 DeepSeek API</view>
+    <view class="hero-sub">Key 仅加密保存在后端。</view>
   </view>
 
   <view class="card backend-card">
@@ -26,11 +26,10 @@
         <button class="btn-soft mini-btn grow tappable" bindtap="saveBackendUrl" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">使用此地址</button>
         <button class="btn-soft mini-btn grow tappable" bindtap="resetBackendUrl" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">恢复本机默认</button>
       </view>
-      <view class="muted tiny">真机调试时 127.0.0.1 指向手机本身，请填写电脑局域网 IP 或已部署的 HTTPS 域名。</view>
+      <view class="muted tiny">真机请填写电脑局域网 IP 或 HTTPS 地址。</view>
     </view>
     <view class="dev-box" wx:else>
-      <view class="muted small">当前使用微信云托管私有链路（wx.cloud.callContainer），无需配置服务器合法域名。</view>
-      <view class="muted tiny">电脑端会通过云托管公网 HTTPS 地址领取任务；该地址只写在电脑端配置中。</view>
+      <view class="muted small">已连接微信云托管。</view>
     </view>
   </view>
 
@@ -38,7 +37,6 @@
     <view class="row space switch-row">
       <view>
         <view class="label-title">启用个人配置</view>
-        <view class="muted small">关闭后保留配置，但聊天使用系统默认 Provider</view>
       </view>
       <switch checked="{{form.enabled}}" bindchange="toggle" color="#506336"/>
     </view>
@@ -47,7 +45,7 @@
   <view class="card">
     <view class="field">
       <view class="label-title">DeepSeek API Key</view>
-      <view class="muted small" wx:if="{{hasKey}}">已保存：{{keyHint}}。留空表示不更换现有 Key。</view>
+      <view class="muted small" wx:if="{{hasKey}}">已保存 {{keyHint}}，留空则不更换。</view>
       <input class="input" password value="{{form.api_key}}" data-k="api_key" bindinput="inp" placeholder="sk-..."/>
     </view>
     <view class="field">
@@ -67,10 +65,8 @@
 
   <view class="security card">
     <view class="security-title">安全设计</view>
-    <view class="security-item">• API Key 只提交给你的 HealthMate 后端，数据库内加密保存。</view>
-    <view class="security-item">• 前端查询只返回是否已配置及脱敏提示，不返回 Key 明文。</view>
-    <view class="security-item">• Base URL 要求 HTTPS，并拦截明显的本机/私有地址。</view>
-    <view class="security-item">• 正式上线仍建议启用 HTTPS、密钥轮换、日志脱敏和访问限流。</view>
+    <view class="security-item">• Key 加密保存在后端</view>
+    <view class="security-item">• 前端不显示 Key 明文</view>
   </view>
 
   <button class="btn-soft test tappable" loading="{{testing}}" bindtap="test" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">测试 DeepSeek 连接</button>

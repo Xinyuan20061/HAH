@@ -36,21 +36,21 @@
       <view class="fact"><text class="fact-value">{{profile.weight_kg}}</text><text class="fact-unit">kg</text><view class="fact-label">体重</view></view>
       <image class="facts-chevron" src="/assets/icons/chevron.png" mode="aspectFit"/>
     </view>
-    <view wx:else class="profile-prompt tappable" bindtap="edit" hover-class="tap-card" hover-start-time="0" hover-stay-time="80"><view><view class="prompt-title">完善身体资料</view><view class="prompt-copy">补充年龄、身高和体重，让建议更贴近你。</view></view><image class="ui-chevron" src="/assets/icons/chevron.png" mode="aspectFit"/></view>
+    <view wx:else class="profile-prompt tappable" bindtap="edit" hover-class="tap-card" hover-start-time="0" hover-stay-time="80"><view><view class="prompt-title">完善身体资料</view></view><image class="ui-chevron" src="/assets/icons/chevron.png" mode="aspectFit"/></view>
 
-    <view class="section-heading"><text>健康中心</text><text>常用</text></view>
+    <view class="section-heading"><text>健康中心</text></view>
     <view class="health-grid">
       <view class="goal-feature tappable" bindtap="goals" hover-class="tap-card" hover-start-time="0" hover-stay-time="80">
         <view class="feature-top"><view class="feature-orb ui-fixed-circle"><image src="/assets/icons/target.png" mode="aspectFit"/></view><image class="feature-arrow ui-fixed-circle" src="/assets/icons/chevron.png" mode="aspectFit"/></view>
-        <view class="feature-kicker">当前目标</view><view class="feature-title">{{goalText||'设置目标'}}</view><view class="feature-copy">调整每天真正能执行的目标</view>
+        <view class="feature-kicker">当前目标</view><view class="feature-title">{{goalText||'设置目标'}}</view>
       </view>
       <view class="side-stack">
-        <view class="mini-feature trend-feature tappable" bindtap="trends" hover-class="tap-card" hover-start-time="0" hover-stay-time="80"><view class="mini-orb ui-fixed-circle"><image src="/assets/icons/trend.png" mode="aspectFit"/></view><view><view class="mini-title">7 日趋势</view><view class="mini-copy">看最近变化</view></view></view>
-        <view class="mini-feature tappable" bindtap="insights" hover-class="tap-card" hover-start-time="0" hover-stay-time="80"><view class="mini-orb ui-fixed-circle light"><image src="/assets/icons/bell.png" mode="aspectFit"/></view><view><view class="mini-title">健康提醒</view><view class="mini-copy">看值得关注</view></view></view>
+        <view class="mini-feature trend-feature tappable" bindtap="trends" hover-class="tap-card" hover-start-time="0" hover-stay-time="80"><view class="mini-orb ui-fixed-circle"><image src="/assets/icons/trend.png" mode="aspectFit"/></view><view><view class="mini-title">7 日趋势</view></view></view>
+        <view class="mini-feature tappable" bindtap="insights" hover-class="tap-card" hover-start-time="0" hover-stay-time="80"><view class="mini-orb ui-fixed-circle light"><image src="/assets/icons/bell.png" mode="aspectFit"/></view><view><view class="mini-title">健康提醒</view></view></view>
       </view>
     </view>
 
-    <view class="section-heading settings-heading"><text>偏好与安全</text><text>低频设置</text></view>
+    <view class="section-heading settings-heading"><text>偏好与安全</text></view>
     <view class="utility-grid">
       <view class="utility tappable" bindtap="aiSettings" hover-class="tap-card" hover-start-time="0" hover-stay-time="80"><view class="utility-orb ui-fixed-circle"><image src="/assets/icons/settings.png" mode="aspectFit"/><view class="config-dot {{ai.enabled&&ai.has_api_key?'on':''}}"></view></view><text>回答偏好</text></view>
       <view class="utility tappable" bindtap="privacy" hover-class="tap-card" hover-start-time="0" hover-stay-time="80"><view class="utility-orb ui-fixed-circle"><image src="/assets/icons/shield.png" mode="aspectFit"/></view><text>隐私安全</text></view>
@@ -66,9 +66,7 @@
       <image wx:if="{{avatarSrc}}" class="avatar-img" src="{{avatarSrc}}" mode="aspectFill"/><view wx:else class="avatar-text">{{initial}}</view>
       <button class="avatar-picker" open-type="chooseAvatar" bindchooseavatar="onChooseAvatar" aria-label="选择头像"></button>
     </view>
-    <view class="hint">点击圆形头像，从微信头像或相册中选择</view>
     <input class="nick-input" type="nickname" placeholder="填写昵称" value="{{nickDraft}}" bindinput="onNickInput" maxlength="30"/>
-    <view class="hint input-hint">点击昵称输入框，可直接使用微信昵称</view>
     <view class="panel-btns"><button class="btn ghost tappable" bindtap="closeEdit" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">取消</button><button class="btn primary tappable" bindtap="saveProfile" loading="{{saving}}" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">保存</button></view>
   </view>
 </view>

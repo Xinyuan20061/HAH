@@ -42,11 +42,10 @@
 
   <view wx:if="{{kinetics}}" class="motion-result">
     <view class="motion-main">
-      <view><view class="badge-row"><view class="source-badge review">Kinetics-400</view></view><view class="motion-name">{{kinetics.top_label_zh||kinetics.top_label}}<text class="kinetics-pct">{{kinetics.topPct}}%</text></view><view class="muted">识别自 400 类预训练动作库，不含次数与评分</view></view>
+      <view><view class="badge-row"><view class="source-badge review">Kinetics-400</view></view><view class="motion-name">{{kinetics.top_label_zh||kinetics.top_label}}<text class="kinetics-pct">{{kinetics.topPct}}%</text></view><view class="muted">仅识别动作类别</view></view>
       <view class="score-ring"><b>{{kinetics.topPct}}</b><text>候选分值</text></view>
     </view>
     <view class="tip-block"><view class="tip-title">候选动作</view><view class="candidate" wx:for="{{kinetics.candidates}}" wx:key="label"><view class="row space"><text>{{item.name}}</text><b>{{item.pct}}%</b></view><view class="candidate-track"><view style="width:{{item.pct}}%"></view></view></view></view>
-    <view class="notice">识别结果仅供健身参考，不代表医学判断；深蹲/俯卧撑/弓步可再走「开始查看」获取次数与评分。</view>
   </view>
-  <view class="notice">动作提示仅作一般健身参考；出现疼痛或明显不适时请停止。</view>
+  <view class="notice">疼痛或不适时请停止。</view>
 </view>

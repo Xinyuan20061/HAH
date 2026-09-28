@@ -65,7 +65,7 @@ test('health insight page exposes evidence, advice and user-controlled actions',
   assert.match(page, /data-verdict="helpful"/)
   assert.match(page, /data-verdict="inaccurate"/)
   assert.match(page, /data-verdict="resolved"/)
-  assert.match(page, /不会自动训练模型/)
+  assert.match(page, /仅用于质量评测，不自动训练/)
   assert.match(page, /个人微实验/)
   assert.match(page, /startExperiment/)
   assert.match(page, /停止条件/)

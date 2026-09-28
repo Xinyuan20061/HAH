@@ -75,7 +75,6 @@
 .suggestion-icon {width: 56rpx;height: 56rpx;flex: none;margin-right: 16rpx;}
 .suggestion-copy {flex: 1;min-width: 0;}
 .suggestion-title {font-size: 27rpx;font-weight: 680;line-height: 1.3;}
-.suggestion-hint {margin-top: 4rpx;color: #5f665f;font-size: 20rpx;line-height: 1.4;}
 .chevron {width: 32rpx;height: 32rpx;margin-left: 12rpx;opacity: .48;}
 
 .message-row {display: flex;margin: 32rpx 0;animation: messageIn .32s cubic-bezier(.2,.8,.2,1);}
