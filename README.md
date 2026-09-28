@@ -9,7 +9,8 @@
 <p align="center">
   <a href="#运行预览">运行预览</a> ·
   <a href="#能做什么">能做什么</a> ·
-  <a href="#如何使用">如何使用</a>
+  <a href="#如何使用">如何使用</a> ·
+  <a href="#安装与启动">安装与启动</a>
 </p>
 
 HealthMate 是一款微信小程序健康助手。你只要随手记录每天的饮食、运动和身体状态，
@@ -45,5 +46,34 @@ HealthMate 是一款微信小程序健康助手。你只要随手记录每天的
 4. 在「记录」页查看能量收支和七日趋势；
 5. 有健康疑问，在「对话」页直接问 HealthMate；
 6. 跟着建议慢慢调整，别忘了打卡坚持。
+
+## 安装与启动
+
+本项目由三部分组成：微信小程序、后端服务（FastAPI）、可选的本地 AI 识别 Worker。
+本地运行需要 Python 3.12、Node.js 和微信开发者工具。
+
+**1. 启动后端**
+
+```powershell
+git clone https://github.com/hauyer/health-assistant.git
+cd health-assistant/backend
+py -3.12 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements-dev.txt
+Copy-Item .env.example .env
+python -m alembic upgrade head
+python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+```
+
+本地开发默认用 SQLite，在 `.env` 中填 `ENV=development`、`DATABASE_URL=sqlite:///./healthmate.db`。
+
+**2. 打开小程序**
+
+用微信开发者工具导入仓库根目录（`project.config.json` 已指向 `miniprogram/`），填入你的 AppID，
+并在 `miniprogram/config/index.js` 中配置后端地址。
+
+**3. 部署上线**
+
+生产环境通过微信云托管部署，构建目录为 `backend/`；完整部署与本地 AI Worker 配置见 `docs/` 目录。
 
 > 健康建议不替代医生诊断。
