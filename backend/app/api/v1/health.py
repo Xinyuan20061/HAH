@@ -25,6 +25,7 @@ from app.services.agent.actions import execute_action
 from app.services.ai.gateway import get_provider
 from app.services.dynamic_goals import apply_adjustment, evaluate_dynamic_goals
 from app.services.health import (
+    energy_dashboard,
     get_goal_settings,
     streak_summary,
     today_summary,
@@ -103,6 +104,13 @@ def save_checkin(
 @router.get("/trends/7d")
 def trends(user=Depends(current_user), db: Session = Depends(get_db)):
     return {"days": trend_7d(db, user.id)}
+
+
+@router.get("/energy-dashboard")
+def get_energy_dashboard(
+    user=Depends(current_user), db: Session = Depends(get_db)
+):
+    return energy_dashboard(db, user.id, user.profile)
 
 
 @router.get("/streak")
