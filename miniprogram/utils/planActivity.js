@@ -19,7 +19,19 @@ function statusOf(day) {
 }
 
 function emptyActivity() {
-  return { cells: [], weeks: [], months: [], columns: 53, summary: { completeDays: 0, partialDays: 0, activeDays: 0 } }
+  return { cells: [], weeks: [], bands: [], months: [], columns: 53, summary: { completeDays: 0, partialDays: 0, activeDays: 0 } }
+}
+
+function positionMonthLabels(months, columnCount, offset = 0) {
+  return months.map(month => {
+    const column = month.column - offset
+    const edgeAligned = column >= columnCount - 1
+    return {
+      ...month,
+      column,
+      style: `left:${((column - 1) / Math.max(1, columnCount - 1) * 100).toFixed(2)}%;${edgeAligned ? 'transform:translateX(-100%)' : ''}`
+    }
+  })
 }
 
 function buildPlanActivity(payload = {}) {
@@ -75,14 +87,26 @@ function buildPlanActivity(payload = {}) {
     }))
   }))
   cells.forEach(cell => { weeks[cell.column - 1].days[cell.row - 1] = cell })
-  const monthLabels = months.map((month, index) => ({
-    ...month,
-    style: `left:${((month.column - 1) / Math.max(1, columns - 1) * 100).toFixed(2)}%;${index === months.length - 1 && month.column >= columns - 1 ? 'transform:translateX(-100%)' : ''}`
-  }))
+  const monthLabels = positionMonthLabels(months, columns)
+  const firstBandColumns = Math.floor(columns / 2)
+  const bandDefinitions = [
+    { key: 'first-half', start: 0, end: firstBandColumns },
+    { key: 'second-half', start: firstBandColumns, end: columns }
+  ]
+  const bands = bandDefinitions.map(band => {
+    const columnCount = band.end - band.start
+    const bandMonths = months.filter(month => month.column > band.start && month.column <= band.end)
+    return {
+      key: band.key,
+      weeks: weeks.slice(band.start, band.end),
+      months: positionMonthLabels(bandMonths, columnCount, band.start)
+    }
+  })
   const summary = payload.summary || {}
   return {
     cells,
     weeks,
+    bands,
     months: monthLabels,
     columns,
     summary: {

@@ -9,18 +9,24 @@
       <view><view class="section-kicker">近 365 天</view><view class="activity-title">计划完成记录</view></view>
       <view class="activity-stat"><text>{{activitySummary.completeDays}}</text><text>天全部完成</text></view>
     </view>
-    <view wx:if="{{activityLoading}}" class="activity-skeleton shimmer"></view>
-    <view wx:elif="{{activityError}}" class="activity-error">
+    <view wx:if="{{activityLoading&&!activityBands.length}}" class="activity-skeleton shimmer"></view>
+    <view wx:elif="{{activityError&&!activityBands.length}}" class="activity-error">
       <text>{{activityError}}</text><view class="activity-retry tappable" bindtap="retryActivity" hover-class="tap">重试</view>
     </view>
     <block wx:else>
-      <view class="activity-grid">
-        <view class="activity-week" wx:for="{{activityWeeks}}" wx:key="key" wx:for-item="week">
-          <view wx:for="{{week.days}}" wx:key="key" wx:for-item="day" class="activity-cell {{day.spacer?'spacer':day.tone}} {{day.today?'today':''}}" aria-label="{{day.ariaLabel}}"></view>
+      <view class="activity-bands {{activityReveal?'reveal':''}}">
+        <view class="activity-band" wx:for="{{activityBands}}" wx:key="key" wx:for-item="band">
+          <view class="activity-grid">
+            <view class="activity-week" wx:for="{{band.weeks}}" wx:key="key" wx:for-item="week">
+              <view wx:for="{{week.days}}" wx:key="key" wx:for-item="day" class="activity-cell {{day.spacer?'spacer':day.tone}} {{day.today?'today':''}}" aria-label="{{day.ariaLabel}}">
+                <view wx:if="{{!day.spacer&&day.tone!=='unfilled'}}" class="activity-fill"></view>
+              </view>
+            </view>
+          </view>
+          <view class="activity-months">
+            <text wx:for="{{band.months}}" wx:key="column" class="month-label" style="{{item.style}}">{{item.label}}</text>
+          </view>
         </view>
-      </view>
-      <view class="activity-months">
-        <text wx:for="{{activityMonths}}" wx:key="column" class="month-label" style="{{item.style}}">{{item.label}}</text>
       </view>
       <view class="activity-foot">
         <text>每天自动向左更新，今天始终在最右侧</text>

@@ -19,7 +19,6 @@
       <view class="welcome-mark"><image src="/assets/icons/spark.png" mode="aspectFit"/></view>
       <view class="welcome-kicker">你的健康，由你做决定</view>
       <view class="welcome-title">今天想先改善什么？</view>
-      <view class="welcome-desc">我会结合你的真实记录给出建议。计划与健康数据始终由你确认后才会写入。</view>
       <view class="suggestion-list">
         <view class="suggestion tappable" wx:for="{{suggestions}}" wx:key="key" bindtap="quick" data-q="{{item.prompt}}" hover-class="tap-card" hover-start-time="0" hover-stay-time="80">
           <view class="suggestion-icon"><image src="{{item.icon}}" mode="aspectFit"/></view>

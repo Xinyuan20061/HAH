@@ -1,16 +1,32 @@
 const api = require('../../utils/request')
 const { buildPlanActivity } = require('../../utils/planActivity')
+const ACTIVITY_REVEAL_DELAY_MS = 300
 
 Page({
   data: {
     headline: '今天只做三件真正有用的事', items: [], doneCount: 0, agentPlan: null,
     showWeek: false, showAdd: false, addTitle: '', addDesc: '', saving: false,
-    activityLoading: true, activityError: '', activityWeeks: [], activityMonths: [],
+    activityLoading: true, activityError: '', activityBands: [], activityReveal: false,
     activitySummary: { completeDays: 0, partialDays: 0, activeDays: 0 }
   },
   onShow() {
+    this.startActivityReveal()
     this.loadToday()
     this.loadActivity()
+  },
+  onHide() { this.clearActivityRevealTimer() },
+  onUnload() { this.clearActivityRevealTimer() },
+  clearActivityRevealTimer() {
+    if (this.activityRevealTimer) clearTimeout(this.activityRevealTimer)
+    this.activityRevealTimer = null
+  },
+  startActivityReveal() {
+    this.clearActivityRevealTimer()
+    this.setData({ activityReveal: false })
+    this.activityRevealTimer = setTimeout(() => {
+      this.activityRevealTimer = null
+      this.setData({ activityReveal: true })
+    }, ACTIVITY_REVEAL_DELAY_MS)
   },
   async loadToday() {
     try {
@@ -26,8 +42,7 @@ Page({
       const result = buildPlanActivity(await api.get('/health/plan/activity/year', { allowCache: false }))
       this.setData({
         activityLoading: false,
-        activityWeeks: result.weeks,
-        activityMonths: result.months,
+        activityBands: result.bands,
         activitySummary: result.summary
       })
     } catch (error) {
