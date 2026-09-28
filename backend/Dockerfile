@@ -7,7 +7,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 
 COPY requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt
+# 云托管构建环境在国内，pypi.org 直连常超时（曾致 watchfiles 索引页 ReadTimeout 构建失败），
+# 改用腾讯云 pip 镜像并提高 read 超时容错。
+RUN pip install --no-cache-dir --timeout 120 -i https://mirrors.cloud.tencent.com/pypi/simple -r requirements.txt
 
 COPY app ./app
 COPY migrations ./migrations
