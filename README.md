@@ -2,6 +2,10 @@
   <strong>简体中文</strong>
 </p>
 
+<p align="center">
+  <img src="miniprogram/assets/icons/spark.png" alt="HealthMate" width="96">
+</p>
+
 <h1 align="center">HealthMate</h1>
 
 <p align="center"><strong>微信小程序健康助手 · 档案 / 目标 / 记录 / 洞察 / Agent 对话 / 姿态与识餐</strong></p>
@@ -16,6 +20,7 @@
 </p>
 
 <p align="center">
+  <a href="#运行预览">运行预览</a> ·
   <a href="#核心功能">核心功能</a> ·
   <a href="#目录结构">目录结构</a> ·
   <a href="#快速开始">快速开始</a> ·
@@ -42,6 +47,17 @@ HealthMate 是一个微信小程序健康助手，覆盖健康档案、目标管
 生产在线后端使用微信云托管，不依赖阿里云；容器不保存生产 SQLite、媒体原文件或视觉模型。
 HealthMate 3.0 已新增健康指挥中心首页、证据优先的识餐区间协议和全局低饱和视觉系统；
 Health Agent v3.1 已新增主动健康提醒与人在回路反馈闭环。
+
+## 运行预览
+
+<table align="center">
+  <tr>
+    <td align="center"><img src="docs/assets/screens/home.png" width="170" alt="首页"><br><sub>首页 · 坚持打卡</sub></td>
+    <td align="center"><img src="docs/assets/screens/chat.png" width="170" alt="对话"><br><sub>对话 · Health Agent</sub></td>
+    <td align="center"><img src="docs/assets/screens/records.png" width="170" alt="记录"><br><sub>记录 · 能量仪表盘</sub></td>
+    <td align="center"><img src="docs/assets/screens/profile.png" width="170" alt="我的"><br><sub>我的 · 健康档案</sub></td>
+  </tr>
+</table>
 
 ## 核心功能
 
