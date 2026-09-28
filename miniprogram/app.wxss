@@ -1,4 +1,4 @@
-page {background: #f7f7f2;color: #111613;font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;font-size: 32rpx;line-height: 1.65;
+page {background: #f7f7f2;color: #111613;font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;font-size: 32rpx;line-height: 1.65;animation: appPageIn .28s ease-out;
 }
 
 .page {min-height: 100vh;padding: 40rpx 32rpx 72rpx;box-sizing: border-box; }
@@ -11,6 +11,19 @@ page {background: #f7f7f2;color: #111613;font-family: -apple-system, BlinkMacSys
 .space {justify-content: space-between; }
 .grow {flex: 1;min-width: 0; }
 .divider {height: 1rpx;margin: 24rpx 0;background: #eeeee6; }
+
+/* Compact shared icon language. The glyph looks small while its round surface
+   keeps a comfortable hit area and a consistent 32rpx page rhythm. */
+.ui-icon-box {display: flex;align-items: center;justify-content: center;width: 64rpx;height: 64rpx;flex: none;border-radius: 50%;background: #e9efd9; }
+.ui-icon-box.soft {background: #f7f7f2; }
+.ui-icon-box.lime {background: #c4e267; }
+.ui-icon-image {display: block;width: 38rpx;height: 38rpx; }
+.ui-icon-box.large {width: 80rpx;height: 80rpx; }
+.ui-icon-box.large .ui-icon-image {width: 46rpx;height: 46rpx; }
+.ui-chevron {display: block;width: 34rpx;height: 34rpx;flex: none;opacity: .72; }
+.ui-round-button {display: flex;align-items: center;justify-content: center;width: 60rpx;height: 60rpx;min-width: 60rpx;margin: 0;padding: 0;border-radius: 50%;background: #e9efd9; }
+.ui-round-button::after {border: 0; }
+.ui-round-button image {display: block;width: 32rpx;height: 32rpx; }
 
 .btn-primary, .btn-soft {min-height: 100rpx;border-radius: 18rpx !important;font-size: 31rpx !important;font-weight: 650 !important;letter-spacing: .2rpx; }
 .btn-primary {color:#111613 !important;background: #c4e267 !important; }
@@ -101,6 +114,7 @@ button[disabled] {opacity: .45; }
 
 /* 浮层/面板入场：元素由 wx:if 挂载时动画自动播放，不需要改 JS */
 @keyframes fadeIn { from {opacity: 0 } to {opacity: 1 } }
+@keyframes appPageIn { from {opacity: 0 } to {opacity: 1 } }
 @keyframes sheetUp { from {opacity: 0;transform: translateY(48rpx) } to {opacity: 1;transform: translateY(0) } }
 @keyframes expandDown { from {opacity: 0;transform: translateY(-12rpx) } to {opacity: 1;transform: translateY(0) } }
 

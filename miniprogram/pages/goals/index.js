@@ -12,12 +12,12 @@ Page({
     finally{this.setData({loading:false})}
   },
   buildCards(){const g=this.data.goals,s=this.data.summary;this.setData({cards:[
-    {k:'water_target',name:'每日饮水',value:g.water_target,unit:'ml',current:s.water_ml||0,pct:this.pct(s.water_ml,g.water_target),min:800,max:4000,step:100,icon:'≈'},
-    {k:'sleep_target',name:'睡眠时长',value:g.sleep_target,unit:'h',current:s.sleep_hours||0,pct:this.pct(s.sleep_hours,g.sleep_target),min:5,max:10,step:.5,icon:'◐'},
-    {k:'exercise_target',name:'每日运动',value:g.exercise_target,unit:'min',current:s.exercise_min||0,pct:this.pct(s.exercise_min,g.exercise_target),min:10,max:120,step:5,icon:'↗'},
-    {k:'steps_target',name:'每日步数',value:g.steps_target,unit:'步',current:s.steps||0,pct:this.pct(s.steps,g.steps_target),min:2000,max:20000,step:500,icon:'⌁'},
-    {k:'protein_target',name:'蛋白质',value:g.protein_target,unit:'g',current:s.protein||0,pct:this.pct(s.protein,g.protein_target),min:30,max:200,step:5,icon:'P'},
-    {k:'calorie_target',name:'热量参考',value:g.calorie_target,unit:'kcal',current:s.calories||0,pct:this.pct(s.calories,g.calorie_target),min:1200,max:3600,step:50,icon:'C'}
+    {k:'water_target',name:'每日饮水',value:g.water_target,unit:'ml',current:s.water_ml||0,pct:this.pct(s.water_ml,g.water_target),min:800,max:4000,step:100,icon:'/assets/icons/water.png'},
+    {k:'sleep_target',name:'睡眠时长',value:g.sleep_target,unit:'h',current:s.sleep_hours||0,pct:this.pct(s.sleep_hours,g.sleep_target),min:5,max:10,step:.5,icon:'/assets/icons/sleep.png'},
+    {k:'exercise_target',name:'每日运动',value:g.exercise_target,unit:'min',current:s.exercise_min||0,pct:this.pct(s.exercise_min,g.exercise_target),min:10,max:120,step:5,icon:'/assets/icons/activity.png'},
+    {k:'steps_target',name:'每日步数',value:g.steps_target,unit:'步',current:s.steps||0,pct:this.pct(s.steps,g.steps_target),min:2000,max:20000,step:500,icon:'/assets/icons/steps.png'},
+    {k:'protein_target',name:'蛋白质',value:g.protein_target,unit:'g',current:s.protein||0,pct:this.pct(s.protein,g.protein_target),min:30,max:200,step:5,icon:'/assets/icons/protein.png'},
+    {k:'calorie_target',name:'热量参考',value:g.calorie_target,unit:'kcal',current:s.calories||0,pct:this.pct(s.calories,g.calorie_target),min:1200,max:3600,step:50,icon:'/assets/icons/calories.png'}
   ]})},
   // ── Velocity-Based Slider Snap ──────────────────────────────────────────
   // 原生 slider 不暴露松手速度，用 bindchanging 的连续采样估算「步/秒」；

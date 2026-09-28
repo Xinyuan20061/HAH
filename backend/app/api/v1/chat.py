@@ -5,6 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 from app.api.deps import current_user
 from app.core.database import get_db
+from app.core.streaming import display_tokens
 from app.models import ChatSession, ChatMessage
 from app.schemas.chat import ChatIn, ChatOut
 from app.services.health import today_summary
@@ -132,10 +133,10 @@ async def chat_stream(
             )
             + "\n"
         )
-        yield (
-            json.dumps({"type": "delta", "content": result.reply}, ensure_ascii=False)
-            + "\n"
-        )
+        for token in display_tokens(result.reply):
+            yield json.dumps(
+                {"type": "delta", "content": token}, ensure_ascii=False
+            ) + "\n"
         yield (
             json.dumps(
                 {"type": "done", "provider": result.provider}, ensure_ascii=False

@@ -20,6 +20,7 @@
 .state-symbol,.clear-ring {display: flex;align-items: center;justify-content: center;width: 72rpx;height: 72rpx;margin: auto;border-radius: 50%;font-size: 38rpx; }
 .state-symbol {color: #9b5143;background: #eeeee6; }
 .clear-ring {color: #506336;background: #e9efd9; }
+.clear-ring image {width: 40rpx;height: 40rpx; }
 .state-title {margin-top: 24rpx;font-size: 28rpx;font-weight: 680; }
 .state-copy {margin-top: 12rpx;color: #5f665f;font-size: 22rpx;line-height: 1.65; }
 .insight-state button {width: 250rpx;margin-top: 32rpx;border: 0;border-radius: 17rpx;color:#111613;background: #c4e267;font-size: 24rpx; }
@@ -36,16 +37,19 @@
 .evidence-block,.advice-block {margin-top: 24rpx;padding: 20rpx 24rpx;border-radius: 17rpx;color: #5f665f;background: #f7f7f2;font-size: 22rpx;line-height: 1.65; }
 .advice-block {color: #111613;background: #f7f7f2; }
 .basis-block {margin-top: 24rpx;padding: 20rpx 24rpx;border-radius: 17rpx;color: #5f665f;background: #f2f4ec;font-size: 21rpx;line-height: 1.6; }
-.basis-fact {display: flex;justify-content: space-between;gap: 16rpx;margin-top: 6rpx; }
+.basis-fact {display: flex;justify-content: space-between;gap: 16rpx;margin-top: 8rpx; }
 .basis-coverage {margin-top: 12rpx;color: #506336;font-size: 20rpx; }
 .basis-limits {margin-top: 12rpx;padding-top: 12rpx;border-top: 1rpx dashed #d7dcc9; }
-.basis-limit {margin-top: 6rpx;color: #7c8273;font-size: 20rpx; }
+.basis-limit {margin-top: 8rpx;color: #7c8273;font-size: 20rpx; }
 .action-timeline {margin-top: 24rpx;padding: 20rpx 24rpx;border-radius: 17rpx;background: #f7f7f2;font-size: 21rpx; }
 .timeline-item {margin-top: 12rpx; }
 .timeline-row {display: flex;align-items: center;justify-content: space-between;color: #111613; }
 .timeline-status {color: #506336;font-size: 19rpx; }
 .timeline-date {margin-top: 4rpx;color: #7c8273;font-size: 19rpx; }
-.timeline-outcome {margin-top: 6rpx;color: #5f665f;font-size: 20rpx;line-height: 1.5; }
+.timeline-outcome {margin-top: 8rpx;color: #5f665f;font-size: 20rpx;line-height: 1.5; }
+.error-state {border-color:#ead1cc; }
+.clear-state {border-color:#e9efd9; }
+.insight-list {margin-top:24rpx; }
 .block-label {margin-bottom: 8rpx;color: #5f665f;font-size: 18rpx;letter-spacing: 2rpx; }
 .advice-block .block-label {color: #506336; }
 .card-actions {display: grid;grid-template-columns: 1fr 1fr;gap: 16rpx;margin-top: 24rpx; }
@@ -58,8 +62,8 @@
 .feedback-actions {display: grid;grid-template-columns: repeat(3,1fr);gap: 12rpx;margin-top: 16rpx; }
 .feedback-actions button {min-height: 62rpx;margin: 0;padding: 0 8rpx;border: 1rpx solid #e9efd9;border-radius: 14rpx;color: #506336;background: #f7f7f2;font-size: 19rpx;line-height: 62rpx; }
 .feedback-actions button::after {border: 0; }
-.feedback-done {color: #506336;font-size: 20rpx; }
-.feedback-done > text {margin-right: 8rpx; }
+.feedback-done {display:flex;align-items:center;flex-wrap:wrap;color:#506336;font-size:20rpx; }
+.feedback-done > image {width:28rpx;height:28rpx;margin-right:8rpx; }
 .feedback-done > view {margin-top: 8rpx;color: #506336;font-size: 17rpx; }
 .boundary-card {margin-top: 24rpx;padding: 24rpx 24rpx;border: 1rpx solid #eeeee6;border-radius: 20rpx;color: #5f665f;background: rgba(255,255,255,.55);font-size: 20rpx;line-height: 1.65; }
 .boundary-title {margin-bottom: 8rpx;color: #5f665f;font-size: 22rpx;font-weight: 650; }

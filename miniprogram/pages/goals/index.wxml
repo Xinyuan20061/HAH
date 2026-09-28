@@ -12,11 +12,11 @@
           <view class="target-change" wx:if="{{item.decision==='increase'||item.decision==='reduce'}}"><text>{{item.previous_target}}</text><text>→</text><text>{{item.recommended_target}}</text><button class="tappable" data-id="{{item.adjustment_id}}" bindtap="applyDynamic" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">应用</button></view>
           <view class="reason">{{item.reason}}</view>
         </view>
-        <view class="ai-explain tappable" bindtap="explainDynamic" hover-class="tap" hover-start-time="0" hover-stay-time="80"><text>{{explainLoading?'正在整理…':dynamicExplain||'查看调整原因'}}</text><text>✦</text></view>
+        <view class="ai-explain tappable" bindtap="explainDynamic" hover-class="tap" hover-start-time="0" hover-stay-time="80"><text>{{explainLoading?'正在整理…':dynamicExplain||'查看调整原因'}}</text><image src="/assets/icons/spark.png" mode="aspectFit"/></view>
       </block>
     </view>
     <view class="goal-card card" wx:for="{{cards}}" wx:key="k">
-      <view class="row space"><view class="goal-name"><view class="gicon">{{item.icon}}</view><view><view class="b">{{item.name}}</view><view class="muted">今天 {{item.current}} {{item.unit}}</view></view></view><view class="target {{snapKey===item.k?'snap':''}}"><text>{{item.value}}</text><text>{{item.unit}}</text></view></view>
+      <view class="row space"><view class="goal-name"><view class="gicon"><image src="{{item.icon}}" mode="aspectFit"/></view><view><view class="b">{{item.name}}</view><view class="muted">今天 {{item.current}} {{item.unit}}</view></view></view><view class="target {{snapKey===item.k?'snap':''}}"><text>{{item.value}}</text><text>{{item.unit}}</text></view></view>
       <view class="progress"><view style="width:{{item.pct}}%"></view></view>
       <slider data-i="{{index}}" min="{{item.min}}" max="{{item.max}}" step="{{item.step}}" value="{{item.value}}" bindchanging="slideLive" bindchange="slide" activeColor="#506336" backgroundColor="#e9efd9" block-color="#506336" block-size="18"/>
     </view>

@@ -36,23 +36,33 @@
     "list": [
       {
         "pagePath": "pages/home/index",
-        "text": "首页"
+        "text": "首页",
+        "iconPath": "assets/tabbar/home.png",
+        "selectedIconPath": "assets/tabbar/home-active.png"
       },
       {
         "pagePath": "pages/chat/index",
-        "text": "健康助手"
+        "text": "助手",
+        "iconPath": "assets/tabbar/agent.png",
+        "selectedIconPath": "assets/tabbar/agent-active.png"
       },
       {
         "pagePath": "pages/records/index",
-        "text": "记录"
+        "text": "记录",
+        "iconPath": "assets/tabbar/records.png",
+        "selectedIconPath": "assets/tabbar/records-active.png"
       },
       {
         "pagePath": "pages/plan/index",
-        "text": "计划"
+        "text": "计划",
+        "iconPath": "assets/tabbar/plan.png",
+        "selectedIconPath": "assets/tabbar/plan-active.png"
       },
       {
         "pagePath": "pages/profile/index",
-        "text": "我的"
+        "text": "我的",
+        "iconPath": "assets/tabbar/profile.png",
+        "selectedIconPath": "assets/tabbar/profile-active.png"
       }
     ]
   },

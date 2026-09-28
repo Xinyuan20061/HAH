@@ -83,7 +83,7 @@ MySQL 映射 `127.0.0.1:3307`，API 为 `127.0.0.1:8000`。不要执行 `docker 
 
 ## D. 小程序配置
 
-微信开发者工具导入仓库根目录，`project.config.json` 指向 `miniprogram/`。核对自己的 AppID。编辑 `miniprogram/config/index.js`：真实 `CLOUD_ENV_ID`、`CLOUDRUN_SERVICE_NAME`；`DEV_LOGIN=false`、`USE_STREAMING=false`。`PUBLIC_API_BASE_URL` 可留空，常规业务走 `wx.cloud.callContainer`。本机 Worker 使用同一服务的公网 HTTPS 地址。
+微信开发者工具导入仓库根目录，`project.config.json` 指向 `miniprogram/`。核对自己的 AppID。编辑 `miniprogram/config/index.js`：真实 `CLOUD_ENV_ID`、`CLOUDRUN_SERVICE_NAME`；`DEV_LOGIN=false`。配置同一服务的公网 HTTPS `PUBLIC_API_BASE_URL` 后可保持 `USE_STREAMING=true`，让已完成安全校验的回答逐 token 呈现；没有公网入口时设为 `false`，自动通过 `wx.cloud.callContainer` 获取完整结果。本机 Worker 使用同一服务的公网 HTTPS 地址。
 
 CloudBase 云存储权限设置为仅文件创建者读写，并完成两个不同微信账号的隔离验证。用户媒体路径为 `healthmate/u<后端用户ID>/{image|video}/...`，不能把数字目录校验当成云端权限规则。补齐微信后台隐私指引、相机/相册用途声明和发布要求。
 

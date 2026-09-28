@@ -149,7 +149,7 @@ function streamPost(url, data, { onMeta, onDelta, onDone, onError } = {}) {
   if (!config.USE_STREAMING || (isCloud() && !config.PUBLIC_API_BASE_URL)) {
     let cancelled = false
     request({ url: url.replace(/\/stream$/, ''), method: 'POST', data, timeout: 120000, allowCache: false })
-      .then(r => { if (cancelled) return; onMeta && onMeta({ session_id: r.session_id }); onDelta && onDelta(r.reply || ''); onDone && onDone({ provider: r.provider }) })
+      .then(r => { if (cancelled) return; onMeta && onMeta({ session_id: r.session_id, safety_level: r.safety_level }); onDelta && onDelta(r.reply || ''); onDone && onDone({ provider: r.provider, result: r }) })
       .catch(e => { if (!cancelled) onError && onError(e) })
     return { abort(){ cancelled = true } }
   }

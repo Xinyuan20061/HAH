@@ -1,5 +1,11 @@
-<view class="page"><view class="title">记录</view><view class="subtitle intro">留下真正影响状态的数据。</view>
-<view class="feature card tappable" bindtap="checkin" hover-class="tap-card" hover-start-time="0" hover-stay-time="80"><view class="big-icon mint">＋</view><view class="grow"><view class="rtitle">今日健康打卡</view></view><view class="go">›</view></view>
-<view class="two"><view class="small card tappable" bindtap="diet" hover-class="tap-card" hover-start-time="0" hover-stay-time="80"><view class="icon lime">🥑</view><view class="rtitle">饮食</view></view><view class="small card tappable" bindtap="exercise" hover-class="tap-card" hover-start-time="0" hover-stay-time="80"><view class="icon blue">↗</view><view class="rtitle">运动</view></view></view>
-<view class="feature card tappable" bindtap="trends" hover-class="tap-card" hover-start-time="0" hover-stay-time="80"><view class="big-icon sand">⌁</view><view class="grow"><view class="rtitle">7 日健康趋势</view></view><view class="go">›</view></view>
-<view class="feature card tappable" bindtap="scan" hover-class="tap-card" hover-start-time="0" hover-stay-time="80"><view class="big-icon sand">餐</view><view class="grow"><view class="rtitle">拍照识餐</view></view><view class="go">›</view></view></view>
+<view class="page">
+  <view class="title">记录</view>
+  <view class="subtitle intro">留下真正影响状态的数据。</view>
+  <view class="feature card tappable" bindtap="checkin" hover-class="tap-card" hover-start-time="0" hover-stay-time="80"><view class="ui-icon-box large"><image class="ui-icon-image" src="/assets/icons/check.png" mode="aspectFit"/></view><view class="grow"><view class="rtitle">今日健康打卡</view></view><image class="ui-chevron" src="/assets/icons/chevron.png" mode="aspectFit"/></view>
+  <view class="two">
+    <view class="small card tappable" bindtap="diet" hover-class="tap-card" hover-start-time="0" hover-stay-time="80"><view class="ui-icon-box"><image class="ui-icon-image" src="/assets/icons/meal.png" mode="aspectFit"/></view><view class="rtitle">饮食</view></view>
+    <view class="small card tappable" bindtap="exercise" hover-class="tap-card" hover-start-time="0" hover-stay-time="80"><view class="ui-icon-box soft"><image class="ui-icon-image" src="/assets/icons/activity.png" mode="aspectFit"/></view><view class="rtitle">运动</view></view>
+  </view>
+  <view class="feature card tappable" bindtap="trends" hover-class="tap-card" hover-start-time="0" hover-stay-time="80"><view class="ui-icon-box large soft"><image class="ui-icon-image" src="/assets/icons/trend.png" mode="aspectFit"/></view><view class="grow"><view class="rtitle">7 日健康趋势</view></view><image class="ui-chevron" src="/assets/icons/chevron.png" mode="aspectFit"/></view>
+  <view class="feature card tappable" bindtap="scan" hover-class="tap-card" hover-start-time="0" hover-stay-time="80"><view class="ui-icon-box large soft"><image class="ui-icon-image" src="/assets/icons/camera.png" mode="aspectFit"/></view><view class="grow"><view class="rtitle">拍照识餐</view></view><image class="ui-chevron" src="/assets/icons/chevron.png" mode="aspectFit"/></view>
+</view>

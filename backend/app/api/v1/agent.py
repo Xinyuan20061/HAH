@@ -2,10 +2,12 @@ import json
 from datetime import timedelta
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from app.api.deps import current_user
 from app.core.database import get_db
+from app.core.streaming import display_tokens
 from app.core.time import utc_iso, utc_now
 from app.models import EvaluationEvent
 from app.schemas.agent import (
@@ -265,6 +267,47 @@ async def agent_respond(
     body: AgentRequest, user=Depends(current_user), db: Session = Depends(get_db)
 ):
     return await respond(db, user, body.message)
+
+
+@router.post("/respond/stream")
+async def agent_respond_stream(
+    body: AgentRequest, user=Depends(current_user), db: Session = Depends(get_db)
+):
+    """Stream an already validated Agent response as NDJSON display tokens.
+
+    The orchestrator must finish its safety review, plan validation and
+    deterministic guardrails before headers are sent.  Structured cards are
+    delivered with the final event so the client cannot expose an unvalidated
+    plan while text is still appearing.
+    """
+
+    result = await respond(db, user, body.message)
+    reply = str(result.get("reply") or "")
+    final_result = {key: value for key, value in result.items() if key != "reply"}
+
+    async def generate():
+        yield json.dumps(
+            {
+                "type": "meta",
+                "intent": result.get("intent"),
+                "safety_level": result.get("safety_level", "normal"),
+            },
+            ensure_ascii=False,
+        ) + "\n"
+        for token in display_tokens(reply):
+            yield json.dumps(
+                {"type": "delta", "content": token}, ensure_ascii=False
+            ) + "\n"
+        yield json.dumps(
+            {
+                "type": "done",
+                "provider": result.get("provider"),
+                "result": final_result,
+            },
+            ensure_ascii=False,
+        ) + "\n"
+
+    return StreamingResponse(generate(), media_type="application/x-ndjson")
 
 
 @router.post("/runs/{run_id}/apply-plan")

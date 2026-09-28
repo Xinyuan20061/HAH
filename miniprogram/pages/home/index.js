@@ -5,14 +5,14 @@ const config = require('../../config/index')
 const TAB_ROUTES = new Set(['/pages/home/index','/pages/chat/index','/pages/records/index','/pages/plan/index','/pages/profile/index'])
 
 const NAV_ITEMS = [
-  { key: 'scan', label: '拍照识餐', icon: '餐', route: '/pages/scan/index' },
-  { key: 'media', label: '动作反馈', icon: '动', route: '/pages/media/index' },
-  { key: 'insights', label: '健康提醒', icon: '醒', route: '/pages/insights/index' },
-  { key: 'trends', label: '7 日趋势', icon: '趋', route: '/pages/trends/index' },
-  { key: 'goals', label: '健康目标', icon: '标', route: '/pages/goals/index' },
-  { key: 'report', label: '健康周报', icon: '报', route: '/pages/report/index' },
-  { key: 'workout', label: '训练计划', icon: '练', route: '/pages/workout/index' },
-  { key: 'profile', label: '身体档案', icon: '档', route: '/pages/profile/edit' }
+  { key: 'scan', label: '拍照识餐', icon: '/assets/icons/camera.png', route: '/pages/scan/index' },
+  { key: 'media', label: '动作反馈', icon: '/assets/icons/activity.png', route: '/pages/media/index' },
+  { key: 'insights', label: '健康提醒', icon: '/assets/icons/bell.png', route: '/pages/insights/index' },
+  { key: 'trends', label: '7 日趋势', icon: '/assets/icons/trend.png', route: '/pages/trends/index' },
+  { key: 'goals', label: '健康目标', icon: '/assets/icons/target.png', route: '/pages/goals/index' },
+  { key: 'report', label: '健康周报', icon: '/assets/icons/report.png', route: '/pages/report/index' },
+  { key: 'workout', label: '训练计划', icon: '/assets/icons/workout.png', route: '/pages/workout/index' },
+  { key: 'profile', label: '身体档案', icon: '/assets/icons/profile-card.png', route: '/pages/profile/edit' }
 ]
 
 Page({

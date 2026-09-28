@@ -1,56 +1,115 @@
 <view class="chat-page">
-  <scroll-view scroll-y class="messages" scroll-into-view="{{scrollId}}">
-    <view class="context">
-      <view class="context-head"><view class="ai-orb">H</view><view class="grow"><view class="ai-kicker">健康助手 · {{provider}}</view><view class="context-title">今天想先解决什么？</view></view><view class="settings tappable" bindtap="settings" hover-class="tap" hover-start-time="0" hover-stay-time="80">设置</view></view>
-      <view class="context-desc">助手会读取你的档案、最近记录、目标和周报事实。任何计划都不会自动写入，必须由你确认。</view>
-      <view class="chips"><view class="tappable" bindtap="quick" data-q="我今天晚饭怎么吃更合适？" hover-class="tap" hover-start-time="0" hover-stay-time="80">晚饭怎么吃</view><view class="tappable" bindtap="quick" data-q="这周只能练三天，结合我的最近数据和目标安排一个本周计划" hover-class="tap" hover-start-time="0" hover-stay-time="80">安排三天计划</view><view class="tappable" bindtap="quick" data-q="结合我的睡眠和运动记录，给我一个今天的恢复建议" hover-class="tap" hover-start-time="0" hover-stay-time="80">恢复建议</view></view>
+  <view class="agent-bar">
+    <view class="agent-identity">
+      <view class="agent-mark"><image src="/assets/icons/spark.png" mode="aspectFit"/></view>
+      <view>
+        <view class="agent-name">HealthMate</view>
+        <view class="agent-state"><view class="state-dot {{sending?'busy':''}}"></view><text>{{statusText}}</text></view>
+      </view>
     </view>
-    <block wx:for="{{messages}}" wx:for-item="msg" wx:for-index="msgIndex" wx:key="msgIndex">
-      <view class="msg {{msg.role}}">
-        <view class="avatar-mini" wx:if="{{msg.role==='assistant'}}">H</view>
-        <view class="bubble">
-          <text>{{msg.content}}</text><text wx:if="{{msg.role==='assistant'&&streaming&&msgIndex===messages.length-1}}" class="cursor">▍</text>
-          <view wx:if="{{msg.safetyLevel&&msg.safetyLevel!=='normal'}}" class="safety-note">安全提醒 · {{msg.safetyLevel}} · 已停止普通规划流程</view>
-          <view wx:if="{{msg.trace}}" class="trace-card">
-            <view class="trace-head"><view class="trace-icon">✓</view><view><view class="trace-kicker">为什么这样建议</view><view class="trace-owner">由{{msg.trace.specialistLabel}}整理</view></view></view>
+    <view class="icon-action tappable" bindtap="settings" hover-class="tap" hover-start-time="0" hover-stay-time="80" aria-label="助手设置">
+      <image src="/assets/icons/settings.png" mode="aspectFit"/>
+    </view>
+  </view>
+
+  <scroll-view scroll-y class="messages" scroll-top="{{scrollTop}}">
+    <view wx:if="{{!messages.length}}" class="welcome">
+      <view class="welcome-mark"><image src="/assets/icons/spark.png" mode="aspectFit"/></view>
+      <view class="welcome-kicker">你的健康，由你做决定</view>
+      <view class="welcome-title">今天想先改善什么？</view>
+      <view class="welcome-desc">我会结合你的真实记录给出建议。计划与健康数据始终由你确认后才会写入。</view>
+      <view class="suggestion-list">
+        <view class="suggestion tappable" wx:for="{{suggestions}}" wx:key="key" bindtap="quick" data-q="{{item.prompt}}" hover-class="tap-card" hover-start-time="0" hover-stay-time="80">
+          <view class="suggestion-icon"><image src="{{item.icon}}" mode="aspectFit"/></view>
+          <view class="suggestion-copy"><view class="suggestion-title">{{item.title}}</view><view class="suggestion-hint">{{item.hint}}</view></view>
+          <image class="chevron" src="/assets/icons/chevron.png" mode="aspectFit"/>
+        </view>
+      </view>
+    </view>
+
+    <block wx:for="{{messages}}" wx:for-item="msg" wx:for-index="msgIndex" wx:key="id">
+      <view id="{{msg.id}}" class="message-row {{msg.role}}">
+        <view wx:if="{{msg.role==='user'}}" class="user-bubble"><text>{{msg.content}}</text></view>
+
+        <view wx:if="{{msg.role==='assistant'}}" class="assistant-message">
+          <view class="assistant-meta">
+            <view class="assistant-mark"><image src="/assets/icons/spark.png" mode="aspectFit"/></view>
+            <text>HealthMate</text>
+            <view wx:if="{{msg.safetyLevel&&msg.safetyLevel!=='normal'}}" class="safety-pill">安全响应</view>
+          </view>
+
+          <view wx:if="{{msg.pending&&!msg.content}}" class="thinking-state">
+            <view class="thinking-dots"><view></view><view></view><view></view></view>
+            <text>{{statusText}}</text>
+          </view>
+
+          <view wx:if="{{msg.content}}" class="response-text">
+            <text>{{msg.content}}</text><text wx:if="{{streaming&&msgIndex===messages.length-1}}" class="cursor"></text>
+          </view>
+
+          <view wx:if="{{msg.safetyLevel&&msg.safetyLevel!=='normal'}}" class="safety-note">
+            <image src="/assets/icons/shield.png" mode="aspectFit"/><text>已停止普通规划流程，并切换到更谨慎的健康提示。</text>
+          </view>
+
+          <view wx:if="{{msg.trace}}" class="trace-card content-reveal">
+            <view class="trace-head">
+              <view class="trace-icon"><image src="/assets/icons/spark.png" mode="aspectFit"/></view>
+              <view><view class="trace-kicker">为什么这样建议</view><view class="trace-owner">由{{msg.trace.specialistLabel}}整理</view></view>
+            </view>
             <view wx:if="{{msg.trace.hasReasons}}" class="trace-reasons"><text wx:for="{{msg.trace.reasons}}" wx:key="*this">{{item}}</text></view>
             <view wx:else class="trace-default">已结合你的最近记录、健康目标和安全边界；涉及计划的操作仍由你确认。</view>
           </view>
-          <view wx:if="{{msg.agentPlan&&msg.planAdjustment}}" class="adjustment-card">
-            <view class="agent-plan-kicker">计划调整 · 参考程度{{msg.planAdjustment.confidence==='high'?'较高':msg.planAdjustment.confidence==='medium'?'中等':'较低'}}</view>
+
+          <view wx:if="{{msg.agentPlan&&msg.planAdjustment}}" class="adjustment-card content-reveal">
+            <view class="section-label">计划调整 · 参考程度{{msg.planAdjustment.confidence==='high'?'较高':msg.planAdjustment.confidence==='medium'?'中等':'较低'}}</view>
             <view class="adjustment-summary">{{msg.planAdjustment.summary}}</view>
             <view class="adjustment-reason" wx:for="{{msg.planAdjustment.reasons}}" wx:for-item="reason" wx:key="code"><text>{{reason.label}}</text><view>{{reason.evidence}}</view><view>{{reason.effect}}</view></view>
             <view class="adjustment-applied" wx:if="{{msg.planAdjustment.applied_changes&&msg.planAdjustment.applied_changes.length}}">已应用：<text wx:for="{{msg.planAdjustment.applied_changes}}" wx:for-item="change" wx:key="*this">{{change}}；</text></view>
           </view>
-          <view wx:if="{{msg.agentPlan}}" class="agent-plan">
-            <view class="agent-plan-kicker">计划草案 · 待确认</view><view class="action-flow"><text class="done">生成建议</text><view class="action-line on"></view><text class="{{msg.applied?'done':'active'}}">用户确认</text><view class="action-line {{msg.applied?'on':''}}"></view><text class="{{msg.applied?'done':''}}">写入计划</text></view><view class="agent-plan-title">{{msg.agentPlan.title}}</view>
+
+          <view wx:if="{{msg.agentPlan}}" class="agent-plan content-reveal">
+            <view class="plan-head"><view class="plan-icon"><image src="/assets/icons/calendar.png" mode="aspectFit"/></view><view><view class="section-label">可执行计划</view><view class="agent-plan-title">{{msg.agentPlan.title}}</view></view></view>
+            <view class="action-flow"><text class="done">生成建议</text><view class="action-line on"></view><text class="{{msg.applied?'done':'active'}}">用户确认</text><view class="action-line {{msg.applied?'on':''}}"></view><text class="{{msg.applied?'done':''}}">写入计划</text></view>
             <view class="agent-item" wx:for="{{msg.agentPlan.items}}" wx:for-item="planItem" wx:for-index="planIndex" wx:key="title"><text class="dot">{{planIndex+1}}</text><view><view class="ap-title">{{planItem.title}}</view><view class="ap-desc">{{planItem.description}}</view></view></view>
-            <button class="tappable" wx:if="{{!msg.applied}}" data-run="{{msg.runId}}" bindtap="applyAgentPlan" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">加入本周计划</button><view wx:else class="applied">✓ 已确认并写入本周计划<text wx:if="{{msg.actionAuditId}}"> · 操作记录 #{{msg.actionAuditId}}</text></view>
+            <button class="plan-confirm tappable" wx:if="{{!msg.applied}}" data-run="{{msg.runId}}" bindtap="applyAgentPlan" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">确认并加入本周</button>
+            <view wx:else class="applied">已写入本周计划<text wx:if="{{msg.actionAuditId}}"> · 操作记录 #{{msg.actionAuditId}}</text></view>
           </view>
-          <view wx:if="{{msg.exerciseRecommendations&&msg.exerciseRecommendations.length}}" class="exercise-recommendations">
-            <view class="agent-plan-kicker">目标匹配 · 动作效果知识</view>
+
+          <view wx:if="{{msg.exerciseRecommendations&&msg.exerciseRecommendations.length}}" class="exercise-recommendations content-reveal">
+            <view class="section-label">适合你的动作</view>
             <view class="exercise-rec" wx:for="{{msg.exerciseRecommendations}}" wx:for-item="exercise" wx:key="exercise_key">
               <view class="row"><view><view class="resource-title">{{exercise.exercise_name}}</view><view class="resource-summary"><text wx:for="{{exercise.reasons}}" wx:key="*this">{{item}}；</text></view></view><view class="rec-score">{{exercise.match_score}}</view></view>
               <view class="rec-support">{{exercise.video_analysis_supported?'当前支持视频评分':'已收录效果知识，视频评分待扩展'}}</view>
             </view>
           </view>
-          <view wx:if="{{msg.resources&&msg.resources.length}}" class="resource-list">
-            <view class="agent-plan-kicker">已审核教学资源</view>
-            <view class="resource-card" wx:for="{{msg.resources}}" wx:for-item="resource" wx:key="id"><view class="resource-platform">{{resource.platform}} · {{resource.difficulty}}</view><view class="resource-title">{{resource.title}}</view><view class="resource-summary">{{resource.summary}}</view><view class="resource-meta"><text>质量 {{resource.quality_score}}</text><button class="tappable" size="mini" data-url="{{resource.url}}" bindtap="copyResource" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">复制链接</button></view></view>
+
+          <view wx:if="{{msg.resources&&msg.resources.length}}" class="resource-list content-reveal">
+            <view class="section-label">已审核教学资源</view>
+            <view class="resource-card" wx:for="{{msg.resources}}" wx:for-item="resource" wx:key="id">
+              <view class="resource-platform">{{resource.platform}} · {{resource.difficulty}}</view><view class="resource-title">{{resource.title}}</view><view class="resource-summary">{{resource.summary}}</view>
+              <view class="resource-meta"><text>质量 {{resource.quality_score}}</text><button class="icon-copy tappable" data-url="{{resource.url}}" bindtap="copyResource" hover-class="tap" hover-start-time="0" hover-stay-time="80" aria-label="复制教学链接"><image src="/assets/icons/copy.png" mode="aspectFit"/></button></view>
+            </view>
           </view>
-          <view wx:if="{{msg.knowledgeSources&&msg.knowledgeSources.length}}" class="knowledge-list">
-            <view class="agent-plan-kicker">参考来源</view>
+
+          <view wx:if="{{msg.knowledgeSources&&msg.knowledgeSources.length}}" class="knowledge-list content-reveal">
+            <view class="section-label">参考来源</view>
             <view class="knowledge-card" wx:for="{{msg.knowledgeSources}}" wx:for-item="source" wx:key="id">
-              <view class="knowledge-label">{{source.citation_id}} · {{source.organization}}</view>
-              <view class="resource-title">{{source.title}}</view>
-              <view class="resource-summary">{{source.excerpt}}</view>
-              <view class="resource-meta"><text>{{source.section}}<text wx:if="{{source.published_at}}"> · {{source.published_at}}</text></text><button class="tappable" size="mini" data-url="{{source.url}}" bindtap="copyKnowledge" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">复制来源</button></view>
+              <view class="knowledge-label">{{source.citation_id}} · {{source.organization}}</view><view class="resource-title">{{source.title}}</view><view class="resource-summary">{{source.excerpt}}</view>
+              <view class="resource-meta"><text>{{source.section}}<text wx:if="{{source.published_at}}"> · {{source.published_at}}</text></text><button class="icon-copy tappable" data-url="{{source.url}}" bindtap="copyKnowledge" hover-class="tap" hover-start-time="0" hover-stay-time="80" aria-label="复制参考来源"><image src="/assets/icons/copy.png" mode="aspectFit"/></button></view>
             </view>
           </view>
         </view>
       </view>
     </block>
-    <view id="bottom" class="bottom-space"></view>
+    <view class="bottom-space"></view>
   </scroll-view>
-  <view class="composer"><textarea value="{{input}}" bindinput="onInput" auto-height maxlength="2000" placeholder="问饮食、运动、睡眠，或一起制定计划…"/><button class="tappable" bindtap="send" loading="{{sending}}" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">{{sending?'':'发送'}}</button></view>
+
+  <view class="composer-wrap">
+    <view class="composer {{composerFocused?'focused':''}}">
+      <textarea class="composer-input" value="{{input}}" bindinput="onInput" bindfocus="onFocus" bindblur="onBlur" auto-height maxlength="2000" show-confirm-bar="{{false}}" cursor-spacing="16" placeholder="问问今天的饮食、运动或恢复…"/>
+      <button class="composer-action tappable {{sending?'stop':canSend?'ready':''}}" bindtap="composerAction" disabled="{{!canSend&&!sending}}" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80" aria-label="{{sending?'停止生成':'发送消息'}}">
+        <view wx:if="{{sending}}" class="stop-mark"></view><image wx:else src="/assets/icons/send.png" mode="aspectFit"/>
+      </button>
+    </view>
+  </view>
 </view>
