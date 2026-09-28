@@ -29,7 +29,7 @@ API_BASE_URL=https://<同一微信云托管公网域名>/api/v1
 WORKER_TOKEN=<与云端相同的独立随机Token>
 WORKER_ID=healthmate-laptop-01
 WORKER_NAME=HealthMate Local Worker
-CAPABILITIES=motion_pose,food_vision
+CAPABILITIES=motion_pose,food_vision,kinetics400
 AI_MODE=local_first
 LOCAL_CONFIDENCE_THRESHOLD=0.6
 POLL_INTERVAL_SECONDS=2
@@ -49,6 +49,10 @@ IMAGE_MAX_DIMENSION=1280
 IMAGE_MAX_BYTES=1000000
 FOOD_CLASSIFIER_MODEL=
 FOOD_CLASSIFIER_TOP_K=3
+KINETICS400_CHECKPOINT=D:\HealthMateData\motion\pretrained\slowfast_r50_8xb8-8x8x1-steplr-256e_kinetics400-rgb_20220818-b62a501f.pth
+KINETICS400_MIN_CONFIDENCE=0.5
+KINETICS400_STRONG_CONFIDENCE=0.7
+KINETICS400_DEVICE=cpu
 ```
 
 这些值由 `healthmate_worker/config.py` 集中读取。CAPABILITIES 是允许探测的能力，不是无条件宣称已可用。模型 ID 默认留空，不绑定 7B 或任何品牌。Worker 只持有自己的 Token，不需要数据库密码、AppSecret 或用户 JWT。
@@ -117,6 +121,19 @@ Invoke-RestMethod http://127.0.0.1:1234/v1/models
 
 事件包括最高位、每次最低位/起立完成、最深位、最大躯干角与最大风险时刻，带真实 timestamp/metrics/confidence。最多四张事件图在本机截取、模糊脸部、叠加骨骼并压缩到每张80KB以内；后端校验后随任务结果展示，默认7天后删除图片，结构化事件继续保留。无预览时前端降级到匿名骨骼画布。没有3D、医学精度或实时反馈承诺。机位、遮挡、光照会影响质量，比赛前应分别用真实完整运动视频验收。
 
+## 5.5 400 类动作识别（kinetics400，正式能力）
+
+本地 SlowFast R50 直接加载 MMAction2 官方 Kinetics-400 checkpoint（132MB），纯 PyTorch CPU 推理，无云端调用。两条使用路径：
+
+- **motion_pose auto 模式内置第二意见**：规则识别后自动跑一次，但**默认不覆盖规则结果**（模型治理门控 `KINETICS400_OVERRIDE_ENABLED=false`）：Kinetics 只作为候选层写入 `recognition["kinetics400"]` 并附 `kinetics_note` 说明未启用覆盖。只有当同集评测注册 active 并把开关置 True 后，才恢复强置信纠正规则误判/救回弃权逻辑；深蹲/俯卧撑/弓步映射回专属评分器，其余 397 类识别为 `exercise_slug`/中文名但**不提供次数与评分**（score.available=false，走"已识别动作类型"分支）。
+- **独立 kinetics400 任务类型**：小程序 media 页新增「400 类动作识别」入口 → `POST /media/kinetics-jobs` → worker 领取 → `analyze_kinetics400` → 完成回执经 `_validate_kinetics400_result` 校验（top_label 必在候选内、概率 0-1 有限值、候选≤10、class_index 0-2000）→ 存储 result_json 并记录 `kinetics400_processing_ms` 指标与 `kinetics400_analysis_completed` 事件。
+
+结果字段：method、top_label、top_label_zh、top_probability、mapped_exercise、exercise_slug、candidates（label/label_zh/class_index/probability/exercise_slug/mapped_exercise）、is_estimate=true、scope 免责声明。中文名映射见 `processors/kinetics.py`；`KINETICS_TO_EXERCISE` 现覆盖 squat/push up/lunge/pull ups/bench pressing/deadlifting/situp 七类（前三类有专属评分器）。
+
+能力探测 `kinetics400_status()`：checkpoint 未配置、文件缺失、缺少 torch，或真实权重加载/单次前向 smoke 失败时均视为不可用，不虚报；探测结果按进程缓存。启用后 `effective_capabilities()` 返回 `kinetics400`，云端 `claim_next_job` 按能力匹配；`/health/command-center` 的 `ai_system.kinetics400_ready` 与 `/system/ai-worker` 的 `kinetics_online` 同步可见。
+
+限制：Kinetics-400 为通用视频预训练，健身机位 top-1 不一定对应动作（例如深蹲视频可能判为 robot dancing），因此它始终是"第二意见"，弱置信输出被阈值过滤；独立任务的候选结果仅供健身参考，不代表医学判断。
+
 ## 6. 任务和安全
 
 后台 heartbeat 与 claim 分离；下载和阻塞推理期间后台持续 lease renewal。claim request_id 在同一次网络重试中复用；完成回执可幂等重发。网络/429/5xx 使用有界退避，401/403 不无限重试。失效 lease 的回执返回 409；本机清理临时文件，云端到期恢复；不能覆盖另一 Worker 的任务结果。
@@ -136,6 +153,6 @@ python -m pytest -q
 python scripts/verify_local_motion.py
 ```
 
-本轮 Worker 90 passed；真实 HTTP 上传→任务→实际 Worker→MediaPipe→done 的 smoke 已执行，并额外读取 REHAB24-6 的腿外展和手臂侧平举片段。六类固定测试集共 120 段全部完成，指标与限制见 `benchmark-results/motion-v1/report.md`。smoke 只证明解码和协议，准确率只对登记固定集有效；测试中的 MockTransport/模拟关键点不替代真实功能。
+本轮（2026-09-27）Worker 99 passed（含 kinetics400 处理器 3 用例；Kinetics 能力探测为真实权重加载 + 前向 smoke）；真实 HTTP 上传→任务→实际 Worker→MediaPipe→done 的 smoke 已执行，并额外读取 REHAB24-6 的腿外展和手臂侧平举片段。六类固定测试集共 120 段全部完成，指标与限制见 `benchmark-results/motion-v1/report.md`。smoke 只证明解码和协议，准确率只对登记固定集有效；测试中的 MockTransport/模拟关键点不替代真实功能。
 
 MediaPipe 固定版本依据：[PyPI 0.10.21](https://pypi.org/project/mediapipe/0.10.21/)。实测环境和限制见 VERIFICATION.md。

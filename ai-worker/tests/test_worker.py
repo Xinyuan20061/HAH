@@ -231,6 +231,7 @@ def test_vlm_invalid_model_response(monkeypatch):
 def test_capabilities_are_independent(monkeypatch):
     monkeypatch.setattr(capabilities, "pose_status", lambda: (True, "test"))
     monkeypatch.setattr(capabilities, "vlm_status", lambda: {"available": False})
+    monkeypatch.setattr(capabilities, "kinetics400_status", lambda: {"available": False})
     assert capabilities.effective_capabilities() == ["motion_pose"]
     monkeypatch.setattr(capabilities, "pose_status", lambda: (False, "test"))
     monkeypatch.setattr(capabilities, "vlm_status", lambda: {"available": True})

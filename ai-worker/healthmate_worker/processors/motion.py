@@ -9,6 +9,8 @@ from .recognition import (
 )
 from .motion_review import review_exercise, explain_frames_deepseek
 from ..models.semantic_runtime import infer_motion_semantics
+from ..models.kinetics_runtime import recognize_video_kinetics400
+from ..config import settings
 from ..errors import ProcessingError
 from ..visualize import annotate_keyframes
 
@@ -343,16 +345,87 @@ def analyze_motion(
         else manual_recognition(exercise_type)
     )
     compositional_semantics = infer_motion_semantics(sample_sets)
-    # DeepSeek vision review runs for EVERY exercise (auto-recognised and
-    # manually selected): it confirms the local pick, corrects it, or rescues
-    # an abstained recognition. Failure never blocks the local decision.
-    review, review_error = review_exercise(
-        video_path,
-        sample_sets,
-        local_pick=recognition.get("selected_type"),
-        local_accepted=bool(recognition.get("accepted")),
-        local_reason=str(recognition.get("reason") or ""),
-    )
+
+    # Local SlowFast Kinetics-400 second opinion. In auto mode the 400-class
+    # model always runs (~0.8s CPU) and its candidates are attached to the
+    # result for review. Overriding the rule pick (confirm / correct / rescue)
+    # is gated behind KINETICS400_OVERRIDE_ENABLED, which stays False until the
+    # same-set evaluation registers the model as active (plan §3.3). With the
+    # gate closed the rule result is never rewritten. No cloud call.
+    kinetics = None
+    if exercise_type == "auto":
+        if progress:
+            progress(88, "kinetics400")
+        try:
+            kinetics = recognize_video_kinetics400(video_path)
+        except Exception as exc:  # local model must never break the chain
+            recognition["kinetics_note"] = f"本地 Kinetics-400 推理失败，已跳过：{exc}"
+        if kinetics:
+            recognition["kinetics400"] = kinetics
+            if not settings.kinetics400_override_enabled:
+                recognition["kinetics_note"] = (
+                    "Kinetics-400 仅作为候选层记录，未启用规则覆盖（评测门禁未通过）"
+                )
+            else:
+                k_prob = float(kinetics.get("top_probability", 0))
+                k_label = kinetics.get("top_label", "")
+                mapped = kinetics.get("mapped_exercise")
+                k_selected = mapped or kinetics.get("exercise_slug")
+                rule_selected = recognition.get("selected_type")
+                rule_accepted = bool(recognition.get("accepted"))
+                strong = k_prob >= settings.kinetics400_strong_confidence
+                usable = k_prob >= settings.kinetics400_min_confidence
+                if usable and rule_accepted and mapped == rule_selected:
+                    # Both agree on an analyzer-backed exercise: confirm + boost.
+                    recognition["method"] = (
+                        f"{recognition.get('method')} + slowfast_kinetics400_confirm"
+                    )
+                    recognition["confidence"] = round(
+                        max(float(recognition.get("confidence") or 0), k_prob), 3
+                    )
+                    recognition["reason"] = (
+                        f"规则与 SlowFast Kinetics-400 均判定为 {k_label}"
+                        f"（{k_prob:.0%}），结论一致。"
+                    )
+                elif strong and (not rule_accepted or k_selected != rule_selected):
+                    # Kinetics strongly disagrees, or the rules abstained: trust it.
+                    recognition["accepted"] = True
+                    recognition["selected_type"] = k_selected
+                    recognition["rescued_by"] = "slowfast_kinetics400"
+                    recognition["confidence"] = round(k_prob, 3)
+                    recognition["method"] = "rule_feature_matching_v1 + slowfast_kinetics400"
+                    lead = (
+                        "本地规则未确认，"
+                        if not rule_accepted
+                        else f"本地规则判定为 {rule_selected}，但 "
+                    )
+                    tail = (
+                        f"已映射到 {mapped} 专属评估。"
+                        if mapped in SUPPORTED_EXERCISES
+                        else "当前无专属评分器，仅识别动作类型。"
+                    )
+                    recognition["reason"] = (
+                        f"{lead}SlowFast Kinetics-400 识别为 {k_label}"
+                        f"（{k_prob:.0%}），{tail}"
+                    )
+                # else Kinetics weak/uncertain: keep the rule pick unchanged.
+
+    # DeepSeek vision review. Skip the cloud call when a local model already
+    # accepted the movement (local-first, saves cost); it stays as the final
+    # fallback for movements neither the rules nor Kinetics could confirm.
+    local_high_conf = bool(recognition.get("accepted")) and float(
+        recognition.get("confidence") or 0
+    ) >= settings.kinetics400_min_confidence
+    if local_high_conf:
+        review, review_error = None, None
+    else:
+        review, review_error = review_exercise(
+            video_path,
+            sample_sets,
+            local_pick=recognition.get("selected_type"),
+            local_accepted=bool(recognition.get("accepted")),
+            local_reason=str(recognition.get("reason") or ""),
+        )
     if review_error:
         recognition["review_note"] = review_error
     if review:
@@ -362,6 +435,7 @@ def analyze_motion(
             # Local rules abstained; the vision model identified a movement.
             recognition["accepted"] = True
             recognition["selected_type"] = chosen
+            recognition["rescued_by"] = "deepseek_vision"
             recognition["confidence"] = round(review.get("confidence") or 0, 3)
             recognition["method"] = (
                 "rule_feature_matching_v1 + deepseek_vision_fallback"
@@ -394,6 +468,17 @@ def analyze_motion(
         if selected_type not in SUPPORTED_EXERCISES and recognition.get("accepted"):
             # Vision-rescued movement without a dedicated analyzer: still report
             # the recognized type with basic pose evidence, no per-movement score.
+            rescued_by = recognition.get("rescued_by", "deepseek_vision")
+            recognizer_cn = (
+                "SlowFast Kinetics-400 本地模型"
+                if rescued_by == "slowfast_kinetics400"
+                else "DeepSeek 视觉模型"
+            )
+            method_full = (
+                "mediapipe_pose + slowfast_kinetics400"
+                if rescued_by == "slowfast_kinetics400"
+                else "mediapipe_pose + deepseek_vision_fallback"
+            )
             visibility = float(
                 max(
                     (
@@ -417,7 +502,7 @@ def analyze_motion(
                 "sampled_frames": sampled,
                 "keypoint_valid_rate": round(visibility, 3),
                 "measurement": "2D heuristic estimate",
-                "message": f"已识别为 {selected_type}（DeepSeek 视觉兜底），当前版本暂不提供该动作的专业评分。",
+                "message": f"已识别为 {selected_type}（{recognizer_cn}），当前版本暂不提供该动作的专业评分。",
                 "errors": [],
             }
             return {
@@ -434,9 +519,9 @@ def analyze_motion(
                 "motion": {
                     "rhythm": f"已识别动作：{selected_type}；专业次数与节奏评估暂未开放。",
                     "period_mean_seconds": 0,
-                    "hint": "该动作由 DeepSeek 视觉兜底识别；可在支持列表中手动选择以获得完整评估。",
+                    "hint": f"该动作由{recognizer_cn}识别；可在支持列表中手动选择以获得完整评估。",
                 },
-                "method": "mediapipe_pose + deepseek_vision_fallback",
+                "method": method_full,
                 "source": "local",
             }
         message = (

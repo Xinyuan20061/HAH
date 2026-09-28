@@ -35,6 +35,17 @@
 .card-title {margin-top: 24rpx;color: #111613;font-size: 32rpx;font-weight: 690;line-height: 1.4; }
 .evidence-block,.advice-block {margin-top: 24rpx;padding: 20rpx 24rpx;border-radius: 17rpx;color: #5f665f;background: #f7f7f2;font-size: 22rpx;line-height: 1.65; }
 .advice-block {color: #111613;background: #f7f7f2; }
+.basis-block {margin-top: 24rpx;padding: 20rpx 24rpx;border-radius: 17rpx;color: #5f665f;background: #f2f4ec;font-size: 21rpx;line-height: 1.6; }
+.basis-fact {display: flex;justify-content: space-between;gap: 16rpx;margin-top: 6rpx; }
+.basis-coverage {margin-top: 12rpx;color: #506336;font-size: 20rpx; }
+.basis-limits {margin-top: 12rpx;padding-top: 12rpx;border-top: 1rpx dashed #d7dcc9; }
+.basis-limit {margin-top: 6rpx;color: #7c8273;font-size: 20rpx; }
+.action-timeline {margin-top: 24rpx;padding: 20rpx 24rpx;border-radius: 17rpx;background: #f7f7f2;font-size: 21rpx; }
+.timeline-item {margin-top: 12rpx; }
+.timeline-row {display: flex;align-items: center;justify-content: space-between;color: #111613; }
+.timeline-status {color: #506336;font-size: 19rpx; }
+.timeline-date {margin-top: 4rpx;color: #7c8273;font-size: 19rpx; }
+.timeline-outcome {margin-top: 6rpx;color: #5f665f;font-size: 20rpx;line-height: 1.5; }
 .block-label {margin-bottom: 8rpx;color: #5f665f;font-size: 18rpx;letter-spacing: 2rpx; }
 .advice-block .block-label {color: #506336; }
 .card-actions {display: grid;grid-template-columns: 1fr 1fr;gap: 16rpx;margin-top: 24rpx; }

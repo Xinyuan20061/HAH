@@ -5,7 +5,9 @@
   <video wx:if="{{file&&type==='video'}}" src="{{file}}" controls class="preview"></video>
   <picker mode="selector" range="{{exerciseOptions}}" value="{{exerciseIndex}}" bindchange="changeExercise"><view class="motion-picker">动作：{{exerciseOptions[exerciseIndex]}}<text>切换</text></view></picker>
   <button wx:if="{{!analysis}}" class="btn primary single-action tappable" bindtap="analyze" loading="{{analyzing}}" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">{{analyzing?'正在处理…':'开始查看'}}</button>
+  <button wx:if="{{type==='video'&&!kinetics}}" class="btn-soft single-action tappable" bindtap="analyzeKinetics" loading="{{analyzingKinetics}}" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">{{analyzingKinetics?'正在识别…':'400 类动作识别'}}</button>
   <view wx:if="{{jobStatus&&!analyzing&&!analysis}}" class="state-card"><view class="state-desc">{{jobStatus}}</view></view>
+  <view wx:if="{{kineticsStatus&&!analyzingKinetics&&!kinetics}}" class="state-card"><view class="state-desc">{{kineticsStatus}}</view></view>
 
   <view wx:if="{{analysis}}" class="motion-result">
     <view wx:if="{{analysis.summary}}" class="ai-summary-card"><view class="ai-summary-title">整体点评</view><view class="ai-summary-text">{{analysis.summary}}</view></view>
@@ -34,6 +36,15 @@
 
     <view class="goal-entry tappable" bindtap="toggleGoal" hover-class="tap" hover-start-time="0" hover-stay-time="80">设置今日目标<text>›</text></view>
     <view wx:if="{{showGoal}}" class="goal-editor"><view class="intent-grid"><picker mode="selector" range="{{targetOptions}}" value="{{targetIndex}}" bindchange="changeTarget"><view class="intent-picker"><text>目标部位</text><b>{{targetOptions[targetIndex]}}</b></view></picker><picker mode="selector" range="{{goalOptions}}" value="{{goalIndex}}" bindchange="changeGoal"><view class="intent-picker"><text>训练目标</text><b>{{goalOptions[goalIndex]}}</b></view></picker></view><button class="btn-soft tappable" bindtap="saveTrainingIntent" loading="{{savingIntent}}" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">保存目标</button></view>
+  </view>
+
+  <view wx:if="{{kinetics}}" class="motion-result">
+    <view class="motion-main">
+      <view><view class="badge-row"><view class="source-badge review">Kinetics-400</view></view><view class="motion-name">{{kinetics.top_label_zh||kinetics.top_label}}<text class="kinetics-pct">{{kinetics.topPct}}%</text></view><view class="muted">识别自 400 类预训练动作库，不含次数与评分</view></view>
+      <view class="score-ring"><b>{{kinetics.topPct}}</b><text>候选分值</text></view>
+    </view>
+    <view class="tip-block"><view class="tip-title">候选动作</view><view class="candidate" wx:for="{{kinetics.candidates}}" wx:key="label"><view class="row space"><text>{{item.name}}</text><b>{{item.pct}}%</b></view><view class="candidate-track"><view style="width:{{item.pct}}%"></view></view></view></view>
+    <view class="notice">识别结果仅供健身参考，不代表医学判断；深蹲/俯卧撑/弓步可再走「开始查看」获取次数与评分。</view>
   </view>
   <view class="notice">动作提示仅作一般健身参考；出现疼痛或明显不适时请停止。</view>
 </view>

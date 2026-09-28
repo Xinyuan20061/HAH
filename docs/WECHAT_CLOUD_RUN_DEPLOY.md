@@ -77,7 +77,7 @@ docker run --rm --env-file .\production.env healthmate-api alembic current
 
 连接云内数据库需要相应网络路径；本机 Docker 不会自动获得云内访问能力。可使用平台当前支持的单次执行环境或受控同网段主机运行迁移，不假定控制台提供某个具体按钮。
 
-4. 确认 `0018_seed_knowledge_documents (head)`。对新库和已有 Alembic 旧库同样执行 upgrade，不要 stamp 掩盖缺表问题。
+4. 确认 `0022_agent_decision_id (head)`。对新库和已有 Alembic 旧库同样执行 upgrade，不要 stamp 掩盖缺表问题。
 5. 发布默认启动命令的 Web 版本；先单实例检查，再扩容。
 6. 验证 live 200、ready 200，并检查 `database_backend=mysql`、`storage_backend=cloud_ref`。
 7. 日志应含脱敏摘要 env/db/storage/port/worker；不能出现 SQLiteImpl 或每次重启 Running upgrade。

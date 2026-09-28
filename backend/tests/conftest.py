@@ -61,6 +61,7 @@ def api(migrated_engine, monkeypatch):
     monkeypatch.setattr(diagnostics, "engine", migrated_engine)
     monkeypatch.setattr(settings, "worker_token", "test-worker-token")
     monkeypatch.setattr(settings, "deepseek_api_key", "")
+    monkeypatch.setattr(settings, "local_llm_model_dir", "")
     monkeypatch.setattr(settings, "env", "test")
     # Deterministic isolated tests: the in-memory rate limiter is a production
     # guard, not behaviour under test; repeated /agent/ calls must not 429.

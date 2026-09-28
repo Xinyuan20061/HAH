@@ -44,3 +44,4 @@
 .ai-summary-card{background:#c4e267;border-radius:22rpx;padding:24rpx 24rpx;margin-bottom:24rpx}
 .ai-summary-title{font-size:19rpx;letter-spacing:2rpx;color:#111613;font-weight:700;margin-bottom:12rpx}
 .ai-summary-text{font-size:25rpx;line-height:1.8;color:#111613}
+.kinetics-pct{margin-left:16rpx;font-size:22rpx;color:#506336;font-weight:750}

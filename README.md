@@ -12,7 +12,7 @@
                                                 └─ DeepSeek 识餐（按 AI_MODE 切换）
 ```
 
-生产在线后端使用微信云托管；不依赖阿里云。容器不保存生产 SQLite、媒体原文件或视觉模型。2026-09-24 本地回归：后端 SQLite 130 项、Worker 90 项、小程序 19 项自动测试通过；真实数据报告见 [动作基线](benchmark-results/motion-v1/report.md) 与 [识餐基线](benchmark-results/food-v1/report.json)。MySQL 8.4 仍需在当前迁移 head 上重跑。完整证据和未验证项见 [VERIFICATION](docs/VERIFICATION.md)。
+生产在线后端使用微信云托管；不依赖阿里云。容器不保存生产 SQLite、媒体原文件或视觉模型。2026-09-27 本地回归：后端 SQLite 161 项、Worker 99 项、小程序 43 项自动测试通过；真实数据报告见 [动作基线](benchmark-results/motion-v1/report.md) 与 [识餐基线](benchmark-results/food-v1/report.json)。MySQL 8.4 仍需在当前迁移 head 上重跑。完整证据和未验证项见 [VERIFICATION](docs/VERIFICATION.md)。
 
 HealthMate 3.0 已新增健康指挥中心首页、证据优先的识餐区间协议和全局低饱和视觉系统，详见 [系统级更新说明](docs/HEALTHMATE_3_SYSTEM_UPDATE.md)。
 
@@ -69,7 +69,7 @@ python -m uvicorn app.main:app --host 0.0.0.0 --port $env:PORT
 DATABASE_URL=mysql+pymysql://USER:URL_ENCODED_PASSWORD@HOST:3306/healthmate?charset=utf8mb4
 ```
 
-密码含 `@`、`:`、`/`、`%` 时必须 URL 编码。在能连接同一数据库的受控环境设置生产变量，执行 `python scripts/preflight.py`、`alembic upgrade head`、`alembic current`，当前 head 是 `0018_seed_knowledge_documents`。迁移前备份，迁移账号允许 DDL；迁移完成后 Web 账号可限制为业务 DML 权限。不要把 CloudBase 文档数据库当作 MySQL。
+密码含 `@`、`:`、`/`、`%` 时必须 URL 编码。在能连接同一数据库的受控环境设置生产变量，执行 `python scripts/preflight.py`、`alembic upgrade head`、`alembic current`，当前 head 是 `0022_agent_decision_id`。迁移前备份，迁移账号允许 DDL；迁移完成后 Web 账号可限制为业务 DML 权限。不要把 CloudBase 文档数据库当作 MySQL。
 
 本地 Docker MySQL 集成：在根目录 `.env` 填写随机十六进制 `MYSQL_ROOT_PASSWORD`、`MYSQL_PASSWORD`、`SECRET_KEY`、独立 `CREDENTIALS_ENCRYPTION_KEY`、`WORKER_TOKEN`（没有默认密码）。然后：
 

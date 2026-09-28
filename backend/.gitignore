@@ -12,3 +12,5 @@ migrate_head.sql
 migrate_statements.json
 scripts/batch_*.json
 scripts/small_*.json
+startup_err.txt
+startup_out.txt

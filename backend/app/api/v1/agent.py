@@ -37,11 +37,33 @@ from app.services.agent.experiments import (
     start_experiment,
     finish_experiment,
     cancel_experiment,
+    get_decision,
+    experiment_timeline,
     variant_history,
     EXPERIMENT_VERSION,
 )
 
 router = APIRouter(prefix="/agent", tags=["health-agent"])
+
+
+def _contract_evidence(item: dict, data_quality: dict) -> dict:
+    """Map internal evidence_meta + global coverage into the §5 evidence shape.
+
+    observed_days and expected_days are always both returned; missing records
+    are never silently turned into zero coverage claims.
+    """
+    meta = item.get("evidence_meta") or {}
+    coverage = data_quality or {}
+    return {
+        "facts": meta.get("facts", []),
+        "data_coverage": {
+            "observed_days": coverage.get("recorded_days", 0),
+            "expected_days": coverage.get("expected_days", 7),
+        },
+        "knowledge_ids": meta.get("knowledge_ids", []),
+        "limitations": meta.get("limitations", []),
+        "evidence_type": meta.get("evidence_type", "general_guidance"),
+    }
 
 
 def _recent_insight_feedback(db: Session, user_id: int) -> dict:
@@ -80,6 +102,13 @@ def proactive_insights(user=Depends(current_user), db: Session = Depends(get_db)
         item["user_feedback"] = recent_feedback.get(item.get("code"))
         item["experiment_proposal"] = build_experiment_proposal(item.get("code"))
         item["proposal_history"] = variant_history(db, user.id, item.get("code"))
+        item["evidence_contract"] = _contract_evidence(item, insights.get("data_quality", {}))
+        item["decision_id"] = (
+            current_payload.get("decision_id")
+            if current_experiment and current_experiment.insight_code == item.get("code") and current_payload
+            else None
+        )
+        item["action_timeline"] = experiment_timeline(db, user.id, item.get("code"))
         item["active_experiment"] = (
             current_payload if current_experiment and current_experiment.insight_code == item.get("code") else None
         )
@@ -199,6 +228,24 @@ def action_registry(user=Depends(current_user)):
         "actions": list_actions(),
         "policy": "所有写操作必须经过 Registry；需要确认的 Action 不能由 LLM 静默执行。",
     }
+
+
+@router.get("/decisions/{decision_id}")
+def decision_ledger(
+    decision_id: str,
+    user=Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    """Read model of one confirmed decision: signal, evidence, proposal,
+    progress and review joined by decision_id (plan §5). The id is validated
+    against the current user; unknown or foreign ids return 404 so the ledger
+    is not enumerable."""
+    if len(decision_id) < 4 or len(decision_id) > 64:
+        raise HTTPException(status_code=404, detail="决策不存在")
+    result = get_decision(db, user.id, decision_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="决策不存在")
+    return result
 
 
 @router.get("/context")

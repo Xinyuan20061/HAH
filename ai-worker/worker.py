@@ -126,6 +126,10 @@ def run_job(api: CloudAPI, job: dict) -> bool:
             )
         elif job["job_type"] == "food_vision":
             result = analyze_food(local_path, progress=progress)
+        elif job["job_type"] == "kinetics400":
+            from healthmate_worker.processors.kinetics import analyze_kinetics400
+
+            result = analyze_kinetics400(local_path, progress=progress)
         else:
             raise ProcessingError("unsupported_job", "不支持的任务类型")
         progress(95, "upload_result")

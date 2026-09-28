@@ -266,6 +266,9 @@ class AgentMicroExperiment(Base, TimestampMixin):
     __tablename__ = "agent_micro_experiments"
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    # Stable ledger key: one decision_id joins signal -> proposal -> confirmed
+    # action -> progress -> review for a single experiment (plan §5).
+    decision_id: Mapped[str] = mapped_column(String(64), unique=True, index=True, default="")
     insight_code: Mapped[str] = mapped_column(String(60), index=True)
     variant: Mapped[str] = mapped_column(String(20), default="gentle")
     title: Mapped[str] = mapped_column(String(180))
@@ -431,7 +434,7 @@ class AIJob(Base, TimestampMixin):
     )
     job_type: Mapped[str] = mapped_column(
         String(40), index=True
-    )  # motion_pose | food_vision
+    )  # motion_pose | food_vision | kinetics400
     status: Mapped[str] = mapped_column(String(30), default="queued", index=True)
     progress: Mapped[int] = mapped_column(Integer, default=0)
     priority: Mapped[int] = mapped_column(Integer, default=100, index=True)

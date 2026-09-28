@@ -275,8 +275,8 @@ class ResNet3dSlowFast(nn.Module):
 
     def __init__(
         self,
-        resample_rate: int = 8,
-        speed_ratio: int = 8,
+        resample_rate: int = 4,
+        speed_ratio: int = 4,
         channel_ratio: int = 8,
     ) -> None:
         super().__init__()
@@ -305,24 +305,28 @@ class ResNet3dSlowFast(nn.Module):
         )
 
     def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
-        x_slow = F.interpolate(x, scale_factor=(1.0 / self.resample_rate, 1.0, 1.0), mode="nearest")
+        # Single fast-rate clip (B,3,32,H,W); slow is derived inside, matching
+        # the official ResNet3dSlowFast.forward (no pool2 in SlowFast).
+        x_slow = F.interpolate(
+            x, mode="nearest",
+            scale_factor=(1.0 / self.resample_rate, 1.0, 1.0))
         x_slow = self.slow_path.conv1(x_slow)
         x_slow = self.slow_path.maxpool(x_slow)
 
         x_fast = F.interpolate(
-            x, scale_factor=(1.0 / (self.resample_rate // self.speed_ratio), 1.0, 1.0), mode="nearest"
-        )
+            x, mode="nearest",
+            scale_factor=(1.0 / (self.resample_rate // self.speed_ratio), 1.0, 1.0))
         x_fast = self.fast_path.conv1(x_fast)
         x_fast = self.fast_path.maxpool(x_fast)
 
         if self.slow_path.lateral:
             x_slow = torch.cat((x_slow, self.slow_path.conv1_lateral(x_fast)), dim=1)
 
-        for index, layer_name in enumerate(self.slow_path.res_layers):
+        for i, layer_name in enumerate(self.slow_path.res_layers):
             x_slow = getattr(self.slow_path, layer_name)(x_slow)
             x_fast = getattr(self.fast_path, layer_name)(x_fast)
-            if index != len(self.slow_path.res_layers) - 1 and self.slow_path.lateral:
-                lateral_name = self.slow_path.lateral_connections[index]
+            if i != len(self.slow_path.res_layers) - 1 and self.slow_path.lateral:
+                lateral_name = self.slow_path.lateral_connections[i]
                 x_slow = torch.cat((x_slow, getattr(self.slow_path, lateral_name)(x_fast)), dim=1)
         return x_slow, x_fast
 
@@ -377,3 +381,95 @@ class SlowFastSixAction(nn.Module):
         fast = F.adaptive_avg_pool3d(fast, 1).flatten(1)
         features = torch.cat((slow, fast), dim=1)
         return self.head(features)
+
+
+# --- Kinetics-400 pretrained inference (no training required) ---------------
+
+KINETICS400_CLIP_LEN = 32
+KINETICS400_MEAN = (123.675, 116.28, 103.53)
+KINETICS400_STD = (58.395, 57.12, 57.375)
+
+
+def load_kinetics400_labels(labels_path: str) -> tuple[str, ...]:
+    """Read the 400-line Kinetics-400 label map (one label per line)."""
+    with open(labels_path, "r", encoding="utf-8") as handle:
+        labels = tuple(line.strip() for line in handle if line.strip())
+    if len(labels) != 400:
+        raise ValueError(f"Kinetics-400 label map must have 400 lines: {labels_path}")
+    return labels
+
+
+class SlowFastKinetics400(nn.Module):
+    """Full SlowFast R50 + 400-way head loaded from the official checkpoint.
+
+    This is a *pretrained, ready-to-run* 400-class action recognizer: it covers
+    squat / push up / lunge / pull ups / bench pressing / deadlifting / skipping
+    rope / front raises / situp / yoga / tai chi and ~390 more. No training is
+    needed; it runs on CPU (slower) or GPU when available.
+    """
+
+    def __init__(
+        self,
+        pretrained_path: str,
+        labels_path: str,
+        num_classes: int = 400,
+        backbone_feature_dim: int = 2304,
+    ) -> None:
+        super().__init__()
+        self.backbone = ResNet3dSlowFast()
+        self.cls_head = nn.Linear(backbone_feature_dim, num_classes)
+        self.labels = load_kinetics400_labels(labels_path)
+        self._load_full_checkpoint(pretrained_path)
+        self.eval()
+
+    def _load_full_checkpoint(self, path: str) -> None:
+        checkpoint = torch.load(path, map_location="cpu", weights_only=True)
+        state_dict = checkpoint.get("state_dict", checkpoint)
+        remapped: dict = {}
+        for key, value in state_dict.items():
+            if key.startswith("backbone."):
+                remapped[key] = value  # self.backbone keeps the same key paths
+            elif key.startswith("cls_head.fc_cls."):
+                suffix = key[len("cls_head.fc_cls."):]
+                remapped[f"cls_head.{suffix}"] = value
+        missing, unexpected = self.load_state_dict(remapped, strict=False)
+        if missing or unexpected:
+            raise ValueError(
+                f"Kinetics-400 checkpoint mismatch: missing={missing} unexpected={unexpected[:5]}"
+            )
+
+    def features(self, x: torch.Tensor) -> torch.Tensor:
+        slow, fast = self.backbone(x)
+        slow = F.adaptive_avg_pool3d(slow, 1).flatten(1)
+        fast = F.adaptive_avg_pool3d(fast, 1).flatten(1)
+        # Official SlowFastHead concatenates FAST first, then slow; the fc
+        # weights are trained with channel order [fast(256), slow(2048)].
+        return torch.cat((fast, slow), dim=1)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.cls_head(self.features(x))
+
+    @torch.no_grad()
+    def predict(self, clip: torch.Tensor, topk: int = 5) -> dict:
+        """Return top-k labels with probabilities for a preprocessed clip.
+
+        ``clip`` shape: (1, 3, 32, H, W), already normalized; the backbone
+        derives the slow pathway internally.
+        """
+        logits = self.forward(clip)
+        probs = F.softmax(logits, dim=1)[0]
+        k = min(topk, probs.numel())
+        top_probs, top_idx = probs.topk(k)
+        candidates = [
+            {
+                "label": self.labels[int(index)],
+                "class_index": int(index),
+                "probability": round(float(prob), 4),
+            }
+            for prob, index in zip(top_probs.tolist(), top_idx.tolist())
+        ]
+        return {
+            "top_label": candidates[0]["label"],
+            "top_probability": candidates[0]["probability"],
+            "candidates": candidates,
+        }

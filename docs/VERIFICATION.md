@@ -1,6 +1,60 @@
 # HealthMate 实际验收记录
 
-初次执行日期：2026-09-18；最近本地复核：2026-09-24，Windows PowerShell。以下只记录已经执行的结果，不把单元测试或本地报告写成正式微信环境验收。
+初次执行日期：2026-09-18；最近本地复核：2026-09-27，Windows PowerShell。以下只记录已经执行的结果，不把单元测试或本地报告写成正式微信环境验收。
+
+## 2026-09-27 竞争性开发阶段 0 验收（版本稳定）
+
+|检查|真实结果|范围与限制|
+|---|---|---|
+|Backend / SQLite|156 passed|新增 kinetics400 任务/校验/存储与 media 端点测试；修复 `test_additional_safety` 的 3 个 chat 用例：测试环境显式隔离 `local_llm_model_dir`，不再被本机 `.env` 的本地模型配置带偏（有/无本机 .env 均同结果）|
+|Worker|99 passed|含 kinetics400 处理器与中文映射 3 用例；Kinetics 能力探测升级为真实权重加载 + 单次前向 smoke，缓存复用|
+|小程序|41 passed|media 页未校准百分比改称「候选分值」、预训练文案去「模型」词，页面展示规范测试转绿|
+|工作区整理|PASS|一次性诊断脚本移入 `ai-worker/scripts/diag/` 受控目录；删除运行日志与临时输出；保留验收脚本 `backend/scripts/verify_ai_fallback.py`|
+|Kinetics 模型门控|PASS|`KINETICS400_OVERRIDE_ENABLED=false`（默认）：motion auto 模式仅记录 400 类候选，不再改写规则结果；覆盖逻辑保留但需评测门禁通过后才打开|
+|迁移 head|`0021_empty_default_nickname`|README / DELIVERY_CHECKLIST / LOCAL_AI_WORKER 版本口径已同步；生产 MySQL 最新迁移仍待阶段 3 复验|
+
+
+## 2026-09-27 阶段 1 验收（行动账本闭环）
+
+|检查|真实结果|范围与限制|
+|---|---|---|
+|决策读模型|新增 `GET /api/v1/agent/decisions/{decision_id}`：同一 `decision_id` 串起 signal → evidence → proposal → confirmed action → progress → review；decision_id 由服务端生成（`dec-<hex>`），按用户隔离校验，他人/未知 id 一律 404（不可枚举）|复用 `AgentMicroExperiment / AgentActionAudit / EvaluationEvent / HealthTimelineEvent`；新增迁移 `0022_agent_decision_id`（列 + 回填 + 唯一索引）|
+|结论级证据标注|`/agent/insights` 每条提醒新增 `evidence_contract`：facts（真实记录）、data_coverage（observed/expected 均返回、缺失不按零）、knowledge_ids（记录类为空并明示）、limitations、evidence_type（record_observation / general_guidance）|前端以「依据与数据覆盖 / 我们还不知道」呈现，不暴露技术名词；无知识支撑时按一般提示降级|
+|小程序行动时间线|insights 页每条提醒新增「历史行动」：方案、状态、日期与复盘结论（支持/尚未支持/记录不足/已停止）|测试数据来自真实实验行，不生成合成记录冒充用户数据|
+|完整与不足案例|后端 5 项决策账本契约测试：完整复盘（supports_hypothesis）、记录不足（insufficient_data + limitations）、用户隔离 404、insights 证据契约、时间线关联|小程序的展示适配测试同步增加 2 项（依据归一化 + 时间线渲染）|
+|自动回归|后端 161/161、小程序 43/43 全绿；Worker 99/99 不变；迁移检查 head=`0022_agent_decision_id` 且 legacy 0003 保留、重复升级不变|三套回归与迁移检查命令、退出码、日期见下方冻结基线|
+
+### 冻结回归基线（2026-09-27 · 阶段 1 后）
+
+阶段 1 完成后刷新基线；阶段 2 起任何改动不得使以下检查变红。测试数随执行日期与代码变化更新，不写永久固定数字。
+
+|检查|命令|结果|代码哈希（内容聚合 SHA-256）|
+|---|---|---:|---|
+|后端 / SQLite|`backend\.venv\Scripts\python.exe -m pytest -q`|161 passed，退出 0|backend/app `4348BF662C6A529CFCAC5F1B95281BA4AC9B6F3C4A244F73438A91E84AE3FFBD`（90 文件）|
+|后端迁移|`backend\.venv\Scripts\python.exe scripts\verify_migrations.py`|PASS：legacy 0003 保留、head=`0022_agent_decision_id`、重复升级不变，退出 0|backend/migrations `b47e271948ac425f65cac60a08e46ba4e601bbd0a28e4175447b85579e5d9920`（25 文件；2026-09-28 修复 0022 回填 SQL 为 MySQL 兼容后重算）|
+|Worker|`ai-worker\.venv\Scripts\python.exe -m pytest -q`|99 passed，退出 0|ai-worker/healthmate_worker `3912BBA3A35733606801FC291558B11C7C428936A94D6B6FD958BB7B97D7E08A`（33 文件）|
+|小程序|`node --test`（miniprogram/）|43 passed，退出 0|miniprogram `823DBE9C2F03316B1D02A76524CFCB539926992E1C8CCFC882500BB3A9D91293`（109 文件）|
+
+## 2026-09-28 阶段 2 验收（多模态可信输入验证）
+
+|检查|真实结果|范围与限制|
+|---|---|---|
+|动作同集三路对照（Kinetics-400 实验候选层）|24 段子集（REHAB24-6：6 类 × 2 实例 × 双视角）全部处理完成：规则 Top-1 50.00% / 覆盖率 83.33% / Macro-F1 0.5765；Kinetics 单独 Top-1 16.67% / 覆盖率 16.67%（仅 lunge 有映射预测，Macro-F1 1.0000 不代表整体，已在报告加注）；规则+Kinetics 融合(模拟) Top-1 58.33% / Macro-F1 0.6127|均未达 §7.2 门槛（Top-1≥80%、覆盖率≥90%、Macro-F1≥0.78、任一目标动作召回≥65%）；CPU 时延 P50≈100-106 s/段；报告 [`benchmark-results/motion-v2-kinetics/report.md`](../benchmark-results/motion-v2-kinetics/report.md)，含清单/预测 SHA-256 与门控参数；全量 120 段基线见 motion-v1|
+|Kinetics 门控维持|`KINETICS400_OVERRIDE_ENABLED=false` 维持，候选层只记录不覆盖；评测仅测量不改生产行为|独立固定集（任务 1：受试者不重合）在仅有 REHAB24-6 单数据集前提下无法完成，如实标注"子集对照、无独立验证集、softmax 未校准、不可用于设定上线阈值"|
+|识餐三口径|样本 42、完成 34、带区间 34：原始 MAE 94.73 kcal；区间覆盖 44.12%、宽度均值 140.26（中位 130 / P95 270）kcal；中点校正代理 MAE 94.01（改进仅 0.76%）|未达 §7.3（区间覆盖≥80% 且可快速校正）；识餐保持实验入口不提升为正式推荐；报告 [`benchmark-results/food-v1/report_range.json`](../benchmark-results/food-v1/report_range.json)，不挑样本|
+|动作结果分层|`POST/GET /api/v1/media/kinetics-jobs` 创建与查询（用户隔离、job_type 校验、不存在 404）与候选层校验（top_label∈candidates、概率 0-1、候选≤10）验证通过；小程序 media 页以"候选分值/预训练动作库"呈现，低质拒识有原因提示|分层逻辑在阶段 0.2/0.4 已落地，本轮复验通过|
+|失败样本|评测过程中 4 段因内存不足（OpenCV Insufficient memory）失败后补跑成功，最终 0 失败；失败样本一律保留不删除|补跑单进程执行，避免并行评测耗尽系统资源（并行两进程曾致系统无响应，已记录为操作教训）|
+|自动回归|阶段 2 未改动 backend/app、healthmate_worker、miniprogram 生产代码（仅新增 ai-worker/scripts 评测脚本与 benchmark 产物），冻结基线测试数与哈希维持阶段 1 基线|回归命令与结果见下方冻结基线（未变红）|
+
+## 2026-09-28 阶段 3 部分验收（真实环境与用户证据 · 进行中）
+
+|检查|真实结果|范围与限制|
+|---|---|---|
+|MySQL fresh/incremental/repeat 迁移|专用审计容器 `healthmate-audit-mysql`（localhost:13307，root/专用审计密码，**非生产**）重建 `healthmate_incremental` 库后：fresh 0001→0022 全链路、legacy 0003 行保留、重复升级不变，`[OK] mysql: legacy 0003 rows preserved, head=0022_agent_decision_id, repeated upgrade unchanged`|验证中发现并修复 0022 迁移回填 SQL 方言 bug（`'dec-'||CAST(id AS VARCHAR)` 在 MySQL 报 1064，改为 MySQL `CONCAT('dec-', id)` / SQLite `'dec-'||id` 分支）；SQLite 侧重复验证仍 PASS；日志 `benchmark-results/mysql-mig-0022.log`|
+|微信与 CloudBase|**未开始**：需要两个真实微信账号（wx.login + AppSecret）与 CloudBase 资源|属用户配合项，本机无法代做|
+|真机与弱网|**未开始**：至少两种机型（相机/相册权限、字体、安全区、离线恢复、Worker 停止与重启）|属用户配合项|
+|Agent 双人盲评|**未开始**：33 条固定案例 × 2 名独立评审，需真实 DeepSeek 在线回答采集 + 双人评分（评审模板已存在：REVIEWER_AUDIT CSV/XLSX 空白模板）|调用真实 DeepSeek 有 API 成本，且需要用户提供评审员，启动前须用户授权|
+|小规模试用|**未开始**：知情同意的非医疗用户、冻结观察指标、退出方式与隐私方案|属用户配合项|
 
 ## 2026-09-24 主动健康体验升级验收
 
@@ -100,8 +154,8 @@ $env:TEST_DATABASE_URL='mysql+pymysql://TEST_USER:URL_ENCODED_PASSWORD@127.0.0.1
 Remove-Item Env:TEST_DATABASE_URL
 
 Set-Location ../ai-worker
-& C:\HealthMateRuntime\worker\Scripts\python.exe -m pytest -q
-& C:\HealthMateRuntime\worker\Scripts\python.exe scripts/verify_local_motion.py
+& ..\ai-worker\.venv\Scripts\python.exe -m pytest -q
+& ..\ai-worker\.venv\Scripts\python.exe scripts/verify_local_motion.py
 
 Set-Location ..
 docker build -t healthmate-api ./backend

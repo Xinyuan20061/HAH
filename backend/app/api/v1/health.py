@@ -406,6 +406,7 @@ def command_center(user=Depends(current_user), db: Session = Depends(get_db)):
             "online": bool(live_nodes),
             "motion_ready": "motion_pose" in capabilities,
             "food_ready": "food_vision" in capabilities,
+            "kinetics400_ready": "kinetics400" in capabilities,
             "active_jobs": sum(job.status in active_states for job in jobs),
             "last_seen_at": utc_iso(live_nodes[0].last_seen_at) if live_nodes else None,
         },

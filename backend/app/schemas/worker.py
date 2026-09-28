@@ -14,7 +14,8 @@ class WorkerClaimIn(BaseModel):
     request_id: str | None = Field(default=None, min_length=8, max_length=80)
     worker_id: str = Field(min_length=3, max_length=120)
     capabilities: list[str] = Field(
-        default_factory=lambda: ["motion_pose", "food_vision"], max_length=20
+        default_factory=lambda: ["motion_pose", "food_vision", "kinetics400"],
+        max_length=20,
     )
 
 

@@ -84,6 +84,9 @@ def ai_worker_status(user=Depends(current_user), db: Session = Depends(get_db)):
         "food_online": any(
             x["online"] and "food_vision" in x["capabilities"] for x in public_nodes
         ),
+        "kinetics_online": any(
+            x["online"] and "kinetics400" in x["capabilities"] for x in public_nodes
+        ),
         "queue_depth": queue_depth,
         "processing": processing,
         "nodes": public_nodes,

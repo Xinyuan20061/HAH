@@ -192,7 +192,9 @@ def claim_next_job(
     request_id: str | None = None,
 ) -> AIJob | None:
     requeue_expired_jobs(db)
-    supported = [x for x in capabilities if x in {"motion_pose", "food_vision"}]
+    supported = [
+        x for x in capabilities if x in {"motion_pose", "food_vision", "kinetics400"}
+    ]
     if not supported:
         return None
     if request_id:

@@ -72,6 +72,46 @@ test('health insight page exposes evidence, advice and user-controlled actions',
   assert.match(page, /不证明因果/)
 })
 
+test('contract evidence renders as understandable basis, not raw jargon', () => {
+  const item = normalizeInsight({
+    code: 'exercise_stall',
+    title: '运动断档',
+    evidence: '近 7 天仅 1 天有运动记录。',
+    evidence_contract: {
+      facts: [
+        { name: 'exercise_days', value: 1, unit: '天', source: 'confirmed_records' },
+        { name: 'consecutive_no_exercise_days', value: 4, unit: '天', source: 'confirmed_records' }
+      ],
+      data_coverage: { observed_days: 1, expected_days: 7 },
+      limitations: ['3 天没有运动记录，无法判断是否实际未运动。'],
+      evidence_type: 'record_observation'
+    },
+    action_timeline: [
+      { decision_id: 'dec-abc', variant: 'gentle', status: 'completed', start_date: '2026-09-20', end_date: '2026-09-22', outcome: 'insufficient_data' },
+      { decision_id: 'dec-def', variant: 'standard', status: 'active', start_date: '2026-09-24', end_date: '2026-09-28', outcome: null }
+    ]
+  })
+  assert.equal(item.evidenceView.factLines.length, 2)
+  assert.equal(item.evidenceView.factLines[0].label, '有运动记录的天数')
+  assert.equal(item.evidenceView.factLines[0].value, '1天')
+  assert.equal(item.evidenceView.coverageText, '记录覆盖 1 / 7 天')
+  assert.ok(item.evidenceView.limitations[0].includes('无法判断'))
+  assert.equal(item.evidenceView.evidenceType, 'record_observation')
+  assert.equal(item.actionTimeline[0].statusLabel, '已复盘')
+  assert.equal(item.actionTimeline[0].outcomeLabel, '记录不足，未下结论')
+  assert.equal(item.actionTimeline[1].statusLabel, '进行中')
+  assert.equal(item.actionTimeline[1].variantLabel, '标准版')
+})
+
+test('timeline and basis blocks are present in the insight page', () => {
+  const page = fs.readFileSync(path.join(__dirname, '..', 'pages', 'insights', 'index.wxml'), 'utf8')
+  assert.match(page, /依据与数据覆盖/)
+  assert.match(page, /我们还不知道/)
+  assert.match(page, /历史行动/)
+  assert.match(page, /item\.actionTimeline/)
+  assert.match(page, /item\.evidenceView\.factLines/)
+})
+
 test('chat renders the decision explanation returned by the health agent', () => {
   const script = fs.readFileSync(path.join(__dirname, '..', 'pages', 'chat', 'index.js'), 'utf8')
   const view = fs.readFileSync(path.join(__dirname, '..', 'pages', 'chat', 'index.wxml'), 'utf8')

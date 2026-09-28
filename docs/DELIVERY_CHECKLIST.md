@@ -11,7 +11,7 @@
 
 ## 资源和发布
 
-- [ ] 持久MySQL、utf8mb4、网络权限、备份、迁移到 `0018_seed_knowledge_documents`
+- [ ] 持久MySQL、utf8mb4、网络权限、备份、迁移到 `0022_agent_decision_id`（当前唯一 head）
 - [ ] 生产变量与三个独立随机密钥，保留凭据加密密钥备份
 - [ ] 构建目录backend/Dockerfile；默认启动不迁移；探针live/ready分别设置
 - [ ] 正式云托管发布、重启/扩容无DDL、ready=mysql/cloud_ref

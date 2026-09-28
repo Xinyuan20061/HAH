@@ -15,7 +15,7 @@ class WorkerSettings(BaseSettings):
     max_redirects: int = Field(default=5, ge=0, le=10)
     api_max_retries: int = Field(default=3, ge=0, le=8)
     log_level: str = "INFO"
-    capabilities: str = "motion_pose,food_vision"
+    capabilities: str = "motion_pose,food_vision,kinetics400"
     local_vlm_base_url: str = "http://127.0.0.1:1234/v1"
     local_vlm_model: str = ""
     local_vlm_api_key: str = ""
@@ -35,6 +35,17 @@ class WorkerSettings(BaseSettings):
     semantic_model_path: str = ""
     semantic_model_sha256: str = ""
     semantic_model_min_confidence: float = Field(default=0.45, ge=0, le=1)
+    # Local SlowFast Kinetics-400 recognizer (400 classes, runs on CPU).
+    # When the checkpoint path is empty/missing the feature is auto-disabled.
+    kinetics400_checkpoint: str = ""
+    kinetics400_min_confidence: float = Field(default=0.5, ge=0, le=1)
+    kinetics400_strong_confidence: float = Field(default=0.7, ge=0, le=1)
+    kinetics400_device: str = "cpu"
+    # Model governance gate: Kinetics-400 remains a candidate layer until the
+    # registered benchmark gates it as "active". When False (default), motion
+    # auto mode records the 400-class candidates but never overrides the rule
+    # result; set True only after a passing same-set evaluation (see plan §3.3).
+    kinetics400_override_enabled: bool = False
     model_config = SettingsConfigDict(
         env_file=".env", case_sensitive=False, extra="ignore"
     )

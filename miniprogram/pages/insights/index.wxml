@@ -39,6 +39,23 @@
         <view class="card-head"><view class="topic-pill">{{item.label}}</view><view class="severity">{{item.severityLabel}}</view></view>
         <view class="card-title">{{item.title}}</view>
         <view class="evidence-block"><view class="block-label">观察到</view><view>{{item.evidence}}</view></view>
+        <view class="basis-block">
+          <view class="block-label">依据与数据覆盖</view>
+          <view wx:for="{{item.evidenceView.factLines}}" wx:for-item="fact" wx:key="label" class="basis-fact"><text>{{fact.label}}</text><text>{{fact.value}}</text></view>
+          <view class="basis-coverage">{{item.evidenceView.coverageText}}</view>
+          <view wx:if="{{item.evidenceView.limitations.length}}" class="basis-limits">
+            <view class="block-label">我们还不知道</view>
+            <view wx:for="{{item.evidenceView.limitations}}" wx:for-item="limit" wx:key="*this" class="basis-limit">— {{limit}}</view>
+          </view>
+        </view>
+        <view wx:if="{{item.actionTimeline.length}}" class="action-timeline">
+          <view class="block-label">历史行动</view>
+          <view wx:for="{{item.actionTimeline}}" wx:for-item="action" wx:key="decision_id" class="timeline-item">
+            <view class="timeline-row"><text>{{action.variantLabel}}</text><text class="timeline-status">{{action.statusLabel}}</text></view>
+            <view class="timeline-date">{{action.start_date}} 至 {{action.end_date}}</view>
+            <view wx:if="{{action.outcomeLabel}}" class="timeline-outcome">{{action.outcomeLabel}}</view>
+          </view>
+        </view>
         <view class="advice-block"><view class="block-label">建议先做</view><view>{{item.advice}}</view></view>
         <view class="card-actions">
           <button class="action-primary tappable" data-route="{{item.route}}" bindtap="openAction" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">{{item.actionLabel}}</button>

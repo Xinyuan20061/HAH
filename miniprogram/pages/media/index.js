@@ -23,6 +23,7 @@ Page({
     result: null, analysis: null, activeFrame: null,
     jobStatus: '', exerciseType: 'auto', exerciseIndex: 0, exerciseOptions: ['自动识别', '深蹲', '俯卧撑', '弓步蹲', '腿外展', '直臂侧平举', '手臂 V/W'], jobId: null,
     worker: { enabled: false, online: false, queue_depth: 0, processing: 0 }, motionProfile: null,
+    kinetics: null, kineticsStatus: '', analyzingKinetics: false,
     trainingIntent: { confirmed: false, target_body_parts: [], goals: [] }, savingIntent: false, targetIndex: 0, goalIndex: 0,
     targetOptions: ['胸部', '背部', '肩部', '手臂', '核心', '股四头肌', '臀部', '腘绳肌'],
     goalOptions: ['力量', '增肌', '肌耐力', '平衡与稳定', '核心稳定'],
@@ -195,6 +196,38 @@ Page({
     } finally { if (!this._unloaded) this.setData({ analyzing: false }) }
   },
   pickFrame(e) { const i = Number(e.currentTarget.dataset.i); this.setData({ activeFrame: this.data.analysis.frames[i] }, () => this.drawSkeleton()) },
+
+  // Kinetics-400：400 类预训练识别（识别到但无次数/评分）
+  async analyzeKinetics() {
+    if (this.data.analyzingKinetics) return
+    if (this.data.type !== 'video') return wx.showToast({ title: '请选择视频素材', icon: 'none' })
+    let asset = this.data.result
+    if (!asset) { asset = await this.upload(); if (!asset) return }
+    this.setData({ analyzingKinetics: true, kinetics: null, kineticsStatus: '排队中' })
+    try {
+      await this.refreshWorkerStatus()
+      if (this.data.cloudMode && this.data.worker.enabled && !this.data.worker.kinetics_online) {
+        wx.showToast({ title: '电脑端 400 类识别未在线，任务会保留', icon: 'none', duration: 2500 })
+      }
+      const created = await api.post('/media/kinetics-jobs', { media_id: asset.media_id })
+      const k = await pollJob({ path: '/media/kinetics-jobs', jobId: created.job_id, asset,
+        cancelled: () => this._unloaded,
+        onStatus: label => { if (!this._unloaded) this.setData({ kineticsStatus: label }) }
+      })
+      if (this._unloaded) return
+      k.topPct = Math.round(Number(k.top_probability || 0) * 100)
+      k.candidates = (k.candidates || []).slice(0, 5).map(item => ({
+        ...item,
+        name: item.label_zh || item.label,
+        pct: Math.round(Number(item.probability || 0) * 100)
+      }))
+      this.setData({ kinetics: k, kineticsStatus: '完成' })
+      await this.refreshWorkerStatus()
+    } catch (e) {
+      if (this._unloaded) return
+      this.setData({ kineticsStatus: e.message || '识别未完成，可稍后重试' })
+    } finally { if (!this._unloaded) this.setData({ analyzingKinetics: false }) }
+  },
 
   // Animated Text Disclosure：按真实内容高度过渡，而不是固定时长淡入
   measureDetails(cb) {

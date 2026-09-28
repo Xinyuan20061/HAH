@@ -70,7 +70,7 @@ HealthMate 已具备“完整健康管理产品 + 多模态分析 + 可审计健
 
 ### P0：决赛前必须完成（决定作品可信度）
 
-1. 在生产 MySQL 备份上验证 `0018_seed_knowledge_documents` 的 fresh / incremental / repeat 迁移。
+1. 在生产 MySQL 备份上验证 `0022_agent_decision_id` 的 fresh / incremental / repeat 迁移。
 2. 用两个真实微信账号验证登录、CloudBase 文件隔离、上传、临时地址刷新、导出与删除。
 3. 对固定 33 条 Agent 回答做双人事实核查、引用支持度和有害建议评分；保留评审表与签名日期。
 4. 准备“在线主流程 + 断网/停 Worker 降级 + 录屏备份”三套演示路径。

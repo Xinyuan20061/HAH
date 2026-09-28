@@ -5,6 +5,10 @@ import httpx
 from .config import settings
 from .processors.food import provider_config
 
+# Kinetics smoke probe result, cached after the first run per process
+# (loading the 132 MB checkpoint on every probe would be wasteful).
+_KINETICS_SMOKE: dict | None = None
+
 
 def pose_status() -> tuple[bool, str]:
     try:
@@ -84,10 +88,63 @@ def vlm_status() -> dict:
     return result
 
 
+def kinetics400_status() -> dict:
+    """Probe the optional SlowFast Kinetics-400 recognizer.
+
+    A checkpoint file plus an importable torch is not enough to claim the
+    capability: the model must actually load its weights, read the 400-label
+    map and complete one forward pass (smoke). The probe runs once per process
+    and caches the result because loading the 132 MB checkpoint is expensive.
+    """
+    global _KINETICS_SMOKE
+    if _KINETICS_SMOKE is not None:
+        return dict(_KINETICS_SMOKE)
+    from pathlib import Path
+
+    path = settings.kinetics400_checkpoint.strip()
+    if not path:
+        return {"available": False, "reason": "KINETICS400_CHECKPOINT 未配置"}
+    if not Path(path).is_file():
+        return {"available": False, "reason": "KINETICS400_CHECKPOINT 指向的文件不存在"}
+    try:
+        import torch  # noqa: F401
+    except ImportError:
+        return {"available": False, "reason": "PyTorch 未安装，无法运行 SlowFast"}
+    try:
+        from .models.kinetics_runtime import get_kinetics400
+
+        model = get_kinetics400()
+        if model is None:
+            return {"available": False, "reason": "SlowFast 权重加载失败"}
+        # Small-input smoke: full weight load + label map + one forward pass.
+        # A zero clip is a deterministic proxy; real video inference is covered
+        # by the standalone kinetics400 job and the fixed-set evaluation.
+        clip = torch.zeros(1, 3, 32, 224, 224)
+        out = model.predict(clip, topk=1)
+        if not out or not out.get("top_label"):
+            raise RuntimeError("smoke 推理无输出")
+        size_mb = Path(path).stat().st_size // 1024 // 1024
+        _KINETICS_SMOKE = {
+            "available": True,
+            "reason": (
+                f"SlowFast Kinetics-400 smoke 通过（{size_mb} MB，"
+                f"top={out['top_label']}，候选分值 {out.get('top_probability', 0):.2f}）"
+            ),
+        }
+    except Exception as exc:
+        return {
+            "available": False,
+            "reason": f"SlowFast 加载或推理失败（{type(exc).__name__}），按未就绪处理",
+        }
+    return dict(_KINETICS_SMOKE)
+
+
 def effective_capabilities() -> list[str]:
     usable = []
     if "motion_pose" in settings.capability_list and pose_status()[0]:
         usable.append("motion_pose")
     if "food_vision" in settings.capability_list and vlm_status()["available"]:
         usable.append("food_vision")
+    if "kinetics400" in settings.capability_list and kinetics400_status()["available"]:
+        usable.append("kinetics400")
     return usable

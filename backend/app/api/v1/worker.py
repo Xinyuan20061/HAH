@@ -316,6 +316,48 @@ def _validate_motion_result(result: dict) -> dict:
     return result
 
 
+def _validate_kinetics400_result(result: dict) -> dict:
+    import math
+
+    if not isinstance(result.get("method"), str) or not result["method"]:
+        raise HTTPException(422, "识别方法缺失")
+    top_label = result.get("top_label")
+    top_probability = result.get("top_probability")
+    if not isinstance(top_label, str) or not top_label:
+        raise HTTPException(422, "识别标签缺失")
+    if (
+        type(top_probability) not in {int, float}
+        or not math.isfinite(top_probability)
+        or not 0 <= top_probability <= 1
+    ):
+        raise HTTPException(422, "识别概率无效")
+    candidates = result.get("candidates", [])
+    if not isinstance(candidates, list) or len(candidates) > 10:
+        raise HTTPException(422, "候选列表无效")
+    seen = set()
+    for candidate in candidates:
+        if not isinstance(candidate, dict):
+            raise HTTPException(422, "候选条目格式无效")
+        label = candidate.get("label")
+        probability = candidate.get("probability")
+        class_index = candidate.get("class_index")
+        if (
+            not isinstance(label, str)
+            or not label
+            or label in seen
+            or type(probability) not in {int, float}
+            or not math.isfinite(probability)
+            or not 0 <= probability <= 1
+            or type(class_index) is not int
+            or not 0 <= class_index <= 2000
+        ):
+            raise HTTPException(422, "候选条目数值无效")
+        seen.add(label)
+    if top_label not in seen:
+        raise HTTPException(422, "top_label 不在候选中")
+    return result
+
+
 @router.post("/jobs/{job_id}/complete")
 def complete(job_id: int, body: WorkerCompleteIn, db: Session = Depends(get_db)):
     job = db.get(AIJob, job_id)
@@ -333,11 +375,12 @@ def complete(job_id: int, body: WorkerCompleteIn, db: Session = Depends(get_db))
             "already_completed": True,
         }
     result = dict(body.result or {})
-    result = (
-        _validate_food_result(result)
-        if job.job_type == "food_vision"
-        else _validate_motion_result(result)
-    )
+    if job.job_type == "food_vision":
+        result = _validate_food_result(result)
+    elif job.job_type == "kinetics400":
+        result = _validate_kinetics400_result(result)
+    else:
+        result = _validate_motion_result(result)
     try:
         extend_lease(
             db,
@@ -396,6 +439,36 @@ def complete(job_id: int, body: WorkerCompleteIn, db: Session = Depends(get_db))
                 "analysis_id": session.id,
                 "provider": result.get("provider"),
                 "confidence": result.get("confidence"),
+            },
+            source="local_ai_worker",
+            ref_type="ai_job",
+            ref_id=job.id,
+        )
+
+    elif job.job_type == "kinetics400":
+        latency_ms = float((body.metrics or {}).get("latency_ms") or 0)
+        record_metric(
+            db,
+            job.user_id,
+            "kinetics400_processing_ms",
+            latency_ms,
+            "ms",
+            "local_ai_worker",
+            True,
+            {
+                "top_label": str(result.get("top_label", ""))[:80],
+                "worker_id": body.worker_id,
+            },
+        )
+        add_event(
+            db,
+            job.user_id,
+            "kinetics400_analysis_completed",
+            {
+                "job_id": job.id,
+                "top_label": str(result.get("top_label", ""))[:80],
+                "top_probability": result.get("top_probability"),
+                "mapped_exercise": result.get("mapped_exercise"),
             },
             source="local_ai_worker",
             ref_type="ai_job",
@@ -590,7 +663,11 @@ def fail(job_id: int, body: WorkerFailIn, db: Session = Depends(get_db)):
         metric_name = (
             "motion_processing_ms"
             if job.job_type == "motion_pose"
-            else "food_analysis_latency_ms"
+            else (
+                "kinetics400_processing_ms"
+                if job.job_type == "kinetics400"
+                else "food_analysis_latency_ms"
+            )
         )
         record_metric(
             db,

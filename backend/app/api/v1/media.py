@@ -54,6 +54,11 @@ class MotionIn(BaseModel):
     )
 
 
+class KineticsIn(BaseModel):
+    file_name: str | None = None
+    media_id: int | None = None
+
+
 class CloudMediaIn(BaseModel):
     file_id: str = Field(min_length=8, max_length=700)
     temp_url: str = Field(min_length=8, max_length=4000)
@@ -348,6 +353,46 @@ async def get_motion_job(
             result["summary"] = summary
             job.result_json = json.dumps(result, ensure_ascii=False)
             db.commit()
+    return public_job(job)
+
+
+@router.post("/kinetics-jobs")
+def create_kinetics_job(
+    body: KineticsIn, user=Depends(current_user), db: Session = Depends(get_db)
+):
+    asset = None
+    if body.media_id:
+        asset = db.get(MediaAsset, body.media_id)
+    elif body.file_name:
+        asset = (
+            db.query(MediaAsset)
+            .filter(MediaAsset.storage_key == body.file_name)
+            .first()
+        )
+    if not asset or asset.user_id != user.id:
+        raise HTTPException(404, "视频资产不存在")
+    if asset.media_type != "video":
+        raise HTTPException(400, "400 类识别仅支持视频")
+
+    job = create_ai_job(
+        db,
+        user_id=user.id,
+        job_type="kinetics400",
+        media_asset_id=asset.id,
+        payload={},
+    )
+
+    return {"ok": True, **public_job(job)}
+
+
+@router.get("/kinetics-jobs/{job_id}")
+async def get_kinetics_job(
+    job_id: int, user=Depends(current_user), db: Session = Depends(get_db)
+):
+    requeue_expired_jobs(db)
+    job = db.get(AIJob, job_id)
+    if not job or job.user_id != user.id or job.job_type != "kinetics400":
+        raise HTTPException(404, "任务不存在")
     return public_job(job)
 
 
