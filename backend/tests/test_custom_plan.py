@@ -42,3 +42,30 @@ def test_custom_plan_rejects_non_custom_delete(api):
 def test_custom_plan_requires_title(api):
     res = api.post("/api/v1/health/plan/today/custom", json={"title": "  "})
     assert res.status_code == 422
+
+
+def test_plan_activity_year_distinguishes_empty_partial_and_complete_days(api):
+    today = api.get("/api/v1/health/plan/today").json()
+    activity = api.get("/api/v1/health/plan/activity/year")
+    assert activity.status_code == 200
+    body = activity.json()
+    assert len(body["days"]) == 365
+    assert body["days"][-1]["date"] == body["end"]
+    assert body["days"][-1]["status"] == "empty"
+
+    first = today["items"][0]
+    assert api.put(
+        f"/api/v1/health/plan/today/{first['task_key']}", json={"done": True}
+    ).status_code == 200
+    partial = api.get("/api/v1/health/plan/activity/year").json()["days"][-1]
+    assert partial["status"] == "partial"
+    assert partial["done"] == 1
+    assert partial["total"] == 3
+
+    for item in today["items"][1:]:
+        assert api.put(
+            f"/api/v1/health/plan/today/{item['task_key']}", json={"done": True}
+        ).status_code == 200
+    complete = api.get("/api/v1/health/plan/activity/year").json()["days"][-1]
+    assert complete["status"] == "complete"
+    assert complete["completion"] == 1

@@ -1,26 +1,60 @@
 <include src="/components/page-transition/first-paint.wxml"/>
 <page-transition/>
-<view class="page ui-page-content">
-  <view class="title">今天</view><view class="subtitle">{{headline}}</view>
-  <view class="today-count">{{doneCount}} / {{items.length||3}} 完成<text wx:if="{{items.length}}" class="undo-hint">误触可点「恢复」</text></view>
-  <view class="plan-simple">
-    <view class="task {{item.done?'done':''}} tappable" wx:for="{{items}}" wx:key="task_key" bindtap="toggle" data-key="{{item.task_key}}" data-done="{{item.done}}" hover-class="tap" hover-start-time="0" hover-stay-time="80">
-      <view class="check"><image wx:if="{{item.done}}" src="/assets/icons/check.png" mode="aspectFit"/><text wx:else>{{index+1}}</text></view>
-      <view class="grow"><view class="task-title">{{item.title}}<text wx:if="{{item.custom}}" class="tag-custom">手动</text></view><view wx:if="{{item.desc}}" class="muted task-desc">{{item.desc}}</view></view>
-      <view class="task-side">
-        <view wx:if="{{item.done}}" class="restore-btn tappable" catchtap="restore" data-key="{{item.task_key}}" hover-class="tap" hover-start-time="0" hover-stay-time="80">恢复</view>
-        <view wx:if="{{item.custom}}" class="del-btn ui-fixed-circle tappable" catchtap="removeCustom" data-key="{{item.task_key}}" hover-class="tap" hover-start-time="0" hover-stay-time="80" aria-label="删除计划"><image src="/assets/icons/delete.png" mode="aspectFit"/></view>
-      </view>
+<view class="page plan-page ui-page-content">
+  <view class="title">计划</view>
+  <view class="subtitle plan-intro">把每天完成的一点点，留成整年的节奏。</view>
+
+  <view class="activity-card">
+    <view class="activity-head">
+      <view><view class="section-kicker">近 365 天</view><view class="activity-title">计划完成记录</view></view>
+      <view class="activity-stat"><text>{{activitySummary.completeDays}}</text><text>天全部完成</text></view>
     </view>
-    <view wx:if="{{!items.length}}" class="empty">计划正在生成。</view>
+    <view wx:if="{{activityLoading}}" class="activity-skeleton shimmer"></view>
+    <view wx:elif="{{activityError}}" class="activity-error">
+      <text>{{activityError}}</text><view class="activity-retry tappable" bindtap="retryActivity" hover-class="tap">重试</view>
+    </view>
+    <block wx:else>
+      <view class="activity-grid">
+        <view class="activity-week" wx:for="{{activityWeeks}}" wx:key="key" wx:for-item="week">
+          <view wx:for="{{week.days}}" wx:key="key" wx:for-item="day" class="activity-cell {{day.spacer?'spacer':day.tone}} {{day.today?'today':''}}" aria-label="{{day.ariaLabel}}"></view>
+        </view>
+      </view>
+      <view class="activity-months">
+        <text wx:for="{{activityMonths}}" wx:key="column" class="month-label" style="{{item.style}}">{{item.label}}</text>
+      </view>
+      <view class="activity-foot">
+        <text>每天自动向左更新，今天始终在最右侧</text>
+        <view class="activity-legend"><view><text class="legend-cell unfilled"></text>未完成</view><view><text class="legend-cell partial"></text>部分</view><view><text class="legend-cell complete"></text>全部</view></view>
+      </view>
+    </block>
   </view>
-  <view class="add-control tappable" bindtap="toggleAdd" hover-class="tap" hover-start-time="0" hover-stay-time="80"><image src="{{showAdd?'/assets/icons/close.png':'/assets/icons/add.png'}}" mode="aspectFit"/><text>{{showAdd?'收起添加':'添加计划'}}</text></view>
-  <view wx:if="{{showAdd}}" class="add-panel">
-    <input class="add-input" placeholder="想添加的计划，如：晚饭后散步 20 分钟" value="{{addTitle}}" bindinput="onTitle" maxlength="60"/>
-    <textarea class="add-textarea" placeholder="补充说明（可选）" value="{{addDesc}}" bindinput="onDesc" maxlength="300"/>
-    <view class="add-actions"><button class="btn-soft tappable" bindtap="toggleAdd" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">取消</button><button class="btn-primary tappable" bindtap="saveCustom" loading="{{saving}}" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">加入今日计划</button></view>
+
+  <view class="settings-head">
+    <view><view class="section-kicker">今日计划</view><view class="settings-title">设置今天要完成的事</view></view>
+    <view class="completion-pill">{{doneCount}} / {{items.length||3}}</view>
   </view>
-  <view class="week-link tappable" bindtap="toggleWeek" hover-class="tap" hover-start-time="0" hover-stay-time="80"><text>{{showWeek?'收起本周':'查看本周'}}</text><image class="ui-chevron {{showWeek?'open':''}}" src="/assets/icons/chevron.png" mode="aspectFit"/></view>
+  <view class="plan-settings">
+    <view class="settings-note">{{headline}}<text wx:if="{{items.length}}"> · 完成后也可以恢复</text></view>
+    <view class="plan-simple">
+      <view class="task {{item.done?'done':''}} tappable" wx:for="{{items}}" wx:key="task_key" bindtap="toggle" data-key="{{item.task_key}}" data-done="{{item.done}}" hover-class="tap" hover-start-time="0" hover-stay-time="80">
+        <view class="check"><image wx:if="{{item.done}}" src="/assets/icons/check.png" mode="aspectFit"/><text wx:else>{{index+1}}</text></view>
+        <view class="grow"><view class="task-title">{{item.title}}<text wx:if="{{item.custom}}" class="tag-custom">手动</text></view><view wx:if="{{item.desc}}" class="muted task-desc">{{item.desc}}</view></view>
+        <view class="task-side">
+          <view wx:if="{{item.done}}" class="restore-btn tappable" catchtap="restore" data-key="{{item.task_key}}" hover-class="tap" hover-start-time="0" hover-stay-time="80">恢复</view>
+          <view wx:if="{{item.custom}}" class="del-btn ui-fixed-circle tappable" catchtap="removeCustom" data-key="{{item.task_key}}" hover-class="tap" hover-start-time="0" hover-stay-time="80" aria-label="删除计划"><image src="/assets/icons/delete.png" mode="aspectFit"/></view>
+        </view>
+      </view>
+      <view wx:if="{{!items.length}}" class="empty">计划正在生成。</view>
+    </view>
+    <view class="add-control tappable" bindtap="toggleAdd" hover-class="tap" hover-start-time="0" hover-stay-time="80"><image src="{{showAdd?'/assets/icons/close.png':'/assets/icons/add.png'}}" mode="aspectFit"/><text>{{showAdd?'收起添加':'添加一项计划'}}</text></view>
+    <view wx:if="{{showAdd}}" class="add-panel">
+      <input class="add-input" placeholder="例如：晚饭后散步 20 分钟" value="{{addTitle}}" bindinput="onTitle" maxlength="60"/>
+      <textarea class="add-textarea" placeholder="补充说明（可选）" value="{{addDesc}}" bindinput="onDesc" maxlength="300"/>
+      <view class="add-actions"><button class="btn-soft tappable" bindtap="toggleAdd" hover-class="tap-btn">取消</button><button class="btn-primary tappable" bindtap="saveCustom" loading="{{saving}}" hover-class="tap-btn">加入今日计划</button></view>
+    </view>
+  </view>
+
+  <view class="week-link tappable" bindtap="toggleWeek" hover-class="tap" hover-start-time="0" hover-stay-time="80"><text>{{showWeek?'收起本周':'查看本周计划'}}</text><image class="ui-chevron {{showWeek?'open':''}}" src="/assets/icons/chevron.png" mode="aspectFit"/></view>
   <view wx:if="{{showWeek&&agentPlan}}" class="week-panel"><view class="row space"><view class="task-title">{{agentPlan.title}}</view><text>{{agentPlan.done_count}} / {{agentPlan.items.length}}</text></view><view class="week-task {{item.done?'done':''}} tappable" wx:for="{{agentPlan.items}}" wx:key="id" bindtap="toggleAgent" data-id="{{item.id}}" data-done="{{item.done}}" hover-class="tap" hover-start-time="0" hover-stay-time="80"><view class="check"><image wx:if="{{item.done}}" src="/assets/icons/check.png" mode="aspectFit"/><text wx:else>{{index+1}}</text></view><view class="grow"><view class="task-title">{{item.title}}</view><view class="muted task-desc">{{item.planned_date}} · {{item.description}}</view></view></view></view>
   <view class="notice">出现疼痛或明显不适时，请暂停并咨询专业人员。</view>
 </view>

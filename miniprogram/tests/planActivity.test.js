@@ -1,0 +1,57 @@
+const { test } = require('node:test')
+const assert = require('node:assert/strict')
+const fs = require('node:fs')
+const path = require('node:path')
+const { buildPlanActivity, statusOf } = require('../utils/planActivity')
+
+const read = file => fs.readFileSync(path.join(__dirname, '..', file), 'utf8')
+
+function isoDay(date) {
+  return date.toISOString().slice(0, 10)
+}
+
+test('rolling activity keeps today in the rightmost of 53 columns', () => {
+  const start = new Date(Date.UTC(2025, 8, 30))
+  const days = Array.from({ length: 365 }, (_, index) => {
+    const date = new Date(start.getTime() + index * 86400000)
+    return { date: isoDay(date), done: index % 9 === 0 ? 3 : index % 4 === 0 ? 1 : 0, total: 3 }
+  })
+  const result = buildPlanActivity({ start: days[0].date, end: days[364].date, days })
+  const today = result.cells.find(cell => cell.today)
+
+  assert.equal(result.columns, 53)
+  assert.equal(today.column, 53)
+  assert.equal(result.cells.length, 365)
+  assert.equal(result.weeks.length, 53)
+  assert.ok(result.weeks[52].days.some(day => day.today))
+  assert.ok(result.months.length >= 12)
+})
+
+test('activity levels use empty, partial and complete states', () => {
+  assert.equal(statusOf({ done: 0, total: 3 }), 'empty')
+  assert.equal(statusOf({ done: 2, total: 3 }), 'partial')
+  assert.equal(statusOf({ done: 3, total: 3 }), 'complete')
+})
+
+test('plan page places the rolling year above a single plan settings component', () => {
+  const view = read('pages/plan/index.wxml')
+  const style = read('pages/plan/index.wxss')
+  const script = read('pages/plan/index.js')
+
+  assert.match(view, /class="activity-grid"/)
+  assert.match(view, /class="activity-week"/)
+  assert.match(view, /class="activity-cell \{\{day\.spacer\?'spacer':day\.tone\}\}/)
+  assert.doesNotMatch(view, /legend-cell empty/)
+  assert.match(view, /今天始终在最右侧/)
+  assert.match(view, /未完成[\s\S]*部分[\s\S]*全部/)
+  assert.ok(view.indexOf('class="activity-card"') < view.indexOf('class="plan-settings"'))
+  assert.match(style, /\.activity-cell\.partial\{[^}]*background:#c4e267/)
+  assert.match(style, /\.activity-cell\.complete\{[^}]*background:#506336/)
+  assert.match(style, /\.activity-cell\.today\{[^}]*box-shadow:/)
+  assert.match(style, /\.activity-week\{[^}]*flex-direction:column/)
+  const activitySurface = style.match(/\.activity-card\{([^}]*)\}/)
+  assert.ok(activitySurface)
+  assert.doesNotMatch(activitySurface[1], /background:|border:|box-shadow:/)
+  assert.match(script, /\/health\/plan\/activity\/year/)
+  assert.match(script, /this\.loadActivity\(\)/)
+})

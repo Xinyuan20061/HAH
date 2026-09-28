@@ -243,6 +243,59 @@ def plan(user=Depends(current_user), db: Session = Depends(get_db)):
     return _plan_snapshot(db, user.id, user.profile)
 
 
+@router.get("/plan/activity/year")
+def plan_activity_year(user=Depends(current_user), db: Session = Depends(get_db)):
+    """Return a rolling 365-day completion map for the daily plan."""
+    end = business_today()
+    start = end - timedelta(days=364)
+    states = db.scalars(
+        select(PlanTaskState).where(
+            PlanTaskState.user_id == user.id,
+            PlanTaskState.record_date >= start.isoformat(),
+            PlanTaskState.record_date <= end.isoformat(),
+        )
+    ).all()
+    by_date: dict[str, list[PlanTaskState]] = {}
+    for state in states:
+        by_date.setdefault(state.record_date, []).append(state)
+
+    days = []
+    complete_days = 0
+    partial_days = 0
+    for offset in range(365):
+        current = start + timedelta(days=offset)
+        key = current.isoformat()
+        rows = by_date.get(key, [])
+        custom = [row for row in rows if row.task_type == "custom"]
+        # The generated daily plan has three base tasks; custom tasks extend
+        # the denominator so completing one stored task cannot appear as 100%.
+        total = 3 + len(custom)
+        done = min(total, sum(1 for row in rows if row.done))
+        completion = done / total if total else 0
+        status = "complete" if done == total else "partial" if done else "empty"
+        complete_days += int(status == "complete")
+        partial_days += int(status == "partial")
+        days.append(
+            {
+                "date": key,
+                "done": done,
+                "total": total,
+                "completion": round(completion, 3),
+                "status": status,
+            }
+        )
+    return {
+        "start": start.isoformat(),
+        "end": end.isoformat(),
+        "days": days,
+        "summary": {
+            "complete_days": complete_days,
+            "partial_days": partial_days,
+            "active_days": complete_days + partial_days,
+        },
+    }
+
+
 def _command_focus(summary: dict, plan_data: dict, active_job: AIJob | None):
     observed = summary.get("observed") or {}
     if active_job:
