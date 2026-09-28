@@ -181,6 +181,11 @@ def icon_close(draw, color):
     line(draw, [(67, 29), (29, 67)], color, 5)
 
 
+def icon_edit(draw, color):
+    line(draw, [(25, 69), (30, 51), (59, 22), (74, 37), (45, 66), (25, 69)], color, 5)
+    line(draw, [(53, 28), (68, 43)], color, 4)
+
+
 def icon_check(draw, color):
     line(draw, [(25, 49), (41, 65), (72, 32)], color, 6)
 
@@ -303,6 +308,7 @@ ICON_DRAWERS = {
     "shield": icon_shield,
     "add": icon_add,
     "close": icon_close,
+    "edit": icon_edit,
     "check": icon_check,
     "delete": icon_delete,
     "upload": icon_upload,

@@ -8,20 +8,22 @@ function initialOf(nickname) {
 }
 
 Page({
-  data: { user: {}, profile: null, goalText: '', ai: { enabled: false, has_api_key: false, model: 'deepseek-chat' }, avatarSrc: '', initial: 'H', editing: false, nickDraft: '', saving: false },
+  data: { loading: true, error: '', user: {}, profile: null, goalText: '', ai: { enabled: false, has_api_key: false, model: 'deepseek-chat' }, avatarSrc: '', initial: 'H', editing: false, nickDraft: '', saving: false },
   onShow() { this.load() },
   async load() {
+    const firstLoad = !this.data.user.id;
+    if (firstLoad) this.setData({ loading: true, error: '' });
     try {
       await api.ensureToken();
       let [u, p, a] = await Promise.all([api.get('/users/me'), api.get('/users/me/health-profile'), api.get('/users/me/ai-config')]);
       let map = { lose: '减脂', maintain: '保持健康', gain: '增肌' };
-      this.setData({ user: u, profile: p, ai: a, goalText: p ? map[p.goal_type] || p.goal_type : '', initial: initialOf(u.nickname) });
+      this.setData({ loading: false, error: '', user: u, profile: p, ai: a, goalText: p ? map[p.goal_type] || p.goal_type : '', initial: initialOf(u.nickname) });
       this.applyAvatar(u.avatar_url);
       if (!u.nickname && !this._guided) {
         this._guided = true;
         this.openEdit();
       }
-    } catch (e) { console.warn('profile load failed', e) }
+    } catch (e) { this.setData({ loading: false, error: (e && e.message) || '请稍后重试' }); console.warn('profile load failed', e) }
   },
   async applyAvatar(url) {
     let src = '';
@@ -40,6 +42,7 @@ Page({
   },
   openEdit() { this.setData({ editing: true, nickDraft: this.data.user.nickname || '' }) },
   closeEdit() { this.setData({ editing: false }) },
+  retry() { this.load() },
   onNickInput(e) { this.setData({ nickDraft: e.detail.value }) },
   async saveProfile() {
     const nick = String(this.data.nickDraft || '').trim();
