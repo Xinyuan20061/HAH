@@ -9,6 +9,8 @@ node_modules/
 dist/
 .DS_Store
 backend/uploads/
+backend/startup_out.txt
+backend/startup_err.txt
 /uploads/
 ai-worker/.env
 ai-worker/models/

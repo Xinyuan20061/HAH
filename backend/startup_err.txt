@@ -1,5 +1,0 @@
-INFO:     Started server process [3544]
-INFO:     Waiting for application startup.
-2026-09-24 11:49:46,330 INFO healthmate.request startup configuration={"env": "production", "db_dialect": "mysql", "storage_backend": "cloud_ref", "port": 8000, "worker_enabled": true, "run_migrations_on_start": false}
-INFO:     Application startup complete.
-INFO:     Uvicorn running on http://127.0.0.1:8123 (Press CTRL+C to quit)
