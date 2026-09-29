@@ -68,6 +68,12 @@ class UserAIConfig(Base, TimestampMixin):
     )
     model: Mapped[str] = mapped_column(String(120), default="deepseek-chat")
     api_key_encrypted: Mapped[str] = mapped_column(Text, default="")
+    voice_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    voice_base_url: Mapped[str] = mapped_column(String(500), default="")
+    voice_stt_model: Mapped[str] = mapped_column(String(120), default="whisper-1")
+    voice_tts_model: Mapped[str] = mapped_column(String(120), default="tts-1")
+    voice_name: Mapped[str] = mapped_column(String(80), default="alloy")
+    voice_api_key_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
     user: Mapped[User] = relationship(back_populates="ai_config")
 
 

@@ -1,16 +1,12 @@
-"""HealthMate Agent v2: role-specialised sub-agents + auditable decision traces.
+"""Legacy specialist contracts used as deterministic multi-agent fallbacks.
 
 Architecture (innovation point for the competition):
 
-    Coordinator (intent routing)
-      -> Planner      : weekly plan drafts, guardrail-adjusted, user-confirmed
-      -> Coach        : motion-profile driven exercise guidance
-      -> Nutritionist : RAG-nutrition evidence + user records
-      -> SafetyGuardian (existing safety layer, runs first and last)
+The v3 Harness owns the live Router -> Workers -> Decision execution graph.
+This module retains deterministic intent mapping, prompt fragments and compact
+conversation memory for compatibility and safe routing fallback.
 
-Each specialist owns its system prompt, evidence contract and audit labels.
-The Coordinator picks one specialist per intent and assembles the trace so every
-reply can answer "why was this suggested".
+The safety guardian still runs before and after the collaboration graph.
 """
 from __future__ import annotations
 
@@ -28,11 +24,10 @@ def _safety_guardrails_text() -> str:
 
 
 def build_coordinator_system(user, summary: dict, specialist: str) -> str:
-    """Assemble the system prompt for the selected specialist.
+    """Assemble the shared safety prompt for the collaboration graph.
 
-    The Coordinator keeps routing and audit responsibility; the specialist
-    provides domain behaviour. All specialists share the safety contract so the
-    guardrails hold regardless of routing.
+    ``specialist`` is now normally ``multi_agent_coordinator``; older callers
+    may still pass a deterministic specialist label.
     """
     base = (
         "你是 HealthMate 健康管理智能体的「{specialist}」。你只能依据给定结构化"

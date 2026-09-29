@@ -3,9 +3,9 @@
 <view class="chat-page ui-page-content">
   <view class="agent-bar">
     <view class="agent-identity">
-      <view class="agent-mark"><image src="/assets/icons/spark.png" mode="aspectFit"/></view>
+      <view class="agent-mark"><image src="{{activeAgent.icon}}" mode="aspectFit"/></view>
       <view>
-        <view class="agent-name">HealthMate</view>
+        <view class="agent-name">{{activeAgent.name}}</view>
         <view class="agent-state"><view class="state-dot {{sending?'busy':''}}"></view><text>{{statusText}}</text></view>
       </view>
     </view>
@@ -16,9 +16,9 @@
 
   <scroll-view scroll-y class="messages" scroll-top="{{scrollTop}}">
     <view wx:if="{{!messages.length}}" class="welcome">
-      <view class="welcome-mark"><image src="/assets/icons/spark.png" mode="aspectFit"/></view>
-      <view class="welcome-kicker">你的健康，由你做决定</view>
-      <view class="welcome-title">今天想先改善什么？</view>
+      <view class="welcome-mark"><image src="{{activeAgent.icon}}" mode="aspectFit"/></view>
+      <view class="welcome-kicker">{{activeAgent.role}}</view>
+      <view class="welcome-title">{{activeAgent.greeting}}</view>
       <view class="suggestion-list">
         <view class="suggestion tappable" wx:for="{{suggestions}}" wx:key="key" bindtap="quick" data-q="{{item.prompt}}" hover-class="tap-card" hover-start-time="0" hover-stay-time="80">
           <view class="suggestion-icon"><image src="{{item.icon}}" mode="aspectFit"/></view>
@@ -34,8 +34,8 @@
 
         <view wx:if="{{msg.role==='assistant'}}" class="assistant-message">
           <view class="assistant-meta">
-            <view class="assistant-mark"><image src="/assets/icons/spark.png" mode="aspectFit"/></view>
-            <text>HealthMate</text>
+            <view class="assistant-mark"><image src="{{msg.agentIcon||activeAgent.icon}}" mode="aspectFit"/></view>
+            <text>{{msg.agentName||activeAgent.name}}</text>
             <view wx:if="{{msg.safetyLevel&&msg.safetyLevel!=='normal'}}" class="safety-pill">安全响应</view>
           </view>
 
@@ -107,7 +107,7 @@
 
   <view class="composer-wrap">
     <view class="composer {{composerFocused?'focused':''}}">
-      <textarea class="composer-input" value="{{input}}" bindinput="onInput" bindfocus="onFocus" bindblur="onBlur" auto-height maxlength="2000" show-confirm-bar="{{false}}" cursor-spacing="16" placeholder="问问今天的饮食、运动或恢复…"/>
+      <textarea class="composer-input" value="{{input}}" bindinput="onInput" bindfocus="onFocus" bindblur="onBlur" auto-height maxlength="2000" show-confirm-bar="{{false}}" cursor-spacing="16" placeholder="{{activeAgent.placeholder}}"/>
       <button class="composer-action ui-fixed-circle tappable {{sending?'stop':canSend?'ready':''}}" bindtap="composerAction" disabled="{{!canSend&&!sending}}" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80" aria-label="{{sending?'停止生成':'发送消息'}}">
         <view wx:if="{{sending}}" class="stop-mark"></view><image wx:else src="/assets/icons/send.png" mode="aspectFit"/>
       </button>

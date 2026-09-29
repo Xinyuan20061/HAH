@@ -8,6 +8,21 @@ const SPECIALIST_NAMES = {
   safety: '安全守护'
 }
 const TOKEN_TICK_MS = 22
+const STEWARD = { id: 'steward', name: '小管家', role: '健康计划管家', greeting: '今天想先处理什么？', placeholder: '问问记录、计划或健康建议…', icon: '/assets/icons/agent-steward.png', capabilities: { text: true, voice_input: false, voice_output: false } }
+const STEWARD_SUGGESTIONS = [
+  { key: 'meal', icon: '/assets/icons/meal.png', title: '安排今天的晚饭', prompt: '我今天晚饭怎么吃更合适？' },
+  { key: 'plan', icon: '/assets/icons/calendar.png', title: '规划这周的训练', prompt: '这周只能练三天，结合我的最近数据和目标安排一个本周计划' },
+  { key: 'recovery', icon: '/assets/icons/recovery.png', title: '看看今天怎么恢复', prompt: '结合我的睡眠和运动记录，给我一个今天的恢复建议' }
+]
+
+function normalizeAgent(agent) {
+  const capabilities = agent && agent.capabilities || {}
+  return Object.assign({}, agent, {
+    icon: agent.icon || STEWARD.icon,
+    voiceInput: !!capabilities.voice_input,
+    voiceOutput: !!capabilities.voice_output
+  })
+}
 
 function presentTrace(trace) {
   if (!trace || !trace.specialist) return null
@@ -42,29 +57,13 @@ Page({
     streaming: false,
     scrollTop: 0,
     messages: [],
-    suggestions: [
-      {
-        key: 'meal',
-        icon: '/assets/icons/meal.png',
-        title: '安排今天的晚饭',
-        hint: '结合目标和今天的记录',
-        prompt: '我今天晚饭怎么吃更合适？'
-      },
-      {
-        key: 'plan',
-        icon: '/assets/icons/calendar.png',
-        title: '规划这周的训练',
-        hint: '生成一份由我确认的计划',
-        prompt: '这周只能练三天，结合我的最近数据和目标安排一个本周计划'
-      },
-      {
-        key: 'recovery',
-        icon: '/assets/icons/recovery.png',
-        title: '看看今天怎么恢复',
-        hint: '参考睡眠与运动情况',
-        prompt: '结合我的睡眠和运动记录，给我一个今天的恢复建议'
-      }
-    ]
+    activeAgent: normalizeAgent(STEWARD),
+    suggestions: STEWARD_SUGGESTIONS
+  },
+
+  onLoad() {
+    this._unloaded = false
+    this.loadHarnessManifest()
   },
 
   onInput(e) {
@@ -76,6 +75,8 @@ Page({
   onBlur() { this.setData({ composerFocused: false }) },
 
   onShow() {
+    const tabBar = typeof this.getTabBar === 'function' && this.getTabBar()
+    if (tabBar) tabBar.setData({ selected: 2, wheelOpen: false, quickOpen: false })
     const prompt = wx.getStorageSync('healthmate_insight_prompt')
     if (prompt) {
       wx.removeStorageSync('healthmate_insight_prompt')
@@ -84,8 +85,19 @@ Page({
   },
 
   onUnload() {
+    this._unloaded = true
     this.stopGeneration(true)
     if (this._scrollTimer) clearTimeout(this._scrollTimer)
+  },
+
+  async loadHarnessManifest() {
+    try {
+      const result = await api.get('/harness/manifest')
+      if (result && Array.isArray(result.agents) && result.agents.length) {
+        const steward = result.agents.find(item => item.id === 'steward')
+        if (steward) this.setData({ activeAgent: normalizeAgent(Object.assign({}, STEWARD, steward)) })
+      }
+    } catch (e) {}
   },
 
   quick(e) {
@@ -117,23 +129,20 @@ Page({
     }[provider] || '标准模式'
   },
 
-  shouldAgent(q) {
-    return /计划|安排|本周|这周|减脂|增肌|练三天|训练三天|怎么练|深蹲|俯卧撑|伏地挺身|弓步|箭步|胸部|背部|肩部|手臂|核心|股四头肌|臀部|腘绳肌|练胸|练背|每周运动|运动多久|运动指南|膳食|营养|怎么吃|慢病|高血压|糖尿病|squat|pushup|lunge|喝水|饮水|睡眠|睡觉|失眠|腰酸|久坐|坐着|体重|减肥|血脂|血压|跑步|散步|快走|运动|锻炼|饮食|吃饭|早餐|午餐|晚餐|盐|油|糖|脂肪|卡路里|热量|大腿|膝盖|拉伸|热身|步数|走多少|吃多少|喝多少|合适|注意|怎么办|可以吗|好不好|怎么减|怎么增/i.test(q)
-  },
-
   composerAction() {
     if (this.data.sending) return this.stopGeneration()
     this.send()
   },
 
-  send() {
+  send(channel = 'text') {
     const q = this.data.input.trim()
     if (!q || this.data.sending) return
-    const useAgent = this.shouldAgent(q)
+    const requestChannel = channel === 'voice' ? 'voice' : 'text'
+    const activeAgent = this.data.activeAgent
     const messages = [
       ...this.data.messages,
       { id: nextMessageId('user'), role: 'user', content: q },
-      { id: nextMessageId('assistant'), role: 'assistant', content: '', pending: true }
+      { id: nextMessageId('assistant'), role: 'assistant', content: '', pending: true, agentId: activeAgent.id, agentName: activeAgent.name, agentIcon: activeAgent.icon, voiceAvailable: activeAgent.voiceOutput }
     ]
     this._tokenQueue = []
     this._pendingDone = null
@@ -144,18 +153,18 @@ Page({
       canSend: false,
       sending: true,
       streaming: true,
-      statusText: useAgent ? '正在整理你的记录' : '正在理解你的问题'
+      statusText: activeAgent.id === 'steward' ? '正在整理你的记录' : '正在想怎么跟你说'
     })
+    this._pendingChannel = requestChannel
     this.scrollBottom()
-    const endpoint = useAgent ? '/agent/respond/stream' : '/chat/stream'
-    this._streamTask = api.streamPost(endpoint, { message: q, session_id: this.data.sessionId }, {
+    this._streamTask = api.streamPost('/agent/respond/stream', { message: q, agent_id: activeAgent.id, channel: requestChannel }, {
       onMeta: meta => {
         if (meta.session_id) this.setData({ sessionId: meta.session_id })
         if (meta.safety_level && meta.safety_level !== 'normal') this.setData({ statusText: '正在执行安全检查' })
       },
       onDelta: chunk => this.queueTokens(chunk),
       onDone: result => this.completeWhenDrained(result),
-      onError: error => this.handleStreamError(error, q, useAgent)
+      onError: error => this.handleStreamError(error, q, activeAgent.id, requestChannel)
     })
   },
 
@@ -225,10 +234,11 @@ Page({
       streaming: false,
       statusText: `${provider} · 已就绪`
     })
+    this._pendingChannel = null
     this.scrollBottom()
   },
 
-  async handleStreamError(error, q, useAgent) {
+  async handleStreamError(error, q, agentId, channel) {
     if (this._streamStopped) return
     const index = this.data.messages.length - 1
     if (this.data.messages[index] && this.data.messages[index].content) {
@@ -237,9 +247,7 @@ Page({
       return
     }
     try {
-      const r = useAgent
-        ? await api.postLong('/agent/respond', { message: q })
-        : await api.postLong('/chat', { message: q, session_id: this.data.sessionId })
+      const r = await api.postLong('/agent/respond', { message: q, agent_id: agentId, channel })
       if (r.session_id) this.setData({ sessionId: r.session_id })
       this.queueTokens(r.reply || '已完成分析。')
       this.completeWhenDrained({ provider: r.provider, result: r })
@@ -263,6 +271,7 @@ Page({
     this._tokenTimer = null
     this._tokenQueue = []
     this._pendingDone = null
+    this._pendingChannel = null
     if (!silent && this.data.sending) {
       const index = this.data.messages.length - 1
       const messages = this.data.messages.slice()
@@ -283,7 +292,7 @@ Page({
         : message)
       this.setData({ messages })
       wx.showToast({ title: r.already_applied ? '计划已在本周' : '已加入本周计划' })
-      setTimeout(() => wx.switchTab({ url: '/pages/plan/index' }), 450)
+      setTimeout(() => wx.navigateTo({ url: '/pages/plan/index' }), 450)
     } catch (error) {
       wx.showToast({ title: error.message || '加入计划失败', icon: 'none' })
     }

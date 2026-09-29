@@ -8,6 +8,12 @@ class AIConfigIn(BaseModel):
     base_url: str = Field(default="https://api.deepseek.com", max_length=500)
     model: str = Field(default="deepseek-chat", min_length=1, max_length=120)
     api_key: str = Field(default="", max_length=500)
+    voice_enabled: bool | None = None
+    voice_base_url: str | None = Field(default=None, max_length=500)
+    voice_stt_model: str | None = Field(default=None, max_length=120)
+    voice_tts_model: str | None = Field(default=None, max_length=120)
+    voice_name: str | None = Field(default=None, max_length=80)
+    voice_api_key: str | None = Field(default=None, max_length=500)
 
     @field_validator("base_url")
     @classmethod
@@ -28,6 +34,13 @@ class AIConfigIn(BaseModel):
                 raise
         return value
 
+    @field_validator("voice_base_url")
+    @classmethod
+    def validate_voice_base_url(cls, value: str | None):
+        if value is None or not value.strip():
+            return value
+        return cls.validate_base_url(value)
+
 
 class AIConfigOut(BaseModel):
     enabled: bool
@@ -37,6 +50,28 @@ class AIConfigOut(BaseModel):
     has_api_key: bool
     api_key_hint: str = ""
     source: str = "user"
+    voice_enabled: bool = False
+    voice_base_url: str = ""
+    voice_stt_model: str = "whisper-1"
+    voice_tts_model: str = "tts-1"
+    voice_name: str = "alloy"
+    has_voice_api_key: bool = False
+    voice_api_key_hint: str = ""
+    system_voice_configured: bool = False
+
+
+class VoiceConnectionTestIn(BaseModel):
+    base_url: str = Field(default="", max_length=500)
+    tts_model: str = Field(default="", max_length=120)
+    voice_name: str = Field(default="", max_length=80)
+    api_key: str = Field(default="", max_length=500)
+
+    @field_validator("base_url")
+    @classmethod
+    def validate_optional_base_url(cls, value: str):
+        if not value.strip():
+            return ""
+        return AIConfigIn.validate_base_url(value)
 
 
 class AIConnectionTestIn(BaseModel):

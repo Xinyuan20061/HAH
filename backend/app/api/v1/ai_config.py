@@ -5,8 +5,14 @@ from app.core.database import get_db
 from app.core.config import settings
 from app.core.crypto import encrypt_secret, decrypt_secret
 from app.models import UserAIConfig
-from app.schemas.ai_config import AIConfigIn, AIConfigOut, AIConnectionTestIn
+from app.schemas.ai_config import (
+    AIConfigIn,
+    AIConfigOut,
+    AIConnectionTestIn,
+    VoiceConnectionTestIn,
+)
 from app.services.ai.gateway import DeepSeekProvider
+from app.harness.voice import OpenAICompatibleVoiceProvider, VoiceUnavailable
 from app.core.url_security import validate_ai_base_url
 
 router = APIRouter(prefix="/users/me/ai-config", tags=["ai-config"])
@@ -21,6 +27,7 @@ def _hint(secret: str) -> str:
 def _out(cfg: UserAIConfig | None):
     if cfg:
         key = _stored_key(cfg)
+        voice_key = _stored_voice_key(cfg)
         return AIConfigOut(
             enabled=cfg.enabled,
             base_url=cfg.base_url,
@@ -28,6 +35,14 @@ def _out(cfg: UserAIConfig | None):
             has_api_key=bool(key),
             api_key_hint=_hint(key),
             source="user",
+            voice_enabled=bool(cfg.voice_enabled),
+            voice_base_url=cfg.voice_base_url or settings.voice_api_base_url,
+            voice_stt_model=cfg.voice_stt_model or settings.voice_stt_model,
+            voice_tts_model=cfg.voice_tts_model or settings.voice_tts_model,
+            voice_name=cfg.voice_name or settings.voice_tts_voice,
+            has_voice_api_key=bool(voice_key),
+            voice_api_key_hint=_hint(voice_key),
+            system_voice_configured=_system_voice_configured(),
         )
     return AIConfigOut(
         enabled=False,
@@ -36,7 +51,19 @@ def _out(cfg: UserAIConfig | None):
         has_api_key=False,
         api_key_hint="",
         source="system-default",
+        voice_enabled=False,
+        voice_base_url=settings.voice_api_base_url,
+        voice_stt_model=settings.voice_stt_model,
+        voice_tts_model=settings.voice_tts_model,
+        voice_name=settings.voice_tts_voice,
+        has_voice_api_key=False,
+        voice_api_key_hint="",
+        system_voice_configured=_system_voice_configured(),
     )
+
+
+def _system_voice_configured() -> bool:
+    return bool(settings.voice_api_key.strip() and settings.voice_api_base_url.strip())
 
 
 def _stored_key(cfg: UserAIConfig | None) -> str:
@@ -45,6 +72,15 @@ def _stored_key(cfg: UserAIConfig | None) -> str:
     except ValueError:
         raise HTTPException(
             503, "用户 Key 无法解密，请恢复原加密密钥或重新填写用户 Key"
+        ) from None
+
+
+def _stored_voice_key(cfg: UserAIConfig | None) -> str:
+    try:
+        return decrypt_secret(cfg.voice_api_key_encrypted or "") if cfg else ""
+    except ValueError:
+        raise HTTPException(
+            503, "用户语音 Key 无法解密，请恢复原加密密钥或重新填写语音 Key"
         ) from None
 
 
@@ -66,6 +102,24 @@ def save_config(
     cfg.model = body.model.strip()
     if body.api_key.strip():
         cfg.api_key_encrypted = encrypt_secret(body.api_key.strip())
+    if body.voice_enabled is not None:
+        cfg.voice_enabled = body.voice_enabled
+    if body.voice_base_url is not None:
+        cfg.voice_base_url = (
+            validate_ai_base_url(body.voice_base_url)
+            if body.voice_base_url.strip()
+            else ""
+        )
+    if body.voice_stt_model is not None:
+        cfg.voice_stt_model = body.voice_stt_model.strip() or settings.voice_stt_model
+    if body.voice_tts_model is not None:
+        cfg.voice_tts_model = body.voice_tts_model.strip() or settings.voice_tts_model
+    if body.voice_name is not None:
+        cfg.voice_name = body.voice_name.strip() or settings.voice_tts_voice
+    if body.voice_api_key is not None and body.voice_api_key.strip():
+        cfg.voice_api_key_encrypted = encrypt_secret(body.voice_api_key.strip())
+    if cfg.voice_enabled and not _stored_voice_key(cfg) and not _system_voice_configured():
+        raise HTTPException(400, "请填写语音 API Key，或先配置系统语音服务")
     db.add(cfg)
     db.commit()
     db.refresh(cfg)
@@ -111,3 +165,45 @@ async def test_config(body: AIConnectionTestIn, user=Depends(current_user)):
             503,
             "连接失败：请检查 Base URL、模型名、API Key 权限或网络状态。服务端不会回显密钥或上游原始错误。",
         )
+
+
+@router.post("/voice-test")
+async def test_voice_config(body: VoiceConnectionTestIn, user=Depends(current_user)):
+    cfg = user.ai_config
+    key = body.api_key.strip() or _stored_voice_key(cfg) or settings.voice_api_key.strip()
+    base_url = (
+        body.base_url.strip()
+        or (cfg.voice_base_url if cfg else "")
+        or settings.voice_api_base_url
+    )
+    model = (
+        body.tts_model.strip()
+        or (cfg.voice_tts_model if cfg else "")
+        or settings.voice_tts_model
+    )
+    voice_name = (
+        body.voice_name.strip()
+        or (cfg.voice_name if cfg else "")
+        or settings.voice_tts_voice
+    )
+    if not key or not base_url:
+        raise HTTPException(400, "请先填写语音 API Key 与 Base URL")
+    try:
+        provider = OpenAICompatibleVoiceProvider(
+            key,
+            validate_ai_base_url(base_url),
+            (cfg.voice_stt_model if cfg else "") or settings.voice_stt_model,
+            model,
+            voice_name,
+        )
+        audio = await provider.synthesize("连接成功")
+        return {
+            "ok": True,
+            "tts_model": model,
+            "voice_name": voice_name,
+            "content_type": audio.content_type,
+        }
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from None
+    except VoiceUnavailable as exc:
+        raise HTTPException(503, str(exc)) from None

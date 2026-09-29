@@ -5,6 +5,7 @@ Run with the repository Python environment (Pillow is required).
 """
 
 from pathlib import Path
+import sys
 
 from PIL import Image, ImageDraw
 
@@ -33,7 +34,32 @@ def line(draw, points, color, width=5, joint="curve"):
 
 
 def rounded(draw, box, radius, color, width=5, fill=None):
-    draw.rounded_rectangle(pt(box), radius=pt(radius), outline=color, width=pt(width), fill=fill)
+    scaled_box = pt(box)
+    scaled_radius = pt(radius)
+    scaled_width = pt(width)
+    if hasattr(draw, "rounded_rectangle"):
+        draw.rounded_rectangle(scaled_box, radius=scaled_radius, outline=color, width=scaled_width, fill=fill)
+        return
+
+    # Pillow 7.x compatibility for the lightweight visual-audit environment.
+    x0, y0, x1, y1 = scaled_box
+    r = scaled_radius
+    if fill is not None:
+        draw.rectangle((x0 + r, y0, x1 - r, y1), fill=fill)
+        draw.rectangle((x0, y0 + r, x1, y1 - r), fill=fill)
+        draw.ellipse((x0, y0, x0 + 2 * r, y0 + 2 * r), fill=fill)
+        draw.ellipse((x1 - 2 * r, y0, x1, y0 + 2 * r), fill=fill)
+        draw.ellipse((x0, y1 - 2 * r, x0 + 2 * r, y1), fill=fill)
+        draw.ellipse((x1 - 2 * r, y1 - 2 * r, x1, y1), fill=fill)
+    if color:
+        draw.line((x0 + r, y0, x1 - r, y0), fill=color, width=scaled_width)
+        draw.line((x0 + r, y1, x1 - r, y1), fill=color, width=scaled_width)
+        draw.line((x0, y0 + r, x0, y1 - r), fill=color, width=scaled_width)
+        draw.line((x1, y0 + r, x1, y1 - r), fill=color, width=scaled_width)
+        draw.arc((x0, y0, x0 + 2 * r, y0 + 2 * r), 180, 270, fill=color, width=scaled_width)
+        draw.arc((x1 - 2 * r, y0, x1, y0 + 2 * r), 270, 360, fill=color, width=scaled_width)
+        draw.arc((x0, y1 - 2 * r, x0 + 2 * r, y1), 90, 180, fill=color, width=scaled_width)
+        draw.arc((x1 - 2 * r, y1 - 2 * r, x1, y1), 0, 90, fill=color, width=scaled_width)
 
 
 def ellipse(draw, box, color, width=5, fill=None):
@@ -99,9 +125,38 @@ TAB_DRAWERS = {
 }
 
 
+def tab_gym(draw, color):
+    line(draw, [(27, 48), (69, 48)], color, 6)
+    rounded(draw, (18, 34, 29, 62), 4, color, 5)
+    rounded(draw, (67, 34, 78, 62), 4, color, 5)
+    line(draw, [(13, 40), (13, 56)], color, 5)
+    line(draw, [(83, 40), (83, 56)], color, 5)
+
+
+def tab_dashboard(draw, color):
+    rounded(draw, (19, 19, 43, 43), 7, color, 4)
+    rounded(draw, (53, 19, 77, 43), 7, color, 4)
+    rounded(draw, (19, 53, 43, 77), 7, color, 4)
+    rounded(draw, (53, 53, 77, 77), 7, color, 4, fill=color)
+
+
+def tab_steward(draw, color):
+    rounded(draw, (17, 20, 79, 73), 22, color)
+    line(draw, [(34, 72), (27, 82), (49, 73)], color)
+    spark(draw, color, radius=16, width=4)
+
+
+SHELL_TAB_DRAWERS = {
+    "gym": tab_gym,
+    "dashboard": tab_dashboard,
+    "steward": tab_steward,
+}
+
+
 def save(image, path, size):
     path.parent.mkdir(parents=True, exist_ok=True)
-    image.resize((size, size), Image.Resampling.LANCZOS).save(path, optimize=True)
+    resampling = Image.Resampling.LANCZOS if hasattr(Image, "Resampling") else Image.LANCZOS
+    image.resize((size, size), resampling).save(path, optimize=True)
 
 
 def generate_tabs():
@@ -112,6 +167,15 @@ def generate_tabs():
             if active:
                 draw.ellipse(pt((72, 14, 84, 26)), fill=LIME)
                 draw.ellipse(pt((75, 17, 81, 23)), fill=INK)
+            suffix = "-active" if active else ""
+            save(image, ROOT / "tabbar" / f"{name}{suffix}.png", 81)
+
+
+def generate_shell_tabs():
+    for name, draw_icon in SHELL_TAB_DRAWERS.items():
+        for active in (False, True):
+            image, draw = canvas()
+            draw_icon(draw, INK if active else MUTED)
             suffix = "-active" if active else ""
             save(image, ROOT / "tabbar" / f"{name}{suffix}.png", 81)
 
@@ -296,6 +360,52 @@ def icon_warning(draw, color):
     ellipse(draw, (45, 63, 51, 69), color, 2, fill=color)
 
 
+def icon_agent_xiaojian(draw, color):
+    """Direct, energetic coach: a compact dumbbell on the brand lime."""
+    draw.ellipse(pt((8, 8, 88, 88)), fill=LIME)
+    line(draw, [(31, 48), (65, 48)], color, 6)
+    rounded(draw, (20, 33, 31, 63), 4, color, 5)
+    rounded(draw, (65, 33, 76, 63), 4, color, 5)
+    line(draw, [(15, 39), (15, 57)], color, 5)
+    line(draw, [(81, 39), (81, 57)], color, 5)
+
+
+def icon_agent_xiaokang(draw, color):
+    """Gentle wellbeing companion: a calm two-leaf sprout."""
+    draw.ellipse(pt((8, 8, 88, 88)), fill="#e9efd9")
+    line(draw, [(48, 72), (48, 45)], GREEN, 4)
+    left_leaf = [(47, 57), (35, 38), (19, 34), (23, 50), (36, 60), (47, 61)]
+    right_leaf = [(49, 51), (59, 29), (78, 25), (73, 43), (59, 53), (49, 55)]
+    draw.polygon([pt(item) for item in left_leaf], fill=LIME)
+    draw.polygon([pt(item) for item in right_leaf], fill="#a8c84f")
+    line(draw, left_leaf + [left_leaf[0]], GREEN, 3)
+    line(draw, right_leaf + [right_leaf[0]], GREEN, 3)
+    line(draw, [(48, 55), (34, 45)], GREEN, 3)
+    line(draw, [(49, 50), (64, 38)], GREEN, 3)
+
+
+def icon_agent_steward(draw, color):
+    """General health steward: the HealthMate compass spark."""
+    draw.ellipse(pt((8, 8, 88, 88)), fill="#ffffff", outline="#e5e8dc", width=pt(3))
+    spark(draw, GREEN, radius=24, width=4)
+    draw.ellipse(pt((42, 42, 54, 54)), fill=LIME)
+
+
+def icon_microphone(draw, color):
+    """Optically balanced microphone for a small circular touch target."""
+    rounded(draw, (35, 17, 61, 57), 13, color, 5)
+    draw.arc(pt((25, 34, 71, 72)), 0, 180, fill=color, width=pt(5))
+    line(draw, [(48, 71), (48, 80)], color, 5)
+    line(draw, [(36, 80), (60, 80)], color, 5)
+
+
+def icon_speaker(draw, color):
+    """Compact playback glyph, distinct from the activity waveform."""
+    draw.polygon([pt((23, 41)), pt((35, 41)), pt((51, 28)), pt((51, 68)), pt((35, 55)), pt((23, 55))], fill=color)
+    draw.arc(pt((45, 31, 71, 65)), 292, 68, fill=color, width=pt(4))
+    draw.arc(pt((44, 22, 82, 74)), 292, 68, fill=color, width=pt(4))
+
+
 ICON_DRAWERS = {
     "spark": icon_spark,
     "settings": icon_settings,
@@ -327,6 +437,11 @@ ICON_DRAWERS = {
     "calories": icon_calories,
     "breathe": icon_breathe,
     "warning": icon_warning,
+    "agent-xiaojian": icon_agent_xiaojian,
+    "agent-xiaokang": icon_agent_xiaokang,
+    "agent-steward": icon_agent_steward,
+    "mic": icon_microphone,
+    "speaker": icon_speaker,
 }
 
 
@@ -338,6 +453,11 @@ def generate_interface_icons():
 
 
 if __name__ == "__main__":
-    generate_tabs()
-    generate_interface_icons()
-    print("Generated HealthMate tab and interface icons.")
+    if "--shell-only" in sys.argv:
+        generate_shell_tabs()
+        print("Generated HealthMate navigation shell icons.")
+    else:
+        generate_tabs()
+        generate_shell_tabs()
+        generate_interface_icons()
+        print("Generated HealthMate tab and interface icons.")

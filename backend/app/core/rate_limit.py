@@ -28,6 +28,8 @@ class InMemoryRateLimiter:
             ("/api/v1/auth/", "auth", settings.rate_limit_auth_per_minute),
             ("/api/v1/chat", "ai", settings.rate_limit_ai_per_minute),
             ("/api/v1/agent/", "ai", settings.rate_limit_ai_per_minute),
+            ("/api/v1/harness/voice/", "ai", settings.rate_limit_ai_per_minute),
+            ("/api/v1/users/me/ai-config/voice-test", "ai", settings.rate_limit_ai_per_minute),
             ("/api/v1/vision/food-jobs", "ai", settings.rate_limit_ai_per_minute),
             ("/api/v1/vision/", "media", settings.rate_limit_media_per_minute),
             ("/api/v1/media/", "media", settings.rate_limit_media_per_minute),

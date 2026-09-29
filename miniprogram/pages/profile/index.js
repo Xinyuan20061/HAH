@@ -8,16 +8,16 @@ function initialOf(nickname) {
 }
 
 Page({
-  data: { loading: true, error: '', user: {}, profile: null, goalText: '', ai: { enabled: false, has_api_key: false, model: 'deepseek-chat' }, avatarSrc: '', initial: 'H', editing: false, nickDraft: '', saving: false },
+  data: { loading: true, error: '', user: {}, profile: null, goalText: '', avatarSrc: '', initial: 'H', editing: false, nickDraft: '', saving: false },
   onShow() { this.load() },
   async load() {
     const firstLoad = !this.data.user.id;
     if (firstLoad) this.setData({ loading: true, error: '' });
     try {
       await api.ensureToken();
-      let [u, p, a] = await Promise.all([api.get('/users/me'), api.get('/users/me/health-profile'), api.get('/users/me/ai-config')]);
+      let [u, p] = await Promise.all([api.get('/users/me'), api.get('/users/me/health-profile')]);
       let map = { lose: '减脂', maintain: '保持健康', gain: '增肌' };
-      this.setData({ loading: false, error: '', user: u, profile: p, ai: a, goalText: p ? map[p.goal_type] || p.goal_type : '', initial: initialOf(u.nickname) });
+      this.setData({ loading: false, error: '', user: u, profile: p, goalText: p ? map[p.goal_type] || p.goal_type : '', initial: initialOf(u.nickname) });
       this.applyAvatar(u.avatar_url);
       if (!u.nickname && !this._guided) {
         this._guided = true;
@@ -74,9 +74,8 @@ Page({
   },
   edit() { wx.navigateTo({ url: '/pages/profile/edit' }) },
   goals() { wx.navigateTo({ url: '/pages/goals/index' }) },
-  aiSettings() { wx.navigateTo({ url: '/pages/settings/ai/index' }) },
+  settings() { wx.navigateTo({ url: '/pages/settings/index' }) },
   trends() { wx.navigateTo({ url: '/pages/trends/index' }) },
   insights() { wx.navigateTo({ url: '/pages/insights/index' }) },
-  evaluation() { wx.navigateTo({ url: '/pages/evaluation/index' }) },
-  privacy() { wx.navigateTo({ url: '/pages/settings/privacy/index' }) }
+  evaluation() { wx.navigateTo({ url: '/pages/evaluation/index' }) }
 })

@@ -63,7 +63,7 @@ test('recording tools stay above analytics and use photo recognition with round 
 
 test('food photo save returns to the live records dashboard', () => {
   const script = read('pages/scan/index.js')
-  assert.match(script, /wx\.switchTab\(\{url:'\/pages\/records\/index'\}\)/)
+  assert.match(script, /wx\.redirectTo\(\{url:'\/pages\/records\/index'\}\)/)
 })
 
 test('records page rebinds the canvas after returning from seven-day trends', () => {

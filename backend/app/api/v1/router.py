@@ -19,6 +19,7 @@ from . import (
     resources,
     fitness,
     knowledge,
+    harness,
 )
 
 api_router = APIRouter()
@@ -42,5 +43,6 @@ for r in [
     resources.router,
     fitness.router,
     knowledge.router,
+    harness.router,
 ]:
     api_router.include_router(r)

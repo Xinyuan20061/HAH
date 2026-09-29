@@ -1,5 +1,19 @@
 # HealthMate 当前架构
 
+## Health Agent Harness
+
+当前产品入口是 Agent Workspace，核心运行时位于 `backend/app/harness/`。三位产品 Agent
+（小健、小康、小管家）属于用户人格层，共享 Router → Workers → Decision 多 Agent Kernel、
+Tool Registry、模型网关和安全层；页面只提交 `agent_id/message/channel` 并展示经过复核的结果。
+
+Router Agent 选择 1–3 个领域子 Agent；Planner、Coach、Nutritionist、Recovery、Records 和
+General 在最小权限工具视图中分别执行有界 ReAct。Decision Agent 汇总候选结论、消除冲突，
+是唯一形成最终答复的模型角色；proposal-only Action 仍必须等待用户确认。
+
+现有健康领域服务不会被复制进 Harness，而是通过工具适配器连接。只读工具可以在循环内执行；
+计划写入、目标调整、识餐保存、微实验和隐私操作注册为需要确认的 action，模型只能提出申请。
+完整设计见 `docs/HEALTH_AGENT_HARNESS.md`。
+
 微信小程序通过callContainer访问微信云托管FastAPI，登录使用一次性wx.login code换openid再签发JWT。公网入口供本机Worker主动轮询；CLOUD_HEADER_LOGIN_ENABLED=false，不能信任公网身份头。
 
 在线数据库为持久MySQL，生产storage=cloud_ref。小程序直传CloudBase，后端持久稳定fileID和临时URL；容器没有原媒体持久目录。DeepSeek负责文本对话/计划/摘要，也可由 Worker 作为识餐视觉 provider；图片会先校验、转正和压缩，Key仅通过 Worker 环境变量或后端密文配置使用。

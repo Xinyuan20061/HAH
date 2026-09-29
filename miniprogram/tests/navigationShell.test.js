@@ -1,0 +1,69 @@
+const { test } = require('node:test')
+const assert = require('node:assert/strict')
+const fs = require('node:fs')
+const path = require('node:path')
+
+const root = path.join(__dirname, '..')
+const read = file => fs.readFileSync(path.join(root, file), 'utf8')
+
+test('bottom shell exposes gym, dashboard launcher and steward only', () => {
+  const app = JSON.parse(read('app.json'))
+  const view = read('custom-tab-bar/index.wxml')
+  const style = read('custom-tab-bar/index.wxss')
+  const script = read('custom-tab-bar/index.js')
+
+  assert.equal(app.tabBar.custom, true)
+  assert.deepEqual(app.tabBar.list.map(item => item.text), ['健身房', '小管家'])
+  for (const label of ['健身房', '仪表盘', '小管家']) assert.match(view, new RegExp(label))
+  for (const action of ['records', 'plan', 'profile', 'settings', 'quick']) assert.match(view, new RegExp(`data-action="${action}"`))
+  for (const label of ['记录', '计划', '我的', '设置', '快速开始']) assert.match(view, new RegExp(label))
+  const actionOrder = [...view.matchAll(/data-action="([^"]+)"/g)].map(match => match[1])
+  assert.deepEqual(actionOrder, ['records', 'plan', 'quick', 'profile', 'settings'])
+  assert.match(script, /\/pages\/records\/index/)
+  assert.match(script, /\/pages\/plan\/index/)
+  assert.match(script, /\/pages\/profile\/index/)
+  assert.match(script, /\/pages\/settings\/index/)
+  assert.match(style, /\.dashboard-button \{[^}]*width:46rpx;[^}]*height:46rpx/)
+  assert.match(style, /\.tab-side image \{[^}]*width:46rpx;[^}]*height:46rpx/)
+  assert.match(style, /\.dashboard-button\.open \{[^}]*translateY\(-48rpx\) scale\(2\.2\)/)
+  assert.match(style, /\.wheel-menu\.open \.wheel-record/)
+  assert.match(style, /\.wheel-menu\.open \.wheel-settings/)
+  assert.match(style, /\.wheel-menu\.open \.wheel-quick \{[^}]*translate\(0,-200rpx\)/)
+  assert.match(style, /transition-delay:\.24s/)
+
+  for (const name of ['gym', 'gym-active', 'dashboard', 'dashboard-active', 'steward', 'steward-active']) {
+    assert.equal(fs.existsSync(path.join(root, 'assets', 'tabbar', `${name}.png`)), true)
+  }
+})
+
+test('gym inherits streaks and hosts the two voice companions', () => {
+  const script = read('pages/home/index.js')
+  const view = read('pages/home/index.wxml')
+  const style = read('pages/home/index.wxss')
+
+  assert.match(script, /\/health\/command-center/)
+  assert.match(view, /streak\.current/)
+  assert.match(view, /streak\.last7/)
+  assert.match(script, /xiaojian/)
+  assert.match(script, /xiaokang/)
+  assert.match(view, /bindtap="selectCompanion"/)
+  assert.match(view, /bindtouchstart="startVoice"/)
+  assert.match(script, /\/harness\/voice\/transcribe/)
+  assert.match(script, /\/harness\/voice\/synthesize/)
+  assert.match(script, /\/agent\/respond/)
+  assert.match(style, /\.voice-button \{[^}]*width:176rpx;[^}]*height:176rpx/)
+  assert.match(style, /@keyframes voiceRing/)
+  assert.doesNotMatch(view, /hero-img|heroImage/)
+})
+
+test('steward remains a focused tool-capable text workspace', () => {
+  const script = read('pages/chat/index.js')
+  const view = read('pages/chat/index.wxml')
+
+  assert.match(script, /id:\s*'steward'/)
+  assert.doesNotMatch(script, /xiaojian|xiaokang/)
+  assert.doesNotMatch(view, /agent-menu|toggleAgentMenu|selectAgent/)
+  assert.match(view, /agentPlan/)
+  assert.match(view, /applyAgentPlan/)
+  assert.match(view, /knowledgeSources/)
+})

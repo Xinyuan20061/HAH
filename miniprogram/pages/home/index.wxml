@@ -1,55 +1,45 @@
 <include src="/components/page-transition/first-paint.wxml"/>
 <page-transition/>
-<view class="home-page ui-page-content">
-  <block wx:if="{{loading}}"><view class="skeleton sk-hero"></view><view class="skeleton sk-start"></view></block>
-  <view wx:elif="{{error}}" class="load-error"><view class="error-title">暂时没有加载出来</view><view class="error-copy">{{error}}</view><button class="tappable" bindtap="retry" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">重新连接</button></view>
-
-  <block wx:else>
-    <view class="hero">
-      <image wx:if="{{heroImage && !heroImageError}}" class="hero-img" src="{{heroImage}}" mode="aspectFill" binderror="onHeroError"/>
-      <view class="hero-scrim"></view>
-      <view class="hero-fade"></view>
-
-      <view class="hero-content">
-        <view class="hero-top">
-          <view class="hero-date">{{dateLabel}}</view>
-          <view class="hero-orb ui-fixed-circle tappable" hover-class="hero-orb-hover" hover-start-time="0" hover-stay-time="80" bindtap="toCheckin" aria-label="记录今天"><image src="/assets/icons/add.png" mode="aspectFit"/></view>
-        </view>
-        <view class="hero-mid">
-          <view class="hero-num-row"><text class="hero-num">{{streak.current||0}}</text><text class="hero-unit">天</text></view>
-          <view class="hero-chip">坚持天数</view>
-        </view>
-        <view class="hero-week">
-          <view wx:for="{{streak.last7}}" wx:key="date" class="week-dot {{item.done?'on':''}}"><view class="dot-core"></view><text>{{item.label}}</text></view>
-        </view>
+<view class="gym-page ui-page-content">
+  <scroll-view scroll-y class="gym-scroll">
+    <view class="gym-content">
+      <block wx:if="{{loading}}">
+        <view class="skeleton skeleton-head"></view><view class="skeleton skeleton-stage"></view><view class="skeleton skeleton-voice"></view>
+      </block>
+      <view wx:elif="{{error}}" class="load-error">
+        <view class="error-title">暂时没有加载出来</view><view class="error-copy">{{error}}</view><button class="tappable" bindtap="retry" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">重新连接</button>
       </view>
+      <block wx:else>
+        <view class="gym-head">
+          <view><view class="date-label">{{dateLabel}}</view><view class="gym-title">健身房</view></view>
+          <view class="streak-mark"><text class="streak-number">{{streak.current||0}}</text><text>天</text></view>
+        </view>
+        <view class="week-strip">
+          <view class="week-day {{item.done?'done':''}}" wx:for="{{streak.last7}}" wx:key="date"><view class="week-core"></view><text>{{item.label}}</text></view>
+        </view>
+        <view class="companion-switch">
+          <view class="companion-choice tappable {{item.id===activeCompanion.id?'selected':''}}" wx:for="{{companions}}" wx:key="id" data-id="{{item.id}}" bindtap="selectCompanion" hover-class="tap" hover-start-time="0" hover-stay-time="80">
+            <image src="{{item.icon}}" mode="aspectFit"/><view><view class="choice-name">{{item.name}}</view><view class="choice-role">{{item.role}}</view></view>
+          </view>
+        </view>
+        <view class="companion-stage">
+          <view class="stage-orbit orbit-one"></view><view class="stage-orbit orbit-two"></view>
+          <view class="companion-avatar ui-fixed-circle"><image src="{{activeCompanion.icon}}" mode="aspectFit"/></view>
+          <view class="companion-name">{{activeCompanion.name}}</view>
+          <view class="companion-greeting">{{activeCompanion.greeting}}</view>
+          <view wx:if="{{voiceWorking}}" class="agent-thinking"><view></view><view></view><view></view></view>
+          <view wx:if="{{response}}" class="voice-response">
+            <view class="heard-text">“{{response.heard}}”</view>
+            <view class="reply-row"><view class="reply-text">{{response.reply}}</view><view class="replay-button ui-fixed-circle tappable" bindtap="replay" hover-class="tap" hover-start-time="0" hover-stay-time="80" aria-label="重新播放"><image src="/assets/icons/speaker.png" mode="aspectFit"/></view></view>
+            <view wx:if="{{response.action}}" class="response-action tappable" bindtap="runResponseAction" hover-class="tap" hover-start-time="0" hover-stay-time="80">{{response.applied?'查看计划':response.action.label}}</view>
+          </view>
+        </view>
+        <view class="voice-zone">
+          <view class="voice-ring {{recording?'recording':''}}"></view>
+          <view class="voice-button ui-fixed-circle tappable {{recording?'recording':''}} {{voiceWorking?'working':''}}" bindtouchstart="startVoice" bindtouchend="stopVoice" bindtouchcancel="cancelVoice" hover-class="voice-button-press" hover-start-time="0" hover-stay-time="80" aria-label="按住与健康伙伴说话"><image src="/assets/icons/mic.png" mode="aspectFit"/></view>
+          <view class="voice-status">{{voiceStatus}}</view>
+        </view>
+      </block>
     </view>
-
-    <view class="start-area">
-      <view class="start-btn" hover-class="start-btn-hover" hover-stay-time="120" bindtap="openNav">开始</view>
-    </view>
-  </block>
-</view>
-
-<view class="nav-mask {{navOpen?'on':''}} tappable" bindtap="closeNav" hover-class="tap" hover-start-time="0" hover-stay-time="80"></view>
-<view class="nav-sheet {{navOpen?'on':''}}">
-  <view class="sheet-head"><view class="sheet-title">想做什么？</view><view class="sheet-close ui-icon-box ui-fixed-circle soft tappable" bindtap="closeNav" hover-class="tap" hover-start-time="0" hover-stay-time="80" aria-label="关闭"><image class="ui-icon-image" src="/assets/icons/close.png" mode="aspectFit"/></view></view>
-  <view class="sheet-grid">
-    <view class="sheet-item tappable" wx:for="{{navItems}}" wx:key="key" data-route="{{item.route}}" bindtap="openNavItem" style="transition-delay:{{navOpen?index*35:0}}ms" hover-class="tap" hover-start-time="0" hover-stay-time="80">
-      <view class="si-orb-wrap">
-        <view class="si-orb ui-fixed-circle"><image src="{{item.icon}}" mode="aspectFit"/></view>
-        <view wx:if="{{item.key==='insights'&&insightCount}}" class="si-badge">{{insightCount}}</view>
-      </view>
-      <text>{{item.label}}</text>
-    </view>
-  </view>
-</view>
-
-<view wx:if="{{showOnboarding}}" class="onboarding-mask">
-  <view class="onboarding-card compact-onboarding">
-    <view class="ob-kicker">欢迎使用 HealthMate</view>
-    <view class="ob-title">从今天开始</view>
-    <view class="ob-points"><view>先记录</view><view>再确认</view><view>随时可删除</view></view>
-    <button class="tappable" bindtap="finishOnboarding" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">进入首页</button>
-  </view>
+  </scroll-view>
 </view>

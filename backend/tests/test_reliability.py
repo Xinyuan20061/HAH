@@ -987,6 +987,67 @@ def test_user_key_is_encrypted_and_not_returned(api, migrated_engine):
         assert user.ai_config.api_key_encrypted != value
 
 
+def test_user_voice_key_is_encrypted_and_returned_as_hint_only(api, migrated_engine):
+    value = "voice-private-key-value"
+    response = api.put(
+        "/api/v1/users/me/ai-config",
+        json={
+            "enabled": False,
+            "voice_enabled": True,
+            "voice_base_url": "https://voice.example.com/v1",
+            "voice_stt_model": "whisper-1",
+            "voice_tts_model": "tts-1",
+            "voice_name": "alloy",
+            "voice_api_key": value,
+        },
+    )
+    assert response.status_code == 200
+    assert response.json()["has_voice_api_key"] is True
+    assert value not in response.text
+    assert value not in api.get("/api/v1/users/me/ai-config").text
+    with Session(migrated_engine) as db:
+        user = db.get(User, api.user_id)
+        assert user.ai_config.voice_api_key_encrypted != value
+
+
+def test_saved_voice_config_can_be_tested_without_returning_audio(api, monkeypatch):
+    response = api.put(
+        "/api/v1/users/me/ai-config",
+        json={
+            "enabled": False,
+            "voice_enabled": True,
+            "voice_base_url": "https://voice.example.com/v1",
+            "voice_stt_model": "whisper-1",
+            "voice_tts_model": "tts-1",
+            "voice_name": "alloy",
+            "voice_api_key": "voice-test-secret",
+        },
+    )
+    assert response.status_code == 200
+
+    class FakeVoiceProvider:
+        def __init__(self, api_key, base_url, stt_model, tts_model, voice):
+            assert api_key == "voice-test-secret"
+            assert base_url == "https://voice.example.com/v1"
+            assert tts_model == "tts-1"
+            assert voice == "alloy"
+
+        async def synthesize(self, text):
+            from app.harness.voice import SpeechAudio
+
+            assert text == "连接成功"
+            return SpeechAudio(b"private-audio")
+
+    from app.api.v1 import ai_config
+
+    monkeypatch.setattr(ai_config, "OpenAICompatibleVoiceProvider", FakeVoiceProvider)
+    tested = api.post("/api/v1/users/me/ai-config/voice-test", json={})
+    assert tested.status_code == 200
+    assert tested.json()["ok"] is True
+    assert "audio_base64" not in tested.text
+    assert "private-audio" not in tested.text
+
+
 def test_utc_normalizes_aware_and_naive_without_schema_change():
     aware = datetime(2026, 1, 1, 8, tzinfo=timezone(timedelta(hours=8)))
     assert naive_utc(aware) == datetime(2026, 1, 1)

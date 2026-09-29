@@ -15,6 +15,7 @@ SENSITIVE_KEYS = {
     "wechat_app_secret",
     "s3_secret_key",
     "api_key_encrypted",
+    "voice_api_key_encrypted",
 }
 
 

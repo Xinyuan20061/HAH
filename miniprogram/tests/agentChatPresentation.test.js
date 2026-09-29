@@ -5,9 +5,10 @@ const path = require('node:path')
 
 const root = path.join(__dirname, '..')
 
-test('tab bar uses a complete normal and selected icon set', () => {
+test('custom tab shell keeps complete primary-route icon metadata', () => {
   const app = JSON.parse(fs.readFileSync(path.join(root, 'app.json'), 'utf8'))
-  assert.equal(app.tabBar.list.length, 5)
+  assert.equal(app.tabBar.custom, true)
+  assert.equal(app.tabBar.list.length, 2)
   for (const item of app.tabBar.list) {
     assert.ok(item.iconPath)
     assert.ok(item.selectedIconPath)
@@ -24,9 +25,15 @@ test('agent chat uses icon actions, token pacing and a stop state', () => {
 
   assert.match(script, /TOKEN_TICK_MS/)
   assert.match(script, /\/agent\/respond\/stream/)
+  assert.doesNotMatch(script, /\/chat\/stream/)
+  assert.match(script, /agent_id: activeAgent\.id/)
+  assert.match(script, /steward/)
+  assert.doesNotMatch(script, /xiaojian|xiaokang/)
   assert.match(script, /queueTokens/)
   assert.match(script, /stopGeneration/)
   assert.match(view, /assets\/icons\/settings\.png/)
+  assert.doesNotMatch(view, /<picker/)
+  assert.doesNotMatch(view, /agent-menu|toggleAgentMenu|selectAgent/)
   assert.match(view, /assets\/icons\/send\.png/)
   assert.match(view, /class="composer-input"/)
   assert.match(view, /class="thinking-dots"/)
@@ -43,4 +50,8 @@ test('agent chat uses icon actions, token pacing and a stop state', () => {
   assert.doesNotMatch(view, /<button[^>]*class="[^"]*\bicon-copy\b/)
   assert.match(style, /\.icon-copy \{[^}]*width:52rpx;[^}]*max-width:52rpx;[^}]*height:52rpx;[^}]*max-height:52rpx;[^}]*flex:0 0 52rpx/)
   assert.match(config, /USE_STREAMING:\s*true/)
+
+  for (const icon of ['agent-steward.png']) {
+    assert.ok(fs.existsSync(path.join(root, 'assets', 'icons', icon)), `missing ${icon}`)
+  }
 })

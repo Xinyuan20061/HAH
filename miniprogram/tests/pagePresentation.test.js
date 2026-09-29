@@ -29,12 +29,11 @@ test('food and motion result views retain correction, details, goals and six act
 test('home and profile expose proactive health reminders', () => {
   const home = page('home')
   const profile = page('profile')
-  // 首页提醒入口现在是数据驱动的导航项（NAV_ITEMS + 弹层渲染），不再是一个固定 bindtap，
-  // 因此同时校验「导航表里有 insights 条目」和「模板确实把这个列表渲染出来」。
-  const homeScript = fs.readFileSync(path.join(__dirname, '..', 'pages', 'home', 'index.js'), 'utf8')
-  assert.match(homeScript, /label:\s*'健康提醒'[\s\S]{0,90}route:\s*'\/pages\/insights\/index'/)
-  assert.match(home, /wx:for="\{\{navItems\}\}"/)
-  assert.match(home, /insightCount/)
+  const shellScript = fs.readFileSync(path.join(__dirname, '..', 'custom-tab-bar', 'index.js'), 'utf8')
+  const shell = fs.readFileSync(path.join(__dirname, '..', 'custom-tab-bar', 'index.wxml'), 'utf8')
+  assert.match(shellScript, /label:\s*'健康提醒'[\s\S]{0,90}route:\s*'\/pages\/insights\/index'/)
+  assert.match(shell, /wx:for="\{\{quickItems\}\}"/)
+  assert.match(home, /streak\.last7/)
   assert.match(profile, /bindtap="insights"/)
 })
 

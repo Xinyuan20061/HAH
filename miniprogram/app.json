@@ -17,6 +17,7 @@
     "pages/records/exercise",
     "pages/checkin/index",
     "pages/trends/index",
+    "pages/settings/index",
     "pages/settings/ai/index",
     "pages/evaluation/index",
     "pages/settings/privacy/index"
@@ -32,6 +33,7 @@
     "page-transition": "/components/page-transition/index"
   },
   "tabBar": {
+    "custom": true,
     "color": "#8E9389",
     "selectedColor": "#111613",
     "backgroundColor": "#FFFFFF",
@@ -39,33 +41,15 @@
     "list": [
       {
         "pagePath": "pages/home/index",
-        "text": "首页",
-        "iconPath": "assets/tabbar/home.png",
-        "selectedIconPath": "assets/tabbar/home-active.png"
+        "text": "健身房",
+        "iconPath": "assets/tabbar/gym.png",
+        "selectedIconPath": "assets/tabbar/gym-active.png"
       },
       {
         "pagePath": "pages/chat/index",
-        "text": "助手",
-        "iconPath": "assets/tabbar/agent.png",
-        "selectedIconPath": "assets/tabbar/agent-active.png"
-      },
-      {
-        "pagePath": "pages/records/index",
-        "text": "记录",
-        "iconPath": "assets/tabbar/records.png",
-        "selectedIconPath": "assets/tabbar/records-active.png"
-      },
-      {
-        "pagePath": "pages/plan/index",
-        "text": "计划",
-        "iconPath": "assets/tabbar/plan.png",
-        "selectedIconPath": "assets/tabbar/plan-active.png"
-      },
-      {
-        "pagePath": "pages/profile/index",
-        "text": "我的",
-        "iconPath": "assets/tabbar/profile.png",
-        "selectedIconPath": "assets/tabbar/profile-active.png"
+        "text": "小管家",
+        "iconPath": "assets/tabbar/steward.png",
+        "selectedIconPath": "assets/tabbar/steward-active.png"
       }
     ]
   },

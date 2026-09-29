@@ -36,6 +36,15 @@ class Settings(BaseSettings):
     local_llm_max_new_tokens: int = Field(default=200, ge=16, le=512)
     local_llm_timeout_seconds: float = Field(default=45.0, ge=5, le=180)
 
+    # Optional OpenAI-compatible speech gateway used by voice-capable agents.
+    # Text chat remains available when this is not configured.
+    voice_api_key: str = ""
+    voice_api_base_url: str = ""
+    voice_stt_model: str = "whisper-1"
+    voice_tts_model: str = "tts-1"
+    voice_tts_voice: str = "alloy"
+    voice_max_audio_bytes: int = Field(default=8 * 1024 * 1024, ge=10000, le=20 * 1024 * 1024)
+
     # WeChat / CloudBase
     wechat_app_id: str = ""
     wechat_app_secret: str = ""
@@ -119,6 +128,10 @@ class Settings(BaseSettings):
             errors.append("STORAGE_BACKEND: 使用 local、cloud_ref 或 s3。")
         if self.food_route_default.lower() not in {"cloud", "worker"}:
             errors.append("FOOD_ROUTE_DEFAULT: 使用 cloud 或 worker。")
+        if bool(self.voice_api_key.strip()) != bool(self.voice_api_base_url.strip()):
+            errors.append("VOICE_API_KEY 与 VOICE_API_BASE_URL 必须同时配置或同时留空。")
+        if self.is_production and self.voice_api_base_url.strip() and not self.voice_api_base_url.startswith("https://"):
+            errors.append("VOICE_API_BASE_URL: production 必须使用 HTTPS。")
         try:
             dialect = make_url(self.effective_database_url).get_backend_name()
             driver = make_url(self.effective_database_url).get_driver_name()
@@ -188,6 +201,7 @@ class Settings(BaseSettings):
             "storage_backend": self.storage_backend,
             "port": self.port,
             "worker_enabled": self.worker_enabled,
+            "voice_enabled": bool(self.voice_api_key.strip() and self.voice_api_base_url.strip()),
             "run_migrations_on_start": self.run_migrations_on_start,
         }
 

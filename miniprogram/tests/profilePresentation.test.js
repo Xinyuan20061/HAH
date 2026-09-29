@@ -28,10 +28,12 @@ test('profile avatars keep a circular one-to-one crop in both surfaces', () => {
   assert.match(style, /\.avatar-picker\{[^}]*position:absolute;[^}]*width:100%;[^}]*height:100%;[^}]*opacity:0/)
 })
 
-test('low frequency profile settings are compact round utilities', () => {
+test('profile delegates low frequency preferences to one settings entry', () => {
   const view = read('pages/profile/index.wxml')
   const style = read('pages/profile/index.wxss')
-  assert.match(view, /class="utility-grid"/)
-  for (const label of ['回答偏好', '隐私安全', '运行评测']) assert.match(view, new RegExp(label))
-  assert.match(style, /\.utility-orb\{[^}]*width:72rpx;[^}]*height:72rpx;[^}]*border-radius:50%/)
+  assert.match(view, /class="settings-entry tappable"/)
+  assert.match(view, /bindtap="settings"/)
+  assert.match(view, />设置</)
+  assert.doesNotMatch(view, /回答偏好|隐私安全|运行评测/)
+  assert.match(style, /\.settings-orb\{[^}]*width:64rpx;[^}]*height:64rpx;[^}]*border-radius:50%/)
 })

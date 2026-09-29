@@ -186,6 +186,12 @@ def build_export_zip(db: Session, user_id: int) -> bytes:
             "base_url": cfg.base_url,
             "model": cfg.model,
             "has_api_key": bool(cfg.api_key_encrypted),
+            "voice_enabled": cfg.voice_enabled,
+            "voice_base_url": cfg.voice_base_url,
+            "voice_stt_model": cfg.voice_stt_model,
+            "voice_tts_model": cfg.voice_tts_model,
+            "voice_name": cfg.voice_name,
+            "has_voice_api_key": bool(cfg.voice_api_key_encrypted),
         }
         if cfg
         else None

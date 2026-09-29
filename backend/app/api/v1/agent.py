@@ -44,6 +44,7 @@ from app.services.agent.experiments import (
     variant_history,
     EXPERIMENT_VERSION,
 )
+from app.harness.personas import list_personas
 
 router = APIRouter(prefix="/agent", tags=["health-agent"])
 
@@ -232,6 +233,11 @@ def action_registry(user=Depends(current_user)):
     }
 
 
+@router.get("/profiles")
+def agent_profiles(user=Depends(current_user)):
+    return {"agents": list_personas(), "default_agent_id": "steward"}
+
+
 @router.get("/decisions/{decision_id}")
 def decision_ledger(
     decision_id: str,
@@ -266,7 +272,7 @@ def stats(user=Depends(current_user), db: Session = Depends(get_db), days: int =
 async def agent_respond(
     body: AgentRequest, user=Depends(current_user), db: Session = Depends(get_db)
 ):
-    return await respond(db, user, body.message)
+    return await respond(db, user, body.message, body.agent_id, body.channel)
 
 
 @router.post("/respond/stream")
@@ -281,7 +287,7 @@ async def agent_respond_stream(
     plan while text is still appearing.
     """
 
-    result = await respond(db, user, body.message)
+    result = await respond(db, user, body.message, body.agent_id, body.channel)
     reply = str(result.get("reply") or "")
     final_result = {key: value for key, value in result.items() if key != "reply"}
 
@@ -291,6 +297,7 @@ async def agent_respond_stream(
                 "type": "meta",
                 "intent": result.get("intent"),
                 "safety_level": result.get("safety_level", "normal"),
+                "agent": result.get("agent"),
             },
             ensure_ascii=False,
         ) + "\n"

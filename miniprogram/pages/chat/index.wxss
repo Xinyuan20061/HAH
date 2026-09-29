@@ -7,6 +7,8 @@
 }
 
 .agent-bar {
+  position: relative;
+  z-index: 30;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -161,7 +163,7 @@
 .rec-support {margin-top: 8rpx;color: #506336;font-size: 17rpx;}
 
 .bottom-space {height: 24rpx;}
-.composer-wrap {padding:12rpx 32rpx calc(12rpx + env(safe-area-inset-bottom));background:rgba(255,255,255,.96);border-top:1rpx solid #eeeee6;}
+.composer-wrap {padding:12rpx 32rpx calc(136rpx + env(safe-area-inset-bottom));background:rgba(255,255,255,.96);border-top:1rpx solid #eeeee6;}
 .composer {display:flex;align-items:center;gap:8rpx;width:100%;box-sizing:border-box;padding:8rpx 8rpx 8rpx 24rpx;border:1rpx solid #eeeee6;border-radius:999rpx;background:#f7f7f2;}
 .composer.focused {border-color: #c4e267;background: #fff;box-shadow: 0 0 0 8rpx rgba(196,226,103,.16);}
 .composer-input {flex:9;min-width:0;min-height:64rpx;max-height:180rpx;box-sizing:border-box;padding:12rpx 0;font-size:25rpx;line-height:1.5;}

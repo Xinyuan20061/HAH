@@ -1,0 +1,50 @@
+<include src="/components/page-transition/first-paint.wxml"/>
+<page-transition/>
+<view class="page settings-page ui-page-content">
+  <view class="settings-head">
+    <view class="eyebrow">HEALTH HARNESS</view>
+    <view class="page-title">设置</view>
+  </view>
+
+  <view wx:if="{{loading}}" class="state-card"><view class="state-spinner"></view><view class="state-title">正在同步设置</view></view>
+  <view wx:elif="{{error}}" class="state-card state-card-error"><view class="grow"><view class="state-title">设置暂时无法读取</view><view class="state-desc">{{error}}</view></view><button class="retry-btn tappable" bindtap="retry" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">重试</button></view>
+
+  <block wx:else>
+    <view class="service-panel setting-enter">
+      <view class="service-top">
+        <view><view class="panel-kicker">智能服务</view><view class="panel-title">连接状态</view></view>
+        <view class="backend-dot {{backendOnline?'on':''}}"></view>
+      </view>
+      <view class="service-grid">
+        <view class="service-item tappable" bindtap="aiSettings" hover-class="tap-card" hover-start-time="0" hover-stay-time="80">
+          <view class="service-orb ui-fixed-circle"><image src="/assets/icons/spark.png" mode="aspectFit"/></view>
+          <view class="service-name">文字模型</view><view class="service-state {{services.textReady?'ready':''}}">{{services.textLabel}}</view>
+        </view>
+        <view class="service-item tappable" bindtap="voiceSettings" hover-class="tap-card" hover-start-time="0" hover-stay-time="80">
+          <view class="service-orb ui-fixed-circle voice"><image src="/assets/icons/speaker.png" mode="aspectFit"/></view>
+          <view class="service-name">语音服务</view><view class="service-state {{services.voiceReady?'ready':''}}">{{services.voiceLabel}}</view>
+        </view>
+      </view>
+    </view>
+
+    <view class="section-title">陪伴偏好</view>
+    <view class="preference-panel setting-enter delay-one">
+      <view class="preference-row">
+        <view><view class="row-title">默认陪伴</view></view>
+        <view class="companion-switch">
+          <view class="companion tappable {{isXiaojian?'active':''}}" data-id="xiaojian" bindtap="chooseCompanion" hover-class="tap" hover-start-time="0" hover-stay-time="80"><image src="/assets/icons/agent-xiaojian.png" mode="aspectFit"/><text>小健</text></view>
+          <view class="companion tappable {{isXiaokang?'active':''}}" data-id="xiaokang" bindtap="chooseCompanion" hover-class="tap" hover-start-time="0" hover-stay-time="80"><image src="/assets/icons/agent-xiaokang.png" mode="aspectFit"/><text>小康</text></view>
+        </view>
+      </view>
+      <view class="preference-row divider-row"><view class="row-title">自动播放回答</view><switch checked="{{voiceAutoplay}}" bindchange="toggleAutoplay" color="#506336"/></view>
+    </view>
+
+    <view class="section-title">账户与健康</view>
+    <view class="settings-list setting-enter delay-two">
+      <view class="settings-row tappable" bindtap="goals" hover-class="tap-card" hover-start-time="0" hover-stay-time="80"><view class="row-icon ui-fixed-circle"><image src="/assets/icons/target.png" mode="aspectFit"/></view><view class="row-title grow">健康目标</view><image class="row-arrow" src="/assets/icons/chevron.png" mode="aspectFit"/></view>
+      <view class="settings-row tappable" bindtap="editProfile" hover-class="tap-card" hover-start-time="0" hover-stay-time="80"><view class="row-icon ui-fixed-circle"><image src="/assets/icons/profile-card.png" mode="aspectFit"/></view><view class="row-title grow">身体档案</view><image class="row-arrow" src="/assets/icons/chevron.png" mode="aspectFit"/></view>
+      <view class="settings-row tappable" bindtap="privacy" hover-class="tap-card" hover-start-time="0" hover-stay-time="80"><view class="row-icon ui-fixed-circle"><image src="/assets/icons/shield.png" mode="aspectFit"/></view><view class="row-title grow">隐私与数据</view><image class="row-arrow" src="/assets/icons/chevron.png" mode="aspectFit"/></view>
+      <view class="settings-row tappable last" bindtap="evaluation" hover-class="tap-card" hover-start-time="0" hover-stay-time="80"><view class="row-icon ui-fixed-circle"><image src="/assets/icons/report.png" mode="aspectFit"/></view><view class="row-title grow">运行评测</view><image class="row-arrow" src="/assets/icons/chevron.png" mode="aspectFit"/></view>
+    </view>
+  </block>
+</view>

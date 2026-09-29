@@ -1,0 +1,43 @@
+<view class="tab-backdrop tappable {{wheelOpen||quickOpen?'on':''}}" bindtap="closePanels" hover-class="tap" hover-start-time="0" hover-stay-time="80"></view>
+
+<view class="wheel-menu {{wheelOpen?'open':''}}">
+  <view class="wheel-item wheel-record tappable" data-action="records" bindtap="openWheelAction" hover-class="tap" hover-start-time="0" hover-stay-time="80">
+    <view class="wheel-orb fixed-circle"><image src="/assets/tabbar/records-active.png" mode="aspectFit"/></view><text>记录</text>
+  </view>
+  <view class="wheel-item wheel-plan tappable" data-action="plan" bindtap="openWheelAction" hover-class="tap" hover-start-time="0" hover-stay-time="80">
+    <view class="wheel-orb fixed-circle"><image src="/assets/icons/calendar.png" mode="aspectFit"/></view><text>计划</text>
+  </view>
+  <view class="wheel-item wheel-quick tappable" data-action="quick" bindtap="openWheelAction" hover-class="tap" hover-start-time="0" hover-stay-time="80">
+    <view class="wheel-orb fixed-circle lime"><image src="/assets/icons/add.png" mode="aspectFit"/></view><text>快速开始</text>
+  </view>
+  <view class="wheel-item wheel-profile tappable" data-action="profile" bindtap="openWheelAction" hover-class="tap" hover-start-time="0" hover-stay-time="80">
+    <view class="wheel-orb fixed-circle"><image src="/assets/icons/profile-card.png" mode="aspectFit"/></view><text>我的</text>
+  </view>
+  <view class="wheel-item wheel-settings tappable" data-action="settings" bindtap="openWheelAction" hover-class="tap" hover-start-time="0" hover-stay-time="80">
+    <view class="wheel-orb fixed-circle"><image src="/assets/icons/settings.png" mode="aspectFit"/></view><text>设置</text>
+  </view>
+</view>
+
+<view class="tab-shell">
+  <view class="tab-side tappable {{selected===0?'selected':''}}" data-key="gym" bindtap="switchPrimary" hover-class="tap" hover-start-time="0" hover-stay-time="80">
+    <image src="{{selected===0?'/assets/tabbar/gym-active.png':'/assets/tabbar/gym.png'}}" mode="aspectFit"/><text>健身房</text>
+  </view>
+  <view class="dashboard-slot tappable {{wheelOpen?'open':''}}" bindtap="toggleWheel" hover-class="tap" hover-start-time="0" hover-stay-time="80" aria-label="打开仪表盘">
+    <view class="dashboard-button fixed-circle {{wheelOpen?'open':''}}">
+      <image src="{{wheelOpen?'/assets/tabbar/dashboard-active.png':'/assets/tabbar/dashboard.png'}}" mode="aspectFit"/>
+    </view>
+    <text class="dashboard-label">仪表盘</text>
+  </view>
+  <view class="tab-side tappable {{selected===2?'selected':''}}" data-key="steward" bindtap="switchPrimary" hover-class="tap" hover-start-time="0" hover-stay-time="80">
+    <image src="{{selected===2?'/assets/tabbar/steward-active.png':'/assets/tabbar/steward.png'}}" mode="aspectFit"/><text>小管家</text>
+  </view>
+</view>
+
+<view class="quick-sheet {{quickOpen?'on':''}}">
+  <view class="quick-head"><view><view class="quick-kicker">快速开始</view><view class="quick-title">现在想做什么？</view></view><view class="quick-close fixed-circle tappable" bindtap="closePanels" hover-class="tap" hover-start-time="0" hover-stay-time="80" aria-label="关闭"><image src="/assets/icons/close.png" mode="aspectFit"/></view></view>
+  <view class="quick-grid">
+    <view class="quick-item tappable" wx:for="{{quickItems}}" wx:key="key" data-route="{{item.route}}" bindtap="openQuickItem" hover-class="tap" hover-start-time="0" hover-stay-time="80">
+      <view class="quick-orb fixed-circle"><image src="{{item.icon}}" mode="aspectFit"/></view><text>{{item.label}}</text>
+    </view>
+  </view>
+</view>

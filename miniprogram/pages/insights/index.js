@@ -1,7 +1,7 @@
 const api = require('../../utils/request')
 const { normalizeInsights, normalizeExperiment } = require('../../utils/insightPresentation')
 
-const TAB_ROUTES = new Set(['/pages/home/index', '/pages/chat/index', '/pages/records/index', '/pages/plan/index', '/pages/profile/index'])
+const TAB_ROUTES = new Set(['/pages/home/index', '/pages/chat/index'])
 
 Page({
   data: {
