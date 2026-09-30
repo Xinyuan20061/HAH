@@ -286,7 +286,11 @@ def test_verify_once_blocked_when_not_configured(db_user, monkeypatch):
 # ---------------------------------------------------------------------------
 # Endpoint-level: no keys -> status reports configured=false, no fake connectivity
 # ---------------------------------------------------------------------------
-def test_voice_status_endpoint_no_cloud_call(api):
+def test_voice_status_endpoint_no_cloud_call(api, monkeypatch):
+    # Deterministic regardless of local .env: force "not configured" so the
+    # endpoint reports configured=false and never fakes connectivity.
+    monkeypatch.setattr(settings, "tencent_secret_id", "")
+    monkeypatch.setattr(settings, "tencent_secret_key", "")
     r = api.get("/api/v1/harness/voice/status")
     assert r.status_code == 200
     body = r.json()

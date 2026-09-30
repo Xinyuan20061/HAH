@@ -42,8 +42,19 @@ PREVIEW_BYTES_BUDGET = 100 * 1024  # per frame, matches worker contract
 # fixed default; production MUST override it (never ship the dev secret).
 DEV_DEFAULT_SECRET = "motion-preview-dev-secret"
 
-_UPLOAD_PATH = "/api/v1/internal/motion-previews/upload"
-_READ_PATH = "/api/v1/media/motion-analyses/previews"
+# These are FULL API paths (include the /api/v1 prefix). The worker PUTs to
+# ``origin + upload_url`` where origin is parsed from API_BASE_URL (path-less),
+# so the real routes are: PUT  /api/v1/media/previews/{asset_id} and
+# GET  /api/v1/media/motion-analyses/{run_id}/previews/{frame_id}.
+_UPLOAD_PATH = "/api/v1/media/previews"
+_READ_PATH = "/api/v1/media/motion-analyses"
+
+
+def _to_dt(ts: float) -> "datetime":
+    """Convert a Unix epoch float to a timezone-aware UTC datetime (DB DDL)."""
+    from datetime import datetime, timezone
+
+    return datetime.fromtimestamp(float(ts), tz=timezone.utc)
 
 
 class PreviewNotFound(LookupError):
@@ -97,7 +108,10 @@ class LocalPreviewStore:
         self.root = Path(root)
 
     def _path(self, rec: PreviewRecord) -> Path:
-        return self.root / str(rec.user_id) / str(rec.run_id) / f"{rec.asset_id}.jpg"
+        # Isolation is by run_id: ownership of a run is enforced upstream
+        # (_owned_run / signed user_id), and motion_evidence_frames has no
+        # user_id column, so the byte store must not depend on one.
+        return self.root / str(rec.run_id) / f"{rec.asset_id}.jpg"
 
     def save(self, data: bytes, rec: PreviewRecord) -> None:
         path = self._path(rec)
@@ -179,6 +193,18 @@ class SqlEvidenceFrameStore:
         self.db = db
         self.table = table
 
+    @staticmethod
+    def _norm(row) -> dict:
+        """Normalize a SQLAlchemy Row to the dict contract (floats for time)."""
+        if row is None:
+            return None
+        mapping = dict(row._mapping)
+        for key in ("expires_at", "created_at"):
+            val = mapping.get(key)
+            if val is not None:
+                mapping[key] = float(val.timestamp())
+        return mapping
+
     def upsert(self, row: dict) -> None:
         from sqlalchemy import select
 
@@ -199,6 +225,47 @@ class SqlEvidenceFrameStore:
                 )
                 .values(**row)
             )
+
+    def list_for_run(self, run_id: int) -> list[dict]:
+        from sqlalchemy import select
+
+        rows = self.db.execute(
+            select(self.table).where(self.table.c.run_id == int(run_id))
+        ).all()
+        return [self._norm(r) for r in rows]
+
+    def all_rows(self) -> list[dict]:
+        from sqlalchemy import select
+
+        rows = self.db.execute(select(self.table)).all()
+        return [self._norm(r) for r in rows]
+
+    def find_by_asset(self, asset_id: str) -> Optional[dict]:
+        from sqlalchemy import select
+
+        row = self.db.execute(
+            select(self.table).where(self.table.c.preview_asset_id == str(asset_id))
+        ).first()
+        return self._norm(row)
+
+    def find_frame(self, run_id: int, frame_id: str) -> Optional[dict]:
+        from sqlalchemy import select
+
+        row = self.db.execute(
+            select(self.table).where(
+                self.table.c.run_id == int(run_id),
+                self.table.c.frame_id == str(frame_id),
+            )
+        ).first()
+        return self._norm(row)
+
+    def delete_expired(self, now: float) -> int:
+        from sqlalchemy import delete
+
+        result = self.db.execute(
+            delete(self.table).where(self.table.c.expires_at <= _to_dt(now))
+        )
+        return int(result.rowcount or 0)
 
 
 class MediaStorage:
@@ -263,7 +330,7 @@ class MediaStorage:
             "exp": int(expiry_ts),
         }
         query = urlencode({**self._query(params), "sig": self._sign(params)})
-        return f"{_UPLOAD_PATH}?{query}"
+        return f"{_UPLOAD_PATH}/{quote(str(asset_id), safe='')}?{query}"
 
     def validate_upload_signature(self, params: dict) -> dict:
         """Validate a worker upload request; return bound {user_id, run_id, asset_id}."""
@@ -302,7 +369,7 @@ class MediaStorage:
             "exp": int(expiry_ts),
         }
         query = urlencode({**self._query(params), "sig": self._sign(params)})
-        return f"{_READ_PATH}/{frame_id}?{query}"
+        return f"{_READ_PATH}/{int(run_id)}/previews/{quote(str(frame_id), safe='')}?{query}"
 
     def validate_read_signature(self, params: dict, *, run_id: int, frame_id: str) -> int:
         """Validate a user read request; return the bound user_id."""
@@ -362,6 +429,11 @@ class MediaStorage:
             expires_at=exp,
         )
         self._store.save(body_bytes, rec)
+        # NOTE: motion_evidence_frames has NO user_id column (ownership follows
+        # run_id -> motion_analysis_runs.user_id). Writing user_id here would
+        # fail on the real DDL; ownership is enforced upstream via _owned_run.
+        # The DDL column is DateTime, so floats are converted here (the local
+        # byte store keeps the float form for expiry comparison).
         self._evidence.upsert(
             {
                 "run_id": rec.run_id,
@@ -370,8 +442,8 @@ class MediaStorage:
                 "preview_asset_id": rec.asset_id,
                 "subject_id": subject_id,
                 "observation_json": json.dumps(observation or {}, ensure_ascii=False),
-                "expires_at": rec.expires_at,
-                "user_id": rec.user_id,
+                "expires_at": _to_dt(rec.expires_at),
+                "created_at": _to_dt(now),
             }
         )
         return {
@@ -388,7 +460,7 @@ class MediaStorage:
             raise PreviewNotFound(asset_id)
         rec = PreviewRecord(
             asset_id=asset_id,
-            user_id=int(row["user_id"]),
+            user_id=int(row.get("user_id", 0) or 0),
             run_id=int(row["run_id"]),
             frame_id=str(row.get("frame_id", "")),
         )
@@ -406,7 +478,7 @@ class MediaStorage:
         for row in expired:
             rec = PreviewRecord(
                 asset_id=row["preview_asset_id"],
-                user_id=int(row["user_id"]),
+                user_id=int(row.get("user_id", 0) or 0),
                 run_id=int(row["run_id"]),
             )
             self._store.delete(rec)

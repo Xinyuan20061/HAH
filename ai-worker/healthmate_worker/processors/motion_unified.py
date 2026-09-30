@@ -691,6 +691,7 @@ def analyze_motion_unified(
                 annotate=False,
                 blur_face=False,
             )
+            jpeg_bytes = _b64(preview["image_b64"])
             row["preview_sha256"] = preview["preview_sha256"]
             row["preview_bytes"] = int(preview["preview_bytes"])
             row["preview_dimensions"] = {
@@ -698,9 +699,17 @@ def analyze_motion_unified(
                 "height": int(preview["height"]),
             }
             if preview_out_dir is not None:
-                (preview_out_dir / f"{asset_id}.jpg").write_bytes(
-                    _b64(preview["image_b64"])
-                )
+                (preview_out_dir / f"{asset_id}.jpg").write_bytes(jpeg_bytes)
+            # Stage for the signed-URL uploader (byte chain R02/R10 closure).
+            upload_items.append(
+                {
+                    "frame_id": row["frame_id"],
+                    "bytes": jpeg_bytes,
+                    "sha256": row["preview_sha256"],
+                    "width": int(preview["width"]),
+                    "height": int(preview["height"]),
+                }
+            )
             # Cloud image transport is authorised independently by cloud_review_mode.
             # "off" renders nothing for the cloud and makes zero external calls.
             if cloud_review_mode == "redacted_frames":
@@ -721,6 +730,21 @@ def analyze_motion_unified(
                 row["cloud_preview_sha256"] = cloud["preview_sha256"]
                 row["cloud_preview_mode"] = "skeleton"
         rows.append(row)
+
+    # --- Signed-URL upload of rendered JPEGs (byte chain) -------------------
+    # Upload failure MUST NOT block the receipt: degrade to the local staging
+    # asset_id and record a warning. Zero external calls when no uploader is set.
+    if preview_uploader is not None and settings.preview_upload_enabled and upload_items:
+        try:
+            remote_ids = preview_uploader(upload_items) or {}
+        except Exception as exc:  # noqa: BLE001 - upload is best-effort
+            logger.warning("preview_upload_failed keeping_local_asset_ids: %s", exc)
+            remote_ids = {}
+        if remote_ids:
+            for row in rows:
+                rid = remote_ids.get(row["frame_id"])
+                if rid:
+                    row["preview_asset_id"] = rid
 
     if progress:
         progress(92, "assemble_result")

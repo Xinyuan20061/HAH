@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import time
 from uuid import uuid4
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlunsplit
 import httpx
 from . import __version__
 from .config import settings
@@ -221,13 +221,18 @@ class CloudAPI:
         """PUT a rendered JPEG to a backend-minted signed upload URL.
 
         ``upload_url`` is the path+query returned by request_preview_upload_urls;
-        it already carries the signature. Uses the same worker-token client as
-        POST /complete. Raises CloudAPIError on non-2xx.
+        it already carries the signature (an absolute path including /api/v1).
+        Uses the same worker-token client as POST /complete. Raises CloudAPIError
+        on non-2xx.
         """
+        # upload_url is absolute-path (starts with /api/v1/...): join it onto the
+        # origin (scheme+host), NOT onto self.base which already contains /api/v1.
+        _p = urlparse(self.base)
+        origin = urlunsplit((_p.scheme, _p.netloc, "", "", ""))
         for attempt in range(settings.api_max_retries + 1):
             try:
                 response = self.client.put(
-                    self.base + upload_url,
+                    origin + upload_url,
                     content=body,
                     headers={"Content-Type": "image/jpeg"},
                 )

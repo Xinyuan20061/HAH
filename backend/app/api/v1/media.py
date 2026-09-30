@@ -983,25 +983,19 @@ async def motion_preview(
             "expires_at": ev.expires_at.isoformat() + "Z",
         }
     try:
-        desc = storage.get_preview(ev.preview_asset_id, user_id=user.id)
+        # Production MediaStorage exposes read_preview_bytes, not get_preview.
+        # Ownership was already enforced by _owned_run above, so the descriptor
+        # is built from the stored evidence row (never leaks another user's).
+        storage.read_preview_bytes(ev.preview_asset_id)
     except PreviewNotFound:
         return _motion_error(request, 404, "PREVIEW_GONE", "预览已被清理")
-    except PreviewForbidden:
-        return _motion_error(request, 404, "FRAME_NOT_FOUND", "该帧不存在")
-    except PreviewExpired:
-        return {
-            "status": "expired",
-            "analysis_id": run.id,
-            "frame_id": frame_id,
-            "expires_at": ev.expires_at.isoformat() + "Z" if ev.expires_at else None,
-        }
     return {
         "status": "available",
         "analysis_id": run.id,
         "frame_id": frame_id,
-        "preview_asset_id": desc["asset_id"],
-        "timestamp_ms": desc["timestamp_ms"],
-        "expires_at": desc["expires_at"],
+        "preview_asset_id": ev.preview_asset_id,
+        "timestamp_ms": int(ev.timestamp_ms or 0),
+        "expires_at": ev.expires_at.isoformat() + "Z" if ev.expires_at else None,
     }
 
 
@@ -1044,9 +1038,12 @@ def motion_analysis_evidence(
     timeline = result.get("timeline") or {}
     # Mint short-lived signed read URLs the mini-program <image> can load without
     # an Authorization header (query-signature path). build_read_url is B's frozen
-    # contract; if storage is not wired yet, frames simply have preview_url=None.
+    # contract; the API prefix is joined here so the mini-program gets an absolute
+    # path it can append to its configured base host.
     storage = build_media_storage(db)
     expiry_ts = int(time.time()) + 3600
+    # <image> needs an absolute URL: join the request origin to the signed path.
+    origin = str(request.base_url).rstrip("/")
     frames = []
     for frame in timeline.get("frames") or []:
         if not isinstance(frame, dict):
@@ -1055,7 +1052,7 @@ def motion_analysis_evidence(
         preview_url = None
         if frame_id:
             try:
-                preview_url = storage.build_read_url(
+                preview_url = origin + storage.build_read_url(
                     run.id, frame_id, user_id=run.user_id, expiry_ts=expiry_ts
                 )
             except Exception:  # pragma: no cover - storage not wired / B pending

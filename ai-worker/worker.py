@@ -138,6 +138,7 @@ def run_job(api: CloudAPI, job: dict) -> bool:
         elif job["job_type"] == "motion_unified":
             from healthmate_worker.processors.motion_unified import (
                 analyze_motion_unified,
+                make_preview_uploader,
             )
 
             result = analyze_motion_unified(
@@ -146,6 +147,7 @@ def run_job(api: CloudAPI, job: dict) -> bool:
                 consent_deepseek_frames=bool(
                     payload.get("consent_deepseek_frames", False)
                 ),
+                preview_uploader=make_preview_uploader(api, job_id),
                 progress=progress,
             )
         else:

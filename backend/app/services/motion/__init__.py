@@ -12,6 +12,7 @@ from .coach_review import (
 # B 包追加导出（契约 §9：只追加，不改删）。
 from .media_storage import (
     InMemoryEvidenceFrameStore,
+    InvalidPreviewSignature,
     LocalPreviewStore,
     MediaStorage,
 )
@@ -30,6 +31,7 @@ __all__ = [
     "semantically_validate",
     # B 包追加
     "InMemoryEvidenceFrameStore",
+    "InvalidPreviewSignature",
     "LocalPreviewStore",
     "MediaStorage",
     # F 包追加

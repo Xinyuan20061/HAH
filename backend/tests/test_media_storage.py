@@ -40,7 +40,7 @@ def test_mint_and_validate_upload_url_roundtrip(tmp_path):
         "preview_abc123", user_id=7, run_id=318, asset_prefix="pfx01",
         expiry_ts=expiry,
     )
-    assert url.startswith("/api/v1/internal/motion-previews/upload?")
+    assert url.startswith("/api/v1/media/previews/preview_abc123?")
     params = _qs(url)
     assert params["asset_id"] == "preview_abc123"
     assert params["user_id"] == "7"
@@ -116,7 +116,7 @@ def test_build_and_validate_read_url_roundtrip(tmp_path):
     )
     expiry = int(MediaStorage._now()) + 600
     url = ms.build_read_url(318, "f_001", user_id=7, expiry_ts=expiry)
-    assert url.startswith("/api/v1/media/motion-analyses/previews/f_001?")
+    assert url.startswith("/api/v1/media/motion-analyses/318/previews/f_001?")
     params = _qs(url)
     assert params["user_id"] == "7"
     assert params["run_id"] == "318"
