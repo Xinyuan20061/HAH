@@ -45,6 +45,28 @@ class Settings(BaseSettings):
     voice_tts_voice: str = "alloy"
     voice_max_audio_bytes: int = Field(default=8 * 1024 * 1024, ge=10000, le=20 * 1024 * 1024)
 
+    # --- Tencent Cloud voice (spec section 7) -------------------------------------
+    # provider: "tencent_cloud" | "openai_compatible" | "off"
+    # Secrets are read ONLY from backend environment variables; the miniprogram /
+    # worker never holds them and they are never written to user_ai_configs.
+    voice_provider: str = "off"
+    tencent_secret_id: str = ""
+    tencent_secret_key: str = ""
+    tencent_region: str = "ap-shanghai"
+    # SentenceRecognition engine service type, e.g. "16k_zh".
+    tencent_asr_engine: str = "16k_zh"
+    # TextToVoice VoiceType (console-verified base/premium voice id), e.g. 101001.
+    tencent_tts_voice_type: int = 101001
+    # Local hard limits / budgets (spec 7.1). These are configuration, not a
+    # permanent price quote and not the Tencent console quota.
+    voice_max_audio_seconds: int = Field(default=60, ge=5, le=60)
+    voice_tts_segment_chars: int = Field(default=120, ge=20, le=200)
+    voice_monthly_asr_budget: int = Field(default=100, ge=1)
+    voice_monthly_tts_chars_budget: int = Field(default=30000, ge=100)
+    # External live connectivity verification is opt-in and only runs manually via
+    # POST /harness/voice/verify-once once per config fingerprint (spec 7.3).
+    voice_live_verify_enabled: bool = False
+
     # WeChat / CloudBase
     wechat_app_id: str = ""
     wechat_app_secret: str = ""
@@ -110,6 +132,19 @@ class Settings(BaseSettings):
     @property
     def worker_enabled(self):
         return bool(self.worker_token.strip())
+
+    @property
+    def tencent_voice_configured(self) -> bool:
+        """True only when both backend env credentials are present (spec 7.1)."""
+        return bool(self.tencent_secret_id.strip() and self.tencent_secret_key.strip())
+
+    @property
+    def active_voice_provider(self) -> str:
+        """System-level default provider. Per-user choice may override it."""
+        provider = self.voice_provider.strip().lower()
+        if provider not in {"tencent_cloud", "openai_compatible", "off"}:
+            return "off"
+        return provider
 
     @property
     def effective_database_url(self) -> str:

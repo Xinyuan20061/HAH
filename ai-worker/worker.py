@@ -17,6 +17,10 @@ from healthmate_worker.processors import analyze_food, analyze_motion
 from healthmate_worker.capabilities import effective_capabilities, vlm_status
 from healthmate_worker.models.semantic_runtime import semantic_model_status
 from healthmate_worker.errors import ProcessingError
+from healthmate_worker.result_contract import (
+    SCHEMA_VERSION,
+    validate_motion_result_local,
+)
 from healthmate_worker.security import UnsafeDownloadURL
 
 logger = logging.getLogger("healthmate.worker")
@@ -118,10 +122,11 @@ def run_job(api: CloudAPI, job: dict) -> bool:
             source.get("url") or "", source.get("original_name") or "media.bin"
         )
         progress(20, "inference")
+        payload = job.get("payload") or {}
         if job["job_type"] == "motion_pose":
             result = analyze_motion(
                 local_path,
-                (job.get("payload") or {}).get("exercise_type", "squat"),
+                payload.get("exercise_type", "squat"),
                 progress=progress,
             )
         elif job["job_type"] == "food_vision":
@@ -130,8 +135,27 @@ def run_job(api: CloudAPI, job: dict) -> bool:
             from healthmate_worker.processors.kinetics import analyze_kinetics400
 
             result = analyze_kinetics400(local_path, progress=progress)
+        elif job["job_type"] == "motion_unified":
+            from healthmate_worker.processors.motion_unified import (
+                analyze_motion_unified,
+            )
+
+            result = analyze_motion_unified(
+                local_path,
+                requested_exercise=payload.get("requested_exercise", "auto"),
+                consent_deepseek_frames=bool(
+                    payload.get("consent_deepseek_frames", False)
+                ),
+                progress=progress,
+            )
         else:
             raise ProcessingError("unsupported_job", "不支持的任务类型")
+        if job["job_type"] in {"motion_pose", "motion_unified"}:
+            # Tag and pre-validate against the v1 contract locally; a structurally
+            # invalid receipt is reported as a permanent failure instead of being
+            # sent to a guaranteed-422 and re-claimed after lease expiry.
+            result["schema_version"] = SCHEMA_VERSION
+            validate_motion_result_local(result)
         progress(95, "upload_result")
         elapsed = round((time.perf_counter() - started) * 1000, 1)
         api.complete(job_id, lease, result, {"latency_ms": elapsed})
@@ -168,7 +192,15 @@ def run_job(api: CloudAPI, job: dict) -> bool:
                 status in {408, 429} or status >= 500,
             )
         elif isinstance(exc, CloudAPIError):
-            code, message, retryable = "cloud_api_error", str(exc), exc.retryable
+            # Use the server's safe error code/field_path/request_id for audit.
+            # str(exc) stays free of the response body; 422/413/409 are already
+            # non-retryable, so a permanently-invalid receipt is not re-claimed.
+            code = exc.code or "cloud_api_error"
+            detail = ""
+            if exc.field_path or exc.request_id:
+                detail = f" field_path={exc.field_path} request_id={exc.request_id}"
+            message = f"{exc}{detail}".strip()
+            retryable = exc.retryable
         else:
             code = (
                 "invalid_media"

@@ -38,4 +38,9 @@ from .models import (
     DatasetRegistry,
     ModelRegistry,
     ModelEvaluation,
+    MotionAnalysisRun,
+    MotionAnalysisFeedback,
+    ProviderInvocation,
+    ProviderConnectionCheck,
+    VoiceUsageDaily,
 )

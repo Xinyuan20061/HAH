@@ -7,6 +7,7 @@ from sqlalchemy import (
     Integer,
     Float,
     DateTime,
+    Date,
     ForeignKey,
     Text,
     Boolean,
@@ -74,6 +75,9 @@ class UserAIConfig(Base, TimestampMixin):
     voice_tts_model: Mapped[str] = mapped_column(String(120), default="tts-1")
     voice_name: Mapped[str] = mapped_column(String(80), default="alloy")
     voice_api_key_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # voice_provider: "off" | "openai_compatible" | "tencent_cloud" (spec section 5).
+    voice_provider: Mapped[str] = mapped_column(String(30), default="off")
+    voice_preferences_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     user: Mapped[User] = relationship(back_populates="ai_config")
 
 
@@ -675,3 +679,158 @@ class ModelEvaluation(Base, TimestampMixin):
     metrics_json: Mapped[str] = mapped_column(Text, default="{}")
     gate_status: Mapped[str] = mapped_column(String(30), index=True)
     evaluated_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+
+
+class MotionAnalysisRun(Base):
+    """Unified motion analysis task (one click -> one run -> one result contract).
+
+    Spec 8.1. `dedupe_key` is the same-request unique key: the same idempotency
+    key plus the same asset returns the same task instead of creating a duplicate.
+    Migration 0024 creates created_at + finished_at (no updated_at);
+    do not add TimestampMixin.
+    """
+
+    __tablename__ = "motion_analysis_runs"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    media_asset_id: Mapped[int] = mapped_column(
+        ForeignKey("media_assets.id"), index=True
+    )
+    ai_job_id: Mapped[int | None] = mapped_column(
+        ForeignKey("ai_jobs.id"), nullable=True, index=True
+    )
+    parent_run_id: Mapped[int | None] = mapped_column(
+        ForeignKey("motion_analysis_runs.id"), nullable=True, index=True
+    )
+    dedupe_key: Mapped[str | None] = mapped_column(
+        String(128), nullable=True, unique=True
+    )
+    requested_type: Mapped[str] = mapped_column(String(30), default="auto")
+    pipeline_version: Mapped[str] = mapped_column(
+        String(60), default="motion-unified-v1"
+    )
+    status: Mapped[str] = mapped_column(String(30), default="queued", index=True)
+    consent_version: Mapped[str] = mapped_column(String(40), default="")
+    model_versions_json: Mapped[str] = mapped_column(Text, default="{}")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, index=True)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    @property
+    def model_versions(self) -> dict:
+        try:
+            value = json.loads(self.model_versions_json or "{}")
+            return value if isinstance(value, dict) else {}
+        except (TypeError, ValueError):
+            return {}
+
+
+class MotionAnalysisFeedback(Base):
+    """One structured result per run; preview images live in short-term storage.
+
+    Spec 8.1: no large base64 images inside the long JSON text.
+    Migration 0024 creates only created_at (no updated_at).
+    """
+
+    __tablename__ = "motion_analysis_feedback"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    run_id: Mapped[int] = mapped_column(
+        ForeignKey("motion_analysis_runs.id"), unique=True, index=True
+    )
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    schema_version: Mapped[str] = mapped_column(String(30), default="motion-unified-v1")
+    result_json: Mapped[str] = mapped_column(
+        Text().with_variant(MEDIUMTEXT(), "mysql"), default="{}"
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, index=True)
+
+    @property
+    def result(self) -> dict:
+        try:
+            value = json.loads(self.result_json or "{}")
+            return value if isinstance(value, dict) else {}
+        except (TypeError, ValueError):
+            return {}
+
+
+class ProviderInvocation(Base):
+    """Desensitized per-call ledger for DeepSeek / Tencent voice (spec 8.2/8.3).
+
+    Never stores raw audio, images, full prompts or keys. Migration 0024 creates
+    only created_at (no updated_at); do not add TimestampMixin.
+    """
+
+    __tablename__ = "provider_invocations"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id"), nullable=True, index=True
+    )
+    run_id: Mapped[int | None] = mapped_column(
+        ForeignKey("motion_analysis_runs.id"), nullable=True, index=True
+    )
+    provider: Mapped[str] = mapped_column(String(40), index=True)
+    operation: Mapped[str] = mapped_column(String(60))
+    request_fingerprint: Mapped[str] = mapped_column(String(128), index=True)
+    status: Mapped[str] = mapped_column(String(30), index=True)
+    latency_ms: Mapped[int] = mapped_column(Integer, default=0)
+    token_or_char_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    provider_request_id: Mapped[str | None] = mapped_column(
+        String(128), nullable=True, index=True
+    )
+    cost_estimate: Mapped[float | None] = mapped_column(Float, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, index=True)
+
+
+class ProviderConnectionCheck(Base):
+    """'Verify once, then stop' record for real external calls (spec 7.3).
+
+    The (config_fingerprint, direction, status) unique constraint makes a
+    successful check deduplicable: same fingerprint + direction already verified
+    returns the cached record instead of calling the external service again.
+    Migration 0024 creates only created_at (no updated_at).
+    """
+
+    __tablename__ = "provider_connection_checks"
+    __table_args__ = (
+        UniqueConstraint(
+            "config_fingerprint",
+            "direction",
+            "status",
+            name="uq_provider_conn_check",
+        ),
+    )
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id"), nullable=True, index=True
+    )
+    config_fingerprint: Mapped[str] = mapped_column(String(128), index=True)
+    direction: Mapped[str] = mapped_column(String(20), index=True)
+    status: Mapped[str] = mapped_column(String(20), default="success")
+    verified_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    provider_request_id: Mapped[str | None] = mapped_column(
+        String(128), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+
+
+class VoiceUsageDaily(Base):
+    """Local daily voice budget counters (spec 7.1); not Tencent console quota.
+
+    Migration 0024 creates updated_at but not created_at for this table.
+    """
+
+    __tablename__ = "voice_usage_daily"
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id", "usage_date", "provider", name="uq_voice_usage_daily"
+        ),
+    )
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    usage_date: Mapped[datetime] = mapped_column(Date, default=utc_now, index=True)
+    provider: Mapped[str] = mapped_column(String(40), index=True)
+    asr_count: Mapped[int] = mapped_column(Integer, default=0)
+    tts_chars: Mapped[int] = mapped_column(Integer, default=0)
+    failure_count: Mapped[int] = mapped_column(Integer, default=0)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=utc_now, onupdate=utc_now
+    )

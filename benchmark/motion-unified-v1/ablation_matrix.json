@@ -1,0 +1,67 @@
+{
+  "schema_version": 1,
+  "status": "protocol_draft_pending_implementation",
+  "frozen_set": "benchmark-results/motion-unified-v1/manifest_frozen.json",
+  "seed": "healthmate-unified-v1-freeze",
+  "note": "四臂必须跑在同一冻结 manifest、同一视频解码、同一 pipeline 版本上；臂间只允许证据来源不同。真实数值待统一动作链实现完成后回填（待实现确认）。",
+  "arms": [
+    {
+      "arm_id": "A_local",
+      "label": "仅本地姿态/规则",
+      "inputs": ["mediapipe_pose"],
+      "uses_kinetics": false,
+      "uses_deepseek_vision": false,
+      "uses_deepseek_text": false,
+      "decision_gate": "规则六类匹配；无规则评价器的动作不输出 label，落到 uncertain/abstained"
+    },
+    {
+      "arm_id": "B_local_kinetics",
+      "label": "本地 + Kinetics-400 候选层",
+      "inputs": ["mediapipe_pose", "slowfast_kinetics400"],
+      "uses_kinetics": true,
+      "uses_deepseek_vision": false,
+      "uses_deepseek_text": false,
+      "decision_gate": "六类规则为主、Kinetics top-k 为候选；Kinetics 候选不直接生成质量分"
+    },
+    {
+      "arm_id": "C_local_deepseek",
+      "label": "本地 + DeepSeek 视觉复核（不融合 Kinetics）",
+      "inputs": ["mediapipe_pose", "desensitized_keyframes", "deepseek_vision"],
+      "uses_kinetics": false,
+      "uses_deepseek_vision": true,
+      "uses_deepseek_text": true,
+      "decision_gate": "DeepSeek 只能在本地候选集或 unknown 中选择；证据不足必须拒识"
+    },
+    {
+      "arm_id": "D_fused",
+      "label": "三者融合（上线决策门）",
+      "inputs": ["mediapipe_pose", "slowfast_kinetics400", "desensitized_keyframes", "deepseek_vision", "deepseek_text"],
+      "uses_kinetics": true,
+      "uses_deepseek_vision": true,
+      "uses_deepseek_text": true,
+      "decision_gate": "规格 4.5 decide_motion：证据一致才 recognized；冲突优先 uncertain；非评价器动作 score.available=false"
+    }
+  ],
+  "per_arm_metrics_to_report": [
+    "coverage",
+    "overall_accuracy_all_samples",
+    "macro_f1",
+    "per_class_recall",
+    "rejection_matrix",
+    "top1_accuracy_target_subset",
+    "top5_accuracy_target_subset",
+    "out_of_set_false_positive_rate",
+    "per_camera_breakdown",
+    "latency_p50_ms",
+    "latency_p95_ms",
+    "cost_per_task_cny_estimate",
+    "deepseek_degraded_rate",
+    "abstention_rate"
+  ],
+  "delta_metrics_required": {
+    "net_gain_D_over_best": "臂 D 全样本准确率 − max(臂B, 臂C 全样本准确率)，必须附置信区间，禁止只看文字流畅度",
+    "extra_misjudgments_D": "臂 D 相对臂 B 新增的错分/误接受条数逐条列出",
+    "rejection_change": "臂 D 相对臂 B 的拒识率变化，且区分‘正确拒识别质量片’与‘错拒好片’",
+    "latency_cost_tradeoff": "臂 D 相对臂 B 增加的 P50/P95 时延与每任务成本"
+  }
+}

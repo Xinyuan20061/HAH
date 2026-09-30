@@ -6,7 +6,8 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from uuid import uuid4
 
-from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
+from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, Request, Header
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from sqlalchemy import select
@@ -17,7 +18,7 @@ from app.api.deps import current_user
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.media_security import UnsafeMediaURL, validate_media_source_url
-from app.models import MediaAsset, AIJob
+from app.models import MediaAsset, AIJob, MotionAnalysisRun, MotionAnalysisFeedback
 from app.services.storage import get_storage
 from app.services.ai_jobs import (
     create_ai_job,
@@ -28,6 +29,12 @@ from app.services.ai_jobs import (
 )
 from app.services.timeline import add_event
 from app.services.result_summary import generate_result_summary
+from app.services.motion.orchestrator import (
+    PIPELINE_VERSION,
+    create_unified_run,
+    get_unified_result,
+    run_stage_view,
+)
 
 router = APIRouter(prefix="/media", tags=["media"])
 ALLOWED = {
@@ -305,10 +312,11 @@ async def upload_media(
     }
 
 
-@router.post("/motion-jobs")
+@router.post("/motion-jobs", deprecated=True)
 def create_motion_job(
     body: MotionIn, user=Depends(current_user), db: Session = Depends(get_db)
 ):
+    """Deprecated: use POST /media/motion-analyses (one unified task)."""
     asset = None
     if body.media_id:
         asset = db.get(MediaAsset, body.media_id)
@@ -334,7 +342,7 @@ def create_motion_job(
     return {"ok": True, **public_job(job)}
 
 
-@router.get("/motion-jobs/{job_id}")
+@router.get("/motion-jobs/{job_id}", deprecated=True)
 async def get_motion_job(
     job_id: int, user=Depends(current_user), db: Session = Depends(get_db)
 ):
@@ -356,7 +364,7 @@ async def get_motion_job(
     return public_job(job)
 
 
-@router.post("/kinetics-jobs")
+@router.post("/kinetics-jobs", deprecated=True)
 def create_kinetics_job(
     body: KineticsIn, user=Depends(current_user), db: Session = Depends(get_db)
 ):
@@ -385,7 +393,7 @@ def create_kinetics_job(
     return {"ok": True, **public_job(job)}
 
 
-@router.get("/kinetics-jobs/{job_id}")
+@router.get("/kinetics-jobs/{job_id}", deprecated=True)
 async def get_kinetics_job(
     job_id: int, user=Depends(current_user), db: Session = Depends(get_db)
 ):
@@ -396,8 +404,295 @@ async def get_kinetics_job(
     return public_job(job)
 
 
-@router.post("/analyze-motion")
+@router.post("/analyze-motion", deprecated=True)
 def analyze_motion_compat(
     body: MotionIn, user=Depends(current_user), db: Session = Depends(get_db)
 ):
     return create_motion_job(body, user, db)
+
+
+# --------------------------------------------------------------------------- #
+# P0-B unified motion chain (spec 5). Errors follow the unified contract:
+# {code, message, request_id, retryable, details?}.
+# --------------------------------------------------------------------------- #
+
+_EXERCISE_RE = r"^(auto|squat|pushup|lunge|leg_abduction|arm_abduction|arm_vw)$"
+
+
+class MotionAnalysesIn(BaseModel):
+    media_id: int
+    requested_exercise: str = Field(pattern=_EXERCISE_RE)
+    consent_deepseek_frames: bool = False
+    pipeline_version: str = Field(default=PIPELINE_VERSION, max_length=60)
+    analysis_revision: bool = False
+
+
+class MotionRetryIn(BaseModel):
+    reason: str = Field(default="after_fix", max_length=40)
+    pipeline_version: str | None = Field(default=None, max_length=60)
+    analysis_revision: bool = False
+
+
+class ConfirmLabelIn(BaseModel):
+    label_id: str = Field(pattern=r"^[a-z][a-z0-9_]{0,40}$")
+    correction_reason: str = Field(default="", max_length=300)
+
+
+class MotionFeedbackIn(BaseModel):
+    useful: bool
+    label_correction: str | None = Field(default=None, max_length=60)
+    frame_id: str | None = Field(default=None, max_length=60)
+    comment: str | None = Field(default=None, max_length=600)
+
+
+def _motion_error(request: Request, status: int, code: str, message: str, retryable: bool = False, details: dict | None = None):
+    payload = {
+        "code": code,
+        "message": message,
+        "request_id": getattr(request.state, "request_id", None),
+        "retryable": retryable,
+    }
+    if details is not None:
+        payload["details"] = details
+    return JSONResponse(status_code=status, content=payload)
+
+
+def _owned_run(db: Session, request: Request, user, run_id: int) -> MotionAnalysisRun | JSONResponse:
+    run = db.get(MotionAnalysisRun, run_id)
+    if not run or run.user_id != user.id:
+        return _motion_error(request, 404, "MOTION_ANALYSIS_NOT_FOUND", "动作分析任务不存在")
+    return run
+
+
+@router.post("/motion-analyses", status_code=202)
+def create_motion_analysis(
+    body: MotionAnalysesIn,
+    request: Request,
+    user=Depends(current_user),
+    db: Session = Depends(get_db),
+    idempotency_key: str | None = Header(default=None, min_length=8, max_length=120),
+):
+    asset = db.get(MediaAsset, body.media_id)
+    if not asset or asset.user_id != user.id:
+        return _motion_error(request, 404, "MEDIA_NOT_FOUND", "视频资产不存在")
+    if asset.media_type != "video":
+        return _motion_error(request, 400, "MEDIA_NOT_VIDEO", "动作分析仅支持视频")
+
+    if idempotency_key:
+        key = idempotency_key
+    else:
+        # Repeat clicks / retries without an explicit key still dedupe on the
+        # same (user, asset, params) fingerprint.
+        import hashlib
+
+        material = f"{user.id}:{asset.id}:{body.requested_exercise}:{int(body.consent_deepseek_frames)}:{body.pipeline_version}"
+        key = "auto-" + hashlib.sha256(material.encode()).hexdigest()
+
+    run, created, conflict = create_unified_run(
+        db,
+        user_id=user.id,
+        asset=asset,
+        requested_exercise=body.requested_exercise,
+        consent_deepseek_frames=body.consent_deepseek_frames,
+        pipeline_version=body.pipeline_version,
+        idempotency_key=key,
+        analysis_revision=body.analysis_revision,
+    )
+    if conflict:
+        return _motion_error(
+            request, 409, "IDEMPOTENCY_PARAM_MISMATCH", conflict,
+            details={"dedupe_key": run.dedupe_key},
+        )
+    return JSONResponse(
+        status_code=202,
+        content={
+            "analysis_id": run.id,
+            "status": run.status,
+            "poll_after_ms": 3000,
+            "created": created,
+        },
+    )
+
+
+@router.get("/motion-analyses/{analysis_id}")
+def read_motion_analysis(
+    analysis_id: int,
+    request: Request,
+    user=Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    run = _owned_run(db, request, user, analysis_id)
+    if isinstance(run, JSONResponse):
+        return run
+    requeue_expired_jobs(db)
+    view = run_stage_view(db, run)
+    result = get_unified_result(db, run)
+    view["result"] = result
+    return view
+
+
+@router.post("/motion-analyses/{analysis_id}/retry")
+def retry_motion_analysis(
+    analysis_id: int,
+    body: MotionRetryIn,
+    request: Request,
+    user=Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    run = _owned_run(db, request, user, analysis_id)
+    if isinstance(run, JSONResponse):
+        return run
+    if run.status != "failed":
+        return _motion_error(
+            request, 409, "RETRY_NOT_ALLOWED",
+            "仅终态 failed 的任务可以重试，旧失败任务保留原因",
+        )
+    new_pipeline = body.pipeline_version or run.pipeline_version
+    if new_pipeline == run.pipeline_version and not body.analysis_revision:
+        return _motion_error(
+            request, 409, "RETRY_NEEDS_REVISION",
+            "重试必须提供新的 pipeline_version 或显式 analysis_revision",
+        )
+    asset = db.get(MediaAsset, run.media_asset_id)
+    import uuid as _uuid
+
+    child, created, conflict = create_unified_run(
+        db,
+        user_id=user.id,
+        asset=asset,
+        requested_exercise=run.requested_type,
+        consent_deepseek_frames=bool(run.model_versions.get("consent_deepseek_frames")),
+        pipeline_version=new_pipeline,
+        idempotency_key=f"retry:{run.id}:{_uuid.uuid4().hex}",
+        parent_run_id=run.id,
+    )
+    return {"analysis_id": child.id, "parent_run_id": run.id, "status": child.status}
+
+
+@router.post("/motion-analyses/{analysis_id}/confirm-label")
+def confirm_motion_label(
+    analysis_id: int,
+    body: ConfirmLabelIn,
+    request: Request,
+    user=Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    run = _owned_run(db, request, user, analysis_id)
+    if isinstance(run, JSONResponse):
+        return run
+    feedback = db.scalar(
+        select(MotionAnalysisFeedback).where(MotionAnalysisFeedback.run_id == run.id)
+    )
+    result = feedback.result if feedback else {}
+    # Record the correction; never fabricate a score out of it.
+    result["user_confirmation"] = {
+        "label_id": body.label_id,
+        "correction_reason": body.correction_reason,
+        "recorded_at": utc_now().isoformat() + "Z",
+    }
+    if feedback is None:
+        feedback = MotionAnalysisFeedback(
+            run_id=run.id, user_id=user.id, result_json=json.dumps(result, ensure_ascii=False)
+        )
+        db.add(feedback)
+    else:
+        feedback.result_json = json.dumps(result, ensure_ascii=False)
+    db.commit()
+    return {"ok": True, "analysis_id": run.id, "label_id": body.label_id, "score_fabricated": False}
+
+
+@router.get("/motion-analyses/{analysis_id}/trace")
+def motion_analysis_trace(
+    analysis_id: int,
+    request: Request,
+    user=Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    run = _owned_run(db, request, user, analysis_id)
+    if isinstance(run, JSONResponse):
+        return run
+    result = get_unified_result(db, run) or {}
+    rec = result.get("recognition") or {}
+    meta = result.get("_meta") or {}
+    return {
+        "analysis_id": run.id,
+        "status": run.status,
+        "recognition_state": rec.get("state"),
+        "label_id": rec.get("label_id"),
+        "reason_code": rec.get("reason_code"),
+        "review_status": rec.get("review_status"),
+        "summary": result.get("summary"),
+        "sources": rec.get("sources"),
+        "stage_log": meta.get("stages"),
+        "limitations": result.get("limitations"),
+    }
+
+
+@router.post("/motion-analyses/{analysis_id}/feedback")
+def submit_motion_feedback(
+    analysis_id: int,
+    body: MotionFeedbackIn,
+    request: Request,
+    user=Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    run = _owned_run(db, request, user, analysis_id)
+    if isinstance(run, JSONResponse):
+        return run
+    feedback = db.scalar(
+        select(MotionAnalysisFeedback).where(MotionAnalysisFeedback.run_id == run.id)
+    )
+    result = feedback.result if feedback else {}
+    # One feedback record per user per run; this is a quality signal, NOT a
+    # training label and never rewrites measured facts.
+    result["user_feedback"] = {
+        "useful": body.useful,
+        "label_correction": body.label_correction,
+        "frame_id": body.frame_id,
+        "comment": body.comment,
+        "recorded_at": utc_now().isoformat() + "Z",
+    }
+    if feedback is None:
+        feedback = MotionAnalysisFeedback(
+            run_id=run.id, user_id=user.id, result_json=json.dumps(result, ensure_ascii=False)
+        )
+        db.add(feedback)
+    else:
+        feedback.result_json = json.dumps(result, ensure_ascii=False)
+    db.commit()
+    return {"ok": True, "analysis_id": run.id, "used_as_training_label": False}
+
+
+@router.get("/motion-analyses/{analysis_id}/evidence")
+def motion_analysis_evidence(
+    analysis_id: int,
+    request: Request,
+    user=Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    run = _owned_run(db, request, user, analysis_id)
+    if isinstance(run, JSONResponse):
+        return run
+    result = get_unified_result(db, run) or {}
+    keyframes = []
+    for frame in result.get("keyframes") or []:
+        keyframes.append(
+            {
+                "id": frame.get("id"),
+                "t_ms": frame.get("t_ms"),
+                "phase": frame.get("phase"),
+                "finding": frame.get("finding"),
+                "advice": frame.get("advice"),
+                "evidence_type": frame.get("evidence_type"),
+                "has_image": bool(frame.get("image_url")),
+            }
+        )
+    meta = result.get("_meta") or {}
+    return {
+        "analysis_id": run.id,
+        "recognition": result.get("recognition"),
+        "score": result.get("score"),
+        "keyframes": keyframes,
+        "model_versions": meta.get("model_versions"),
+        "worker_method": meta.get("worker_method"),
+    }

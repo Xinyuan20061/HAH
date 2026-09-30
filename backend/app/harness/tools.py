@@ -3,6 +3,13 @@ from __future__ import annotations
 from functools import lru_cache
 
 from app.harness.contracts import ToolContext, ToolSpec
+from app.harness.motion_evidence import (
+    TOOL_ANALYSIS_READ,
+    TOOL_FEEDBACK_READ,
+    owner_id,
+    read_analyses,
+    read_feedback_signals,
+)
 from app.harness.registry import ToolRegistry
 from app.services.agent.actions import list_actions
 from app.services.agent.tools import read_context
@@ -39,6 +46,29 @@ def _proposal_only(context: ToolContext, arguments: dict):
     return {"proposal": arguments, "status": "awaiting_user_confirmation"}
 
 
+def _motion_analysis_read(context: ToolContext, arguments: dict):
+    """Read-only unified motion result; scoped to the calling user (spec 8.2)."""
+    uid = owner_id(context)
+    if uid is None:
+        return {"found": False, "reason": "no_owner"}
+    raw = arguments.get("analysis_id")
+    try:
+        analysis_id = int(raw) if raw not in (None, "") else None
+    except (TypeError, ValueError):
+        analysis_id = None
+    return read_analyses(
+        context.db, uid, analysis_id=analysis_id, limit=int(arguments.get("limit") or 3)
+    )
+
+
+def _motion_feedback_read(context: ToolContext, arguments: dict):
+    """Read-only quality-correction signals from the calling user (spec 8.4)."""
+    uid = owner_id(context)
+    if uid is None:
+        return {"found": False, "count": 0, "signals": []}
+    return read_feedback_signals(context.db, uid)
+
+
 @lru_cache
 def get_tool_registry() -> ToolRegistry:
     registry = ToolRegistry(
@@ -69,6 +99,29 @@ def get_tool_registry() -> ToolRegistry:
                 title="查看可申请操作",
                 description="列出 Harness 中已注册、受权限控制的写操作。",
                 handler=_action_catalog,
+                input_schema={},
+            ),
+            ToolSpec(
+                name=TOOL_ANALYSIS_READ,
+                title="读取动作分析结果",
+                description=(
+                    "按当前用户范围读取统一动作分析结果（识别结论、关键帧证据、"
+                    "测量评分、点评摘要、来源与 trace_id）。只读，不会触发模型调用，"
+                    "也不能修改任何测量值；analysis_id 缺省时返回最近若干次。"
+                ),
+                handler=_motion_analysis_read,
+                kind="read",
+                input_schema={"analysis_id": "integer 可选", "limit": "integer 1-5"},
+            ),
+            ToolSpec(
+                name=TOOL_FEEDBACK_READ,
+                title="读取动作纠错反馈",
+                description=(
+                    "按当前用户范围读取其对动作分析的纠错/确认信号（类别纠正、"
+                    "关键帧问题、建议是否有用）；仅用于质量治理与引用，不直接改写测量事实。"
+                ),
+                handler=_motion_feedback_read,
+                kind="read",
                 input_schema={},
             ),
         ]

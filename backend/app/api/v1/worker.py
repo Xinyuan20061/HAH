@@ -2,22 +2,27 @@ from __future__ import annotations
 from app.core.time import utc_now, utc_iso
 
 import json
+import logging
 import re
 from datetime import timedelta
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.worker_deps import require_worker_token
-from app.core.database import get_db
 from app.core.config import settings
+from app.core.database import get_db
 from app.models import AIJob, FoodAnalysisSession, MotionScore, MotionEvent
 from app.schemas.worker import (
+    MOTION_WORKER_RESULT_SCHEMA_VERSION,
+    MotionResultSchemaError,
     WorkerClaimIn,
     WorkerCompleteIn,
     WorkerFailIn,
     WorkerHeartbeatIn,
     WorkerProgressIn,
+    validate_motion_worker_result_v1,
 )
 from app.schemas.ai_results import FoodResult
 from pydantic import ValidationError
@@ -35,6 +40,7 @@ from app.services.training_semantics import build_motion_semantics
 router = APIRouter(
     prefix="/worker", tags=["ai-worker"], dependencies=[Depends(require_worker_token)]
 )
+logger = logging.getLogger("healthmate.worker")
 
 
 @router.post("/heartbeat")
@@ -316,6 +322,41 @@ def _validate_motion_result(result: dict) -> dict:
     return result
 
 
+def _validate_motion_result_with_contract(result: dict, request: Request) -> dict:
+    """Route a motion receipt to the v1 contract or the legacy compat path.
+
+    Compat rule (spec 6.3): a receipt WITHOUT ``schema_version`` comes from an
+    old worker and keeps the legacy hand-written validation for one version
+    cycle. A receipt WITH ``schema_version`` must equal the current contract
+    version; any other value is a permanent 422 pointing at the version field.
+    The raw payload is never logged (it may contain image base64).
+    """
+    version = result.get("schema_version")
+    rid = getattr(request.state, "request_id", "-")
+    if version is None:
+        # Old worker on the deprecation path: legacy rules, same 422 semantics.
+        return _validate_motion_result(result)
+    if version != MOTION_WORKER_RESULT_SCHEMA_VERSION:
+        logger.info(
+            "motion result rejected rid=%s field_path=schema_version version=%r",
+            rid,
+            version,
+        )
+        raise MotionResultSchemaError(
+            "不支持的回执 schema 版本", field_path="schema_version"
+        )
+    try:
+        return validate_motion_worker_result_v1(result)
+    except MotionResultSchemaError as exc:
+        logger.info(
+            "motion result rejected rid=%s field_path=%s reason=%s",
+            rid,
+            exc.field_path,
+            exc.message,
+        )
+        raise
+
+
 def _validate_kinetics400_result(result: dict) -> dict:
     import math
 
@@ -359,7 +400,12 @@ def _validate_kinetics400_result(result: dict) -> dict:
 
 
 @router.post("/jobs/{job_id}/complete")
-def complete(job_id: int, body: WorkerCompleteIn, db: Session = Depends(get_db)):
+def complete(
+    job_id: int,
+    body: WorkerCompleteIn,
+    request: Request,
+    db: Session = Depends(get_db),
+):
     job = db.get(AIJob, job_id)
     if not job:
         raise HTTPException(404, "任务不存在")
@@ -380,7 +426,7 @@ def complete(job_id: int, body: WorkerCompleteIn, db: Session = Depends(get_db))
     elif job.job_type == "kinetics400":
         result = _validate_kinetics400_result(result)
     else:
-        result = _validate_motion_result(result)
+        result = _validate_motion_result_with_contract(result, request)
     try:
         extend_lease(
             db,
@@ -607,6 +653,27 @@ def complete(job_id: int, body: WorkerCompleteIn, db: Session = Depends(get_db))
             ref_type="ai_job",
             ref_id=job.id,
         )
+    elif job.job_type == "motion_unified":
+        # P0-B unified chain: the receipt was already validated against
+        # MotionWorkerResultV1 above. Materialise the unified result contract,
+        # run the DeepSeek visual review + grounded summary and persist them.
+        from app.services.motion.orchestrator import handle_unified_worker_result
+
+        try:
+            handle_unified_worker_result(db, job, result, body.metrics)
+        except Exception:
+            logger.exception("motion_unified orchestration failed job=%s", job.id)
+            from app.models import MotionAnalysisRun
+
+            run = db.scalar(
+                select(MotionAnalysisRun).where(
+                    MotionAnalysisRun.ai_job_id == job.id
+                )
+            )
+            if run is not None:
+                run.status = "failed"
+                run.finished_at = utc_now()
+            raise
     else:
         raise HTTPException(422, "不支持的 AI 任务类型")
 

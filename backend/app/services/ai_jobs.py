@@ -195,6 +195,10 @@ def claim_next_job(
     supported = [
         x for x in capabilities if x in {"motion_pose", "food_vision", "kinetics400"}
     ]
+    # The unified motion chain is only claimed by workers that explicitly declare
+    # the motion_unified_v1 capability (single-decode processor spec 3.2).
+    if "motion_unified_v1" in capabilities:
+        supported.append("motion_unified")
     if not supported:
         return None
     if request_id:

@@ -1,6 +1,7 @@
 from pydantic import BaseModel, Field, field_validator
 from urllib.parse import urlparse
 import ipaddress
+import json
 
 
 class AIConfigIn(BaseModel):
@@ -14,6 +15,19 @@ class AIConfigIn(BaseModel):
     voice_tts_model: str | None = Field(default=None, max_length=120)
     voice_name: str | None = Field(default=None, max_length=80)
     voice_api_key: str | None = Field(default=None, max_length=500)
+    # voice_provider: "off" | "openai_compatible" | "tencent_cloud" (spec section 5).
+    voice_provider: str | None = Field(default=None, max_length=30)
+    # Voice preferences (e.g. tencent voice_type id) as a JSON object. Never holds keys.
+    voice_preferences: dict | None = None
+
+    @field_validator("voice_provider")
+    @classmethod
+    def validate_voice_provider(cls, value: str | None):
+        if value is None:
+            return value
+        if value not in {"off", "openai_compatible", "tencent_cloud"}:
+            raise ValueError("voice_provider 必须是 off、openai_compatible 或 tencent_cloud")
+        return value
 
     @field_validator("base_url")
     @classmethod
@@ -58,6 +72,8 @@ class AIConfigOut(BaseModel):
     has_voice_api_key: bool = False
     voice_api_key_hint: str = ""
     system_voice_configured: bool = False
+    voice_provider: str = "off"
+    voice_preferences: dict = {}
 
 
 class VoiceConnectionTestIn(BaseModel):

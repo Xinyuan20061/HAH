@@ -1,3 +1,5 @@
+import json
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.api.deps import current_user
@@ -24,6 +26,16 @@ def _hint(secret: str) -> str:
     return f"{secret[:3]}••••{secret[-4:]}" if len(secret) >= 8 else "••••••••"
 
 
+def _preferences_dict(cfg: UserAIConfig | None) -> dict:
+    if not cfg or not getattr(cfg, "voice_preferences_json", None):
+        return {}
+    try:
+        value = json.loads(cfg.voice_preferences_json)
+        return value if isinstance(value, dict) else {}
+    except (TypeError, ValueError):
+        return {}
+
+
 def _out(cfg: UserAIConfig | None):
     if cfg:
         key = _stored_key(cfg)
@@ -43,6 +55,8 @@ def _out(cfg: UserAIConfig | None):
             has_voice_api_key=bool(voice_key),
             voice_api_key_hint=_hint(voice_key),
             system_voice_configured=_system_voice_configured(),
+            voice_provider=getattr(cfg, "voice_provider", "off") or "off",
+            voice_preferences=_preferences_dict(cfg),
         )
     return AIConfigOut(
         enabled=False,
@@ -59,6 +73,8 @@ def _out(cfg: UserAIConfig | None):
         has_voice_api_key=False,
         voice_api_key_hint="",
         system_voice_configured=_system_voice_configured(),
+        voice_provider=settings.active_voice_provider,
+        voice_preferences={},
     )
 
 
@@ -118,8 +134,15 @@ def save_config(
         cfg.voice_name = body.voice_name.strip() or settings.voice_tts_voice
     if body.voice_api_key is not None and body.voice_api_key.strip():
         cfg.voice_api_key_encrypted = encrypt_secret(body.voice_api_key.strip())
-    if cfg.voice_enabled and not _stored_voice_key(cfg) and not _system_voice_configured():
-        raise HTTPException(400, "请填写语音 API Key，或先配置系统语音服务")
+    # voice_provider switch (spec section 5). "tencent_cloud" uses system-side
+    # backend keys only; it never requires (and never accepts) user-provided keys.
+    if body.voice_provider is not None:
+        cfg.voice_provider = body.voice_provider
+    if body.voice_preferences is not None:
+        cfg.voice_preferences_json = json.dumps(body.voice_preferences, ensure_ascii=False)
+    if cfg.voice_enabled and cfg.voice_provider != "tencent_cloud":
+        if not _stored_voice_key(cfg) and not _system_voice_configured():
+            raise HTTPException(400, "请填写语音 API Key，或先配置系统语音服务")
     db.add(cfg)
     db.commit()
     db.refresh(cfg)

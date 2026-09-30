@@ -93,14 +93,14 @@ function cacheGet(url, maxAgeMs = 6 * 60 * 60 * 1000) {
 }
 function cacheSet(url, data) { try { wx.setStorageSync(CACHE_PREFIX + (wx.getStorageSync('healthmate_user_id') || 'anonymous') + ':' + url, { savedAt: Date.now(), data }) } catch (e) {} }
 
-async function request({ url, method = 'GET', data = {}, timeout, retried = false, networkRetry = 0, allowCache = false }) {
+async function request({ url, method = 'GET', data = {}, timeout, retried = false, networkRetry = 0, allowCache = false, headers: extraHeaders = {} }) {
   try {
     let res
     if (isCloud()) {
-      res = await cloudCall({ path: '/api/v1' + url, method, data, timeout, header: headers() })
+      res = await cloudCall({ path: '/api/v1' + url, method, data, timeout, header: Object.assign(headers(), extraHeaders) })
     } else {
       res = await new Promise((resolve, reject) => wx.request({
-        url: httpBaseUrl() + url, method, data, timeout: timeout || config.REQUEST_TIMEOUT, header: headers(), success: resolve, fail: reject
+        url: httpBaseUrl() + url, method, data, timeout: timeout || config.REQUEST_TIMEOUT, header: Object.assign(headers(), extraHeaders), success: resolve, fail: reject
       }))
     }
     if (res.statusCode >= 200 && res.statusCode < 300) { if (method === 'GET' && allowCache) cacheSet(url, res.data); return res.data }
@@ -196,7 +196,7 @@ async function health() {
 
 module.exports = {
   get: (url, opts={}) => request({ url, ...opts }),
-  post: (url, data) => request({ url, method: 'POST', data }),
+  post: (url, data, headers) => request({ url, method: 'POST', data, headers }),
   postLong: (url, data) => request({ url, method: 'POST', data, timeout: 120000 }),
   put: (url, data) => request({ url, method: 'PUT', data }),
   del: (url, data={}) => request({ url, method: 'DELETE', data }),

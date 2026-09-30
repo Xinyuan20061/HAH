@@ -5,6 +5,8 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from sqlalchemy.exc import SQLAlchemyError
 
+from app.schemas.worker import MotionResultSchemaError
+
 
 class ErrorCode(IntEnum):
     OK = 0
@@ -71,6 +73,23 @@ def register_exception_handlers(app):
             content=payload(
                 ErrorCode.VALIDATION_ERROR, "提交的数据格式不正确", safe_errors, rid
             ),
+        )
+
+    @app.exception_handler(MotionResultSchemaError)
+    async def motion_schema_exc(request: Request, exc: MotionResultSchemaError):
+        # Worker receipt contract violations: permanent, non-retryable. The body
+        # carries only a safe summary + the first failing field path. The raw
+        # payload (possibly image base64) is never echoed.
+        rid = getattr(request.state, "request_id", None)
+        return JSONResponse(
+            status_code=422,
+            content={
+                "code": "MOTION_RESULT_SCHEMA_INVALID",
+                "message": exc.message,
+                "request_id": rid,
+                "retryable": False,
+                "details": {"field_path": exc.field_path},
+            },
         )
 
     @app.exception_handler(SQLAlchemyError)

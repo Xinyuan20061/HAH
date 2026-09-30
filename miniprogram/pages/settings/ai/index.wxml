@@ -20,12 +20,37 @@
 
   <view wx:else class="config-panel panel-enter">
     <view class="panel-head"><view><view class="panel-kicker">VOICE</view><view class="panel-title">语音服务</view></view><switch checked="{{form.voice_enabled}}" bindchange="toggleVoice" color="#506336"/></view>
+    <view class="field"><view class="label-title">语音提供方</view><view class="chips">
+      <view class="chip tappable {{voiceProvider==='off'?'active':''}}" data-provider="off" bindtap="selectVoiceProvider" hover-class="tap" hover-start-time="0" hover-stay-time="80">关闭</view>
+      <view class="chip tappable {{voiceProvider==='tencent_cloud'?'active':''}}" data-provider="tencent_cloud" bindtap="selectVoiceProvider" hover-class="tap" hover-start-time="0" hover-stay-time="80">腾讯云</view>
+      <view class="chip tappable {{voiceProvider==='openai_compatible'?'active':''}}" data-provider="openai_compatible" bindtap="selectVoiceProvider" hover-class="tap" hover-start-time="0" hover-stay-time="80">OpenAI 兼容</view>
+    </view></view>
+
+    <block wx:if="{{voiceProvider==='tencent_cloud'}}">
+      <view class="system-chip">腾讯云密钥由后端统一管理，本页无需填写</view>
+      <view class="field">
+        <view class="label-title">服务端状态</view>
+        <view class="field-state">{{voiceStatus ? (voiceStatus.configured ? '已配置' : '后端未配置密钥') : '读取中…'}}</view>
+        <view class="field-state" wx:if="{{voiceStatus && voiceStatus.last_verified_at}}">上次验证：{{voiceStatus.last_verified_at}}</view>
+        <view class="field-state" wx:elif="{{voiceStatus && voiceStatus.configured}}">尚未连通验证（live_check_required）</view>
+        <view class="field-state" wx:if="{{voiceStatus}}">识别 {{voiceStatus.asr_available?'可用':'不可用'}} · 合成 {{voiceStatus.tts_available?'可用':'不可用'}}</view>
+      </view>
+      <view class="field"><view class="label-title">音色（voice_type）</view><view class="chips"><view wx:for="{{tencentVoices}}" wx:key="*this" class="chip tappable" data-voice="{{item}}" bindtap="useVoice" hover-class="tap" hover-start-time="0" hover-stay-time="80">{{item}}</view></view></view>
+      <view class="actions">
+        <button class="btn-soft grow tappable" loading="{{verifying&&verifyingKind==='asr'}}" data-kind="asr" bindtap="verifyVoice" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">验证识别</button>
+        <button class="btn-soft grow tappable" loading="{{verifying&&verifyingKind==='tts'}}" data-kind="tts" bindtap="verifyVoice" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">验证合成</button>
+        <button class="btn-primary grow tappable" loading="{{saving}}" bindtap="save" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">保存</button>
+      </view>
+    </block>
+
+    <block wx:else>
     <view wx:if="{{systemVoiceConfigured&&!hasVoiceKey}}" class="system-chip">系统语音可直接使用</view>
     <view class="field"><view class="label-title">语音 API Key</view><view wx:if="{{hasVoiceKey}}" class="field-state">已保存 {{voiceKeyHint}}</view><input class="input" password value="{{form.voice_api_key}}" data-k="voice_api_key" bindinput="inp" placeholder="留空使用系统服务"/></view>
     <view class="field"><view class="label-title">Base URL</view><input class="input" value="{{form.voice_base_url}}" data-k="voice_base_url" bindinput="inp" placeholder="OpenAI-compatible API 地址"/></view>
     <view class="model-grid"><view class="field compact"><view class="label-title">语音识别</view><input class="input" value="{{form.voice_stt_model}}" data-k="voice_stt_model" bindinput="inp" placeholder="whisper-1"/></view><view class="field compact"><view class="label-title">语音合成</view><input class="input" value="{{form.voice_tts_model}}" data-k="voice_tts_model" bindinput="inp" placeholder="tts-1"/></view></view>
     <view class="field"><view class="label-title">声音</view><input class="input" value="{{form.voice_name}}" data-k="voice_name" bindinput="inp" placeholder="alloy"/><view class="chips"><view wx:for="{{voices}}" wx:key="*this" class="chip tappable {{form.voice_name===item?'active':''}}" bindtap="useVoice" data-voice="{{item}}" hover-class="tap" hover-start-time="0" hover-stay-time="80">{{item}}</view></view></view>
-    <view class="actions"><button class="btn-soft grow tappable" loading="{{testingVoice}}" bindtap="testVoice" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">测试语音</button><button class="btn-primary grow tappable" loading="{{saving}}" bindtap="save" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">保存</button></view>
+    <view class="actions"><button class="btn-primary grow tappable" loading="{{saving}}" bindtap="save" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">保存</button></view>
+    </block>
   </view>
 
   <view class="diagnostic tappable" bindtap="toggleBackend" hover-class="tap-card" hover-start-time="0" hover-stay-time="80"><view class="diagnostic-dot {{backendOnline===true?'on':backendOnline===false?'bad':''}}"></view><view class="grow"><view class="diagnostic-title">后端连接</view><view class="diagnostic-state">{{backendMessage}}</view></view><image class="diagnostic-arrow {{backendExpanded?'open':''}}" src="/assets/icons/chevron.png" mode="aspectFit"/></view>

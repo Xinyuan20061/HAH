@@ -16,6 +16,12 @@ _LABELS_PATH = Path(__file__).with_name("kinetics400_labels.txt")
 _lock = threading.Lock()
 _model = None
 
+# Worker-side concurrency gate: SlowFast on CPU is heavy, so at most ONE
+# inference may run at a time. The job loop is already sequential, but this
+# semaphore documents and enforces the constraint even if the worker later
+# parallelizes job processing. Acquire it around every model.predict.
+SLOWFAST_SEMAPHORE = threading.Semaphore(1)
+
 # Kinetics-400 labels that map onto a HealthMate exercise with a full analyzer
 # (squat / pushup / lunge) or a known display slug shown in the mini-program.
 # Only the first three get a dedicated count+score; the rest are recognized
@@ -76,8 +82,9 @@ def recognize_video_kinetics400(video_path) -> Optional[dict]:
         return None
     from .kinetics_clip import build_clip
 
-    clip, _ = build_clip(str(video_path))
-    result = model.predict(clip, topk=5)
+    with SLOWFAST_SEMAPHORE:
+        clip, _ = build_clip(str(video_path))
+        result = model.predict(clip, topk=5)
     label = result["top_label"]
     result["mapped_exercise"] = KINETICS_TO_EXERCISE.get(label)
     result["exercise_slug"] = slugify_kinetics(label)

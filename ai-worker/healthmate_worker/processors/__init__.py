@@ -2,7 +2,12 @@
 
 from importlib import import_module
 
-__all__ = ["analyze_food", "analyze_motion", "analyze_kinetics400"]
+__all__ = [
+    "analyze_food",
+    "analyze_motion",
+    "analyze_kinetics400",
+    "analyze_motion_unified",
+]
 
 
 def __getattr__(name: str):
@@ -12,4 +17,6 @@ def __getattr__(name: str):
         return import_module(".food", __name__).analyze_food
     if name == "analyze_kinetics400":
         return import_module(".kinetics", __name__).analyze_kinetics400
+    if name == "analyze_motion_unified":
+        return import_module(".motion_unified").analyze_motion_unified
     raise AttributeError(name)

@@ -10,7 +10,8 @@ const DEFAULT_FORM = {
   voice_stt_model: 'whisper-1',
   voice_tts_model: 'tts-1',
   voice_name: 'alloy',
-  voice_api_key: ''
+  voice_api_key: '',
+  voice_provider: 'off'
 }
 
 Page({
@@ -24,6 +25,11 @@ Page({
     hasVoiceKey: false,
     voiceKeyHint: '',
     systemVoiceConfigured: false,
+    voiceStatus: null,
+    voiceProvider: 'off',
+    providerOptions: ['off', 'tencent_cloud', 'openai_compatible'],
+    verifying: false,
+    verifyingKind: '',
     testing: false,
     testingVoice: false,
     saving: false,
@@ -35,6 +41,7 @@ Page({
     devBackendUrl: '',
     models: ['deepseek-chat', 'deepseek-reasoner'],
     voices: ['alloy', 'nova', 'shimmer'],
+    tencentVoices: ['101001', '101002', '101051'],
     cloudMode: api.isCloud()
   },
 
@@ -68,17 +75,34 @@ Page({
           voice_stt_model: r.voice_stt_model || DEFAULT_FORM.voice_stt_model,
           voice_tts_model: r.voice_tts_model || DEFAULT_FORM.voice_tts_model,
           voice_name: r.voice_name || DEFAULT_FORM.voice_name,
-          voice_api_key: ''
+          voice_api_key: '',
+          voice_provider: r.voice_provider || 'off'
         },
+        voiceProvider: r.voice_provider || 'off',
         hasKey: !!r.has_api_key,
         keyHint: r.api_key_hint || '',
         hasVoiceKey: !!r.has_voice_api_key,
         voiceKeyHint: r.voice_api_key_hint || '',
         systemVoiceConfigured: !!r.system_voice_configured
       })
+      await this.loadVoiceStatus()
     } catch (error) {
       this.setData({ backendOnline: false, backendMessage: error.message || '读取配置失败' })
     }
+  },
+
+  async loadVoiceStatus() {
+    try {
+      const s = await api.get('/harness/voice/status')
+      this.setData({ voiceStatus: s })
+    } catch (error) {
+      this.setData({ voiceStatus: null })
+    }
+  },
+
+  selectVoiceProvider(e) {
+    const vp = e.currentTarget.dataset.provider
+    this.setData({ voiceProvider: vp, 'form.voice_provider': vp })
   },
 
   selectSection(e) {
@@ -138,9 +162,12 @@ Page({
     const form = { ...this.data.form }
     if (form.enabled && (!form.base_url || !form.model)) return wx.showToast({ title: '请补全文字模型配置', icon: 'none' })
     if (form.enabled && !this.data.hasKey && !String(form.api_key || '').trim()) return wx.showToast({ title: '请填写文字 API Key', icon: 'none' })
-    const personalVoice = this.data.hasVoiceKey || String(form.voice_api_key || '').trim()
-    if (form.voice_enabled && personalVoice && !form.voice_base_url) return wx.showToast({ title: '请填写语音 Base URL', icon: 'none' })
-    if (form.voice_enabled && !personalVoice && !this.data.systemVoiceConfigured) return wx.showToast({ title: '请填写语音 API Key', icon: 'none' })
+    // Tencent mode uses system-side backend keys only; do not require user keys.
+    if (form.voice_enabled && form.voice_provider !== 'tencent_cloud') {
+      const personalVoice = this.data.hasVoiceKey || String(form.voice_api_key || '').trim()
+      if (personalVoice && !form.voice_base_url) return wx.showToast({ title: '请填写语音 Base URL', icon: 'none' })
+      if (!personalVoice && !this.data.systemVoiceConfigured) return wx.showToast({ title: '请填写语音 API Key', icon: 'none' })
+    }
     this.setData({ saving: true })
     try {
       await this.ensureReady()
@@ -151,6 +178,8 @@ Page({
         hasVoiceKey: !!result.has_voice_api_key,
         voiceKeyHint: result.voice_api_key_hint || '',
         systemVoiceConfigured: !!result.system_voice_configured,
+        voiceProvider: result.voice_provider || 'off',
+        'form.voice_provider': result.voice_provider || 'off',
         'form.api_key': '',
         'form.voice_api_key': '',
         'form.enabled': !!result.enabled,
@@ -179,23 +208,31 @@ Page({
     }
   },
 
-  async testVoice() {
-    if (this.data.testingVoice) return
-    this.setData({ testingVoice: true })
+  async verifyVoice(e) {
+    if (this.data.verifying) return
+    const kind = (e && e.currentTarget && e.currentTarget.dataset.kind) || 'tts'
+    this.setData({ verifying: true, verifyingKind: kind })
     try {
       await this.ensureReady()
-      const form = this.data.form
-      await api.postLong('/users/me/ai-config/voice-test', {
-        base_url: form.voice_base_url,
-        tts_model: form.voice_tts_model,
-        voice_name: form.voice_name,
-        api_key: form.voice_api_key
+      // Manual, explicit one-time connectivity check (spec 7.3). Never auto-runs.
+      const result = await api.postLong('/harness/voice/verify-once', {
+        provider: 'tencent_cloud',
+        check: kind,
+        acknowledge_quota: true
       })
-      wx.showModal({ title: '语音服务可用', content: '合成测试已通过。', showCancel: false })
+      const when = result.verified_at ? `（${result.verified_at}）` : ''
+      wx.showModal({
+        title: result.cached ? '已验证过' : '验证完成',
+        content: result.cached
+          ? `该方向已连通，未重复调用${when}`
+          : `${kind === 'asr' ? '识别' : '合成'}连通成功${when}`,
+        showCancel: false
+      })
+      await this.loadVoiceStatus()
     } catch (error) {
-      wx.showModal({ title: '语音连接失败', content: error.message || '请检查语音 API 配置。', showCancel: false })
+      wx.showModal({ title: '验证未通过', content: error.message || '请确认后端已配置腾讯云密钥。', showCancel: false })
     } finally {
-      this.setData({ testingVoice: false })
+      this.setData({ verifying: false, verifyingKind: '' })
     }
   },
 

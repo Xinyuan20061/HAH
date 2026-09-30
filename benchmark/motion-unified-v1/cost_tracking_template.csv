@@ -1,0 +1,5 @@
+date,run_id_or_batch,provider,operation,count_or_tokens,latency_p50_ms,latency_p95_ms,success_rate,error_code,422_ratio_in_window,abstention_rate,deepseek_degraded_rate,asr_success_rate,tts_success_rate,cost_estimate_cny,monthly_asr_budget_used,monthly_tts_chars_budget_used,notes
+2026-09-29,template,deepseek,vision_review,0,0,0,0.0,,,,0.0,0.0,0.0,0.0,0.0,0,0,template_row_fill_after_implementation_pending_confirmation
+2026-09-29,template,deepseek,text_feedback,0,0,0,0.0,,,,,,,,0.0,0,0,template_row
+2026-09-29,template,tencent_cloud,asr_sentence,0,0,0,0.0,,,,,,,,0.0,0,0,template_row
+2026-09-29,template,tencent_cloud,tts_segment,0,0,0,0.0,,,,,,,,0.0,0,0,template_row

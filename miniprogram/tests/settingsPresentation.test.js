@@ -29,8 +29,30 @@ test('AI settings exposes text and voice providers in one configuration surface'
   for (const field of ['voice_api_key', 'voice_base_url', 'voice_stt_model', 'voice_tts_model', 'voice_name']) {
     assert.match(view, new RegExp(`data-k="${field}"`))
   }
-  assert.match(script, /\/users\/me\/ai-config\/voice-test/)
   assert.match(script, /systemVoiceConfigured/)
+})
+
+test('AI settings no longer auto-runs voice-test; uses manual verify-once + server status', () => {
+  const view = read('pages/settings/ai/index.wxml')
+  const script = read('pages/settings/ai/index.js')
+
+  // No automatic real-synthesis voice-test; the old endpoint must not be called.
+  assert.doesNotMatch(script, /\/users\/me\/ai-config\/voice-test/)
+
+  // Server-side status is read (no cloud call on the client) and surfaced.
+  assert.match(script, /\/harness\/voice\/status/)
+  assert.match(view, /上次验证/)
+  assert.match(view, /last_verified_at/)
+
+  // Explicit manual one-time connectivity entry points (not automatic).
+  assert.match(script, /\/harness\/voice\/verify-once/)
+  assert.match(script, /acknowledge_quota/)
+  assert.match(view, /验证识别/)
+  assert.match(view, /验证合成/)
+
+  // Tencent cloud mode never collects SecretId/SecretKey on the client.
+  assert.match(view, /腾讯云密钥由后端统一管理/)
+  assert.doesNotMatch(view, /data-k="tencent_secret_(id|key)"/)
 })
 
 test('gym honours the settings voice autoplay preference', () => {

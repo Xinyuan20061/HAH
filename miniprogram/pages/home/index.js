@@ -148,7 +148,8 @@ Page({
       const transcript = await api.postLong('/harness/voice/transcribe', {
         agent_id: this.data.activeCompanion.id,
         audio_base64: audioBase64,
-        format: 'mp3'
+        format: 'mp3',
+        request_id: 'asr-' + Date.now()
       })
       const text = String(transcript && transcript.text || '').trim()
       if (!text) throw new Error('没有听清，再说一次吧')
@@ -179,14 +180,49 @@ Page({
   async speak(text) {
     if (!text || this._unloaded) return
     try {
-      const result = await api.postLong('/harness/voice/synthesize', { agent_id: this.data.activeCompanion.id, text: text.slice(0, 800) })
-      const filePath = `${wx.env.USER_DATA_PATH}/gym-agent-${Date.now()}.mp3`
-      await new Promise((resolve, reject) => wx.getFileSystemManager().writeFile({ filePath, data: result.audio_base64, encoding: 'base64', success: resolve, fail: reject }))
-      if (this._audio) this._audio.destroy()
-      this._audio = wx.createInnerAudioContext()
-      this._audio.src = filePath
-      this._audio.play()
+      const result = await api.postLong('/harness/voice/synthesize', {
+        agent_id: this.data.activeCompanion.id,
+        text,
+        request_id: 'tts-' + Date.now()
+      })
+      // New segmented contract: play MP3 segments in order (never byte-concatenate).
+      let segments = Array.isArray(result.segments) && result.segments.length ? result.segments : null
+      if (!segments && result.audio_base64) {
+        segments = [{ index: 0, audio_base64: result.audio_base64, content_type: result.content_type || 'audio/mpeg' }]
+      }
+      if (!segments || !segments.length) return
+      await this.playSegments(segments)
     } catch (error) {}
+  },
+
+  // Write each MP3 segment to its OWN file and chain playback. If a later segment
+  // fails, already-played segments are not re-synthesized and not re-played.
+  async playSegments(segments) {
+    const fsm = wx.getFileSystemManager()
+    const stamp = Date.now()
+    const files = []
+    for (const seg of segments) {
+      const fp = `${wx.env.USER_DATA_PATH}/hm-tts-${stamp}-${seg.index}.mp3`
+      try {
+        await new Promise((resolve, reject) => fsm.writeFile({ filePath: fp, data: seg.audio_base64, encoding: 'base64', success: resolve, fail: reject }))
+        files.push(fp)
+      } catch (e) { break } // this segment failed -> play the successful ones and stop
+    }
+    if (!files.length) return
+    await this.playQueue(files, 0)
+  },
+
+  playQueue(files, i) {
+    return new Promise(resolve => {
+      if (this._unloaded || i >= files.length) return resolve()
+      if (this._audio) this._audio.destroy()
+      const audio = wx.createInnerAudioContext()
+      this._audio = audio
+      audio.src = files[i]
+      audio.onEnded(() => { this.playQueue(files, i + 1).then(resolve) })
+      audio.onError(() => resolve()) // stop here; earlier segments already played
+      audio.play()
+    })
   },
 
   replay() {

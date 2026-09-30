@@ -141,10 +141,18 @@ def kinetics400_status() -> dict:
 
 def effective_capabilities() -> list[str]:
     usable = []
-    if "motion_pose" in settings.capability_list and pose_status()[0]:
+    pose_ok, _ = pose_status()
+    if "motion_pose" in settings.capability_list and pose_ok:
         usable.append("motion_pose")
     if "food_vision" in settings.capability_list and vlm_status()["available"]:
         usable.append("food_vision")
     if "kinetics400" in settings.capability_list and kinetics400_status()["available"]:
         usable.append("kinetics400")
+    # Unified motion chain: one decode feeds pose + SlowFast + timeline. It only
+    # needs MediaPipe pose as the base engine; Kinetics weights may be offline
+    # and the chain still degrades to six-action recognition (reported at
+    # runtime as kinetics.status="unavailable"). If pose itself is unavailable the
+    # worker must not claim unified jobs at all.
+    if "motion_unified_v1" in settings.capability_list and pose_ok:
+        usable.append("motion_unified_v1")
     return usable

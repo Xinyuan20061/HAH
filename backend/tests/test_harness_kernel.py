@@ -167,19 +167,25 @@ def test_harness_manifest_and_voice_gateway_contract(api, monkeypatch):
     assert body["policies"]["write_actions_require_confirmation"] is True
     assert body["policies"]["worker_tools_least_privilege"] is True
 
-    class VoiceProvider:
-        async def transcribe(self, audio, filename, content_type):
-            assert audio == b"voice-bytes"
-            assert filename.endswith(".mp3")
-            return "今天练十五分钟"
-
-        async def synthesize(self, text):
-            assert text == "现在开始"
-            return SpeechAudio(b"mp3-bytes")
-
     from app.harness import voice as voice_gateway
+    from app.harness.voice import TranscribeResult, TtsSegment, VoiceGateway
 
-    monkeypatch.setattr(voice_gateway, "get_voice_provider", lambda user=None: VoiceProvider())
+    class FakeVoice:
+        name = "tencent_cloud"
+
+        async def transcribe(self, audio, fmt):
+            assert audio == b"voice-bytes"
+            assert fmt == "mp3"
+            return TranscribeResult(text="今天练十五分钟", provider_request_id="r1")
+
+        async def synthesize_segment(self, text):
+            assert text == "现在开始"
+            return TtsSegment(audio=b"mp3-bytes", content_type="audio/mpeg", provider_request_id="r2")
+
+    def fake_gateway(user, db):
+        return VoiceGateway(FakeVoice(), getattr(user, "id", None), db)
+
+    monkeypatch.setattr(voice_gateway, "build_voice_gateway", fake_gateway)
     transcription = api.post(
         "/api/v1/harness/voice/transcribe",
         json={
@@ -196,6 +202,8 @@ def test_harness_manifest_and_voice_gateway_contract(api, monkeypatch):
         json={"agent_id": "xiaojian", "text": "现在开始"},
     )
     assert speech.status_code == 200
+    # New segmented contract, with legacy single-segment compatibility field.
+    assert speech.json()["segments"][0]["audio_base64"]
     assert base64.b64decode(speech.json()["audio_base64"]) == b"mp3-bytes"
 
     blocked = api.post(

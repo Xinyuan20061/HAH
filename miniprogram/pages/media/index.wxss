@@ -44,6 +44,35 @@
 .ai-summary-card{background:#c4e267;border-radius:22rpx;padding:24rpx 24rpx;margin-bottom:24rpx}
 .ai-summary-title{font-size:19rpx;letter-spacing:2rpx;color:#111613;font-weight:700;margin-bottom:12rpx}
 .ai-summary-text{font-size:25rpx;line-height:1.8;color:#111613}
+.ai-summary-degraded{font-size:19rpx;color:#506336;margin-top:12rpx}
 .kinetics-pct{margin-left:16rpx;font-size:22rpx;color:#506336;font-weight:750}
 .detail-toggle .ui-chevron,.goal-entry .ui-chevron{transition:transform .24s cubic-bezier(.2,.8,.2,1)}
 .detail-toggle .ui-chevron.open,.goal-entry .ui-chevron.open{transform:rotate(90deg)}
+
+/* ── 统一动作分析结果页（规格 4.1/4.3/4.4） ── */
+.privacy-note{font-size:19rpx;line-height:1.6;color:#5f665f;background:#f7f7f2;border-radius:16rpx;padding:16rpx;margin:8rpx 0 20rpx}
+.consent-row{display:flex;align-items:center;justify-content:space-between;background:#fff;border:1rpx solid #e9efd9;border-radius:18rpx;padding:16rpx 20rpx;margin-bottom:20rpx}
+.consent-text{display:flex;flex-direction:column;gap:4rpx}
+.consent-title{font-size:24rpx;font-weight:700;color:#111613}
+.consent-sub{font-size:19rpx;color:#506336}
+.result-head{margin:8rpx 0 20rpx}
+.source-badge.local{background:#eeeee6;color:#8a5a45}
+.source-badge.warn{background:#fff1dc;color:#9b5b00}
+.score-block{margin:8rpx 0 20rpx}
+.no-score-note{font-size:23rpx;line-height:1.6;color:#5f665f;background:#f7f7f2;border-radius:16rpx;padding:20rpx}
+.no-score-note text{display:block;font-size:19rpx;color:#8a5a45;margin-top:8rpx}
+.keyframes-block{margin:8rpx 0 24rpx}
+.block-title{font-size:26rpx;font-weight:800;color:#111613;margin-bottom:16rpx}
+.kf-card{background:#fff;border-radius:22rpx;padding:20rpx;margin-bottom:16rpx;box-shadow:0 4rpx 18rpx rgba(17,22,19,.05)}
+.kf-img{width:100%;height:360rpx;border-radius:16rpx;background:#e9efd9;margin-bottom:12rpx}
+.kf-meta{display:flex;align-items:center;gap:12rpx;margin-bottom:8rpx}
+.kf-time{font-size:21rpx;font-weight:800;color:#506336}
+.kf-phase{font-size:19rpx;color:#5f665f;background:#f7f7f2;padding:4rpx 12rpx;border-radius:99rpx}
+.kf-finding{font-size:24rpx;font-weight:700;color:#111613;line-height:1.5;margin:8rpx 0}
+.kf-advice{font-size:22rpx;line-height:1.6;color:#111613}
+.kf-evidence{font-size:18rpx;color:#5f665f;margin-top:12rpx}
+.feedback-row{display:flex;flex-wrap:wrap;gap:12rpx;margin:8rpx 0 20rpx}
+.fb-btn{font-size:21rpx;font-weight:700;padding:12rpx 24rpx;border-radius:99rpx;background:#c4e267;color:#111613}
+.fb-btn.soft{background:#f7f7f2;color:#506336}
+.confidence-line{font-size:21rpx;color:#5f665f;margin-top:12rpx}
+.trace-box{margin-top:12rpx;padding:16rpx;background:#f7f7f2;border-radius:14rpx;font-size:19rpx;line-height:1.6;color:#5f665f}

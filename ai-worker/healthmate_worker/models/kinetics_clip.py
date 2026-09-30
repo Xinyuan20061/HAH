@@ -73,3 +73,28 @@ def build_clip(
     arr = (arr - mean) / std
     clip = torch.from_numpy(arr).permute(3, 0, 1, 2).unsqueeze(0).contiguous()
     return clip, len(frames)
+
+
+def sample_indices_for(num_frames: int) -> list[int]:
+    """Public accessor for the SlowFast temporal sample indices."""
+    return _sample_indices(num_frames)
+
+
+def clip_tensor_from_selected(
+    selected_frames: list[np.ndarray],
+    resize: int = 256,
+    size: int = 224,
+) -> torch.Tensor:
+    """Build a normalized SlowFast clip tensor from already-decoded frames.
+
+    ``selected_frames`` must be BGR frames in temporal order at the indices
+    returned by :func:`sample_indices_for`. This lets the unified chain decode
+    the video once and reuse the same frames for pose + Kinetics, instead of
+    opening the file a second time.
+    """
+    cropped = [_resize_crop(f, resize, size) for f in selected_frames]
+    arr = np.stack(cropped).astype(np.float32)  # T,H,W,3 RGB
+    mean = np.asarray(KINETICS400_MEAN, dtype=np.float32)
+    std = np.asarray(KINETICS400_STD, dtype=np.float32)
+    arr = (arr - mean) / std
+    return torch.from_numpy(arr).permute(3, 0, 1, 2).unsqueeze(0).contiguous()

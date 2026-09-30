@@ -232,9 +232,16 @@ def test_capabilities_are_independent(monkeypatch):
     monkeypatch.setattr(capabilities, "pose_status", lambda: (True, "test"))
     monkeypatch.setattr(capabilities, "vlm_status", lambda: {"available": False})
     monkeypatch.setattr(capabilities, "kinetics400_status", lambda: {"available": False})
-    assert capabilities.effective_capabilities() == ["motion_pose"]
+    monkeypatch.setattr(
+        capabilities.settings,
+        "capabilities",
+        "motion_pose,food_vision,kinetics400,motion_unified_v1",
+    )
+    # Pose-gated engines both advertise when pose works; kinetics/vlm are off.
+    assert capabilities.effective_capabilities() == ["motion_pose", "motion_unified_v1"]
     monkeypatch.setattr(capabilities, "pose_status", lambda: (False, "test"))
     monkeypatch.setattr(capabilities, "vlm_status", lambda: {"available": True})
+    # With pose down, neither motion_pose nor motion_unified_v1 is advertised.
     assert capabilities.effective_capabilities() == ["food_vision"]
 
 

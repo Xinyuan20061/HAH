@@ -9,10 +9,47 @@ from .config import settings
 
 
 class CloudAPIError(RuntimeError):
-    def __init__(self, status: int, path: str):
+    """Raised on a non-2xx cloud response.
+
+    Carries only the SAFE fields the server returns (code / field_path /
+    request_id). The raw response body is never stored nor stringified, so
+    secrets or payloads cannot leak into logs.
+    """
+
+    def __init__(
+        self,
+        status: int,
+        path: str,
+        *,
+        code: str | None = None,
+        field_path: str | None = None,
+        request_id: str | None = None,
+        retryable: bool | None = None,
+    ):
         super().__init__(f"Cloud API HTTP {status} ({path})")
         self.status = status
-        self.retryable = status in {408, 429} or status >= 500
+        self.code = code
+        self.field_path = field_path
+        self.request_id = request_id
+        # Permanent client-side / payload errors must never be retried: resending
+        # the same invalid receipt would just 422 again once the lease expires.
+        if retryable is not None:
+            self.retryable = retryable
+        elif status in {422, 413, 409}:
+            self.retryable = False
+        else:
+            self.retryable = status in {408, 429} or status >= 500
+
+    @property
+    def is_lease_conflict(self) -> bool:
+        """409: the lease was lost / taken by another worker. Handle separately
+        from payload errors (do not re-attempt this job)."""
+        return self.status == 409
+
+    @property
+    def is_permanent_payload_error(self) -> bool:
+        """422 schema invalid / 413 too large: the same payload will always fail."""
+        return self.status in {422, 413}
 
 
 class CloudAPI:
@@ -43,6 +80,33 @@ class CloudAPI:
     def __exit__(self, *_):
         self.close()
 
+    def _error_from_response(self, response: httpx.Response, path: str) -> CloudAPIError:
+        """Extract safe diagnostic fields from a non-2xx body.
+
+        The body itself is never stored on the exception, so a malformed or
+        secret-bearing payload cannot leak into worker logs.
+        """
+        code = field_path = request_id = None
+        try:
+            payload = response.json()
+        except ValueError:
+            payload = None
+        if isinstance(payload, dict):
+            if isinstance(payload.get("code"), str):
+                code = payload["code"]
+            if isinstance(payload.get("request_id"), str):
+                request_id = payload["request_id"]
+            details = payload.get("details")
+            if isinstance(details, dict) and isinstance(details.get("field_path"), str):
+                field_path = details["field_path"]
+        return CloudAPIError(
+            response.status_code,
+            path,
+            code=code,
+            field_path=field_path,
+            request_id=request_id,
+        )
+
     def _post(self, path: str, data: dict):
         for attempt in range(settings.api_max_retries + 1):
             try:
@@ -52,7 +116,7 @@ class CloudAPI:
                         return response.json()
                     except ValueError:
                         raise CloudAPIError(502, path) from None
-                error = CloudAPIError(response.status_code, path)
+                error = self._error_from_response(response, path)
                 if not error.retryable or attempt >= settings.api_max_retries:
                     raise error
                 try:
