@@ -1,7 +1,7 @@
 # 待配置项清单（腾讯云 / 语音 / 视觉）
 
-> 版本：2026-09-30；状态：**部分已完成**。腾讯云语音密钥已配置并通过真实连通验证（ASR+TTS 各一次，2026-09-30）；
-> 云端部署与真机评测仍待办。密钥类禁止入库、禁止写进小程序或 `user_ai_configs`。
+> 版本：2026-09-30；状态：**全部部署完成**。腾讯云语音密钥已配置并通过真实连通验证（ASR+TTS 各一次，2026-09-30）；
+> 云端环境变量已注入、迁移 0024 已上线、Worker 已重启。仅剩线上 verify-once 一次写入待小程序端触发。
 
 ## 1. 腾讯云密钥（已完成 ✅）
 
@@ -50,7 +50,10 @@
 - 密钥变更前先核对控制台再改 `TENCENT_TTS_VOICE_TYPE`。
 - 不要把本地预算数字说成"腾讯云账户真实余量"。
 
-## 7. 仍待办（部署相关）
+## 7. 云端部署（已完成 ✅ 2026-09-30）
 
-- 云端云托管环境变量注入 `TENCENT_SECRET_ID/KEY/REGION/ASR_ENGINE/TTS_VOICE_TYPE` 与 `VOICE_*` 配置（按部署手册）。
-- 云端部署迁移 0024 后，线上触发一次 `verify-once`（asr+tts）写入 `provider_connection_checks`，设置页即可显示"上次验证时间"。
+- ✅ 云端云托管环境变量已注入：`TENCENT_SECRET_ID/KEY/REGION/ASR_ENGINE/TTS_VOICE_TYPE` 与全部 `VOICE_*` 配置（通过 SubmitServerConfigChangeDiff，TaskId 2262142 → 版本 `healthmate-api-023`，100% 流量）。
+- ✅ 线上 MySQL 迁移 0024 已执行（本地 Alembic 直连线上库，`0023_user_voice_config` → `0024_motion_voice_harness`）：五张新表（motion_analysis_runs / motion_analysis_feedback / provider_invocations / provider_connection_checks / voice_usage_daily）+ user_ai_configs 新列（voice_provider / voice_preferences_json）均已确认存在。
+- ✅ 线上 `/health/live` 200；`/api/v1/harness/voice/status` 接口正常（401 需登录态，符合预期）。
+- ✅ 本地 AI Worker 已重启并心跳连通云端（`heartbeat_2xx=true`），能力含 `motion_unified_v1`。
+- ⏳ 唯一剩余：线上触发一次 `verify-once`（asr+tts）写入 `provider_connection_checks`，设置页即可显示"上次验证时间"。需小程序登录态调用，云端已具备条件（`VOICE_LIVE_VERIFY_ENABLED=true`），待小程序端实测触发。
