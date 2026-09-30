@@ -13,6 +13,7 @@ from __future__ import annotations
 from ..errors import ProcessingError
 from ..models.kinetics_runtime import (
     KINETICS_TO_EXERCISE,
+    map_kinetics_label,
     recognize_video_kinetics400,
     slugify_kinetics,
 )
@@ -118,6 +119,9 @@ def analyze_kinetics400(video_path: str, *, progress=None) -> dict:
     candidates = []
     for item in raw.get("candidates", []):
         label = str(item.get("label", ""))
+        # Canonical id comes from the shared catalog (None when the catalog has no
+        # exact mapping — keep the raw label, never force-map to six classes).
+        canonical = map_kinetics_label(label)
         candidates.append(
             {
                 "label": label,
@@ -125,7 +129,8 @@ def analyze_kinetics400(video_path: str, *, progress=None) -> dict:
                 "class_index": int(item.get("class_index", -1)),
                 "probability": round(float(item.get("probability", 0.0)), 4),
                 "exercise_slug": slugify_kinetics(label),
-                "mapped_exercise": KINETICS_TO_EXERCISE.get(label),
+                "mapped_exercise": canonical,
+                "canonical_id": canonical,
             }
         )
     top_label = str(raw.get("top_label", ""))

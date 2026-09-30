@@ -99,6 +99,11 @@ class Settings(BaseSettings):
     worker_offline_after_seconds: int = Field(default=45, ge=10)
     motion_preview_retention_days: int = Field(default=7, ge=1, le=30)
 
+    # Comma-separated WeChat openids allowed to call the read-only motion admin
+    # diagnostics endpoint (error codes / candidates / versions / trace). Empty
+    # by default => nobody may call it; normal users get a 403.
+    motion_admin_openids: str = ""
+
     request_id_header: str = "X-Request-ID"
     diagnostics_timeout_seconds: float = 2.5
     log_level: str = "INFO"

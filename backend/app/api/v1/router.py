@@ -44,5 +44,8 @@ for r in [
     fitness.router,
     knowledge.router,
     harness.router,
+    media.router,
+    media.admin_router,  # F 包追加：/admin/motion-analyses/{id}/diagnostics
+    media.worker_preview_router,  # F 包追加：/worker/jobs/{id}/preview-upload-urls
 ]:
     api_router.include_router(r)

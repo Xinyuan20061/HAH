@@ -142,13 +142,21 @@ def test_motion_tools_registered_as_read_only():
     assert manifest["motion.feedback.read"]["kind"] == "read"
 
     # No write-path tool may exist under motion.* (writes stay proposal-only).
+    # V2 (work package F): timeline.read + history.compare are also read-only.
     motion_names = [n for n in registry.names() if n.startswith("motion.")]
-    assert motion_names == ["motion.analysis.read", "motion.feedback.read"]
+    assert motion_names == [
+        "motion.analysis.read",
+        "motion.feedback.read",
+        "motion.timeline.read",
+        "motion.history.compare",
+    ]
 
     # Coach gets the reads; write-gated actions are outside its least-privilege scope.
     coach = registry.scoped(WORKERS["coach"].tools)
     assert "motion.analysis.read" in coach.names()
     assert "motion.feedback.read" in coach.names()
+    assert "motion.timeline.read" in coach.names()
+    assert "motion.history.compare" in coach.names()
     assert "plan.apply" not in coach.names()
 
 

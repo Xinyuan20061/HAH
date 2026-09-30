@@ -15,7 +15,11 @@ class WorkerSettings(BaseSettings):
     max_redirects: int = Field(default=5, ge=0, le=10)
     api_max_retries: int = Field(default=3, ge=0, le=8)
     log_level: str = "INFO"
-    capabilities: str = "motion_pose,food_vision,kinetics400"
+    # Declares motion_unified_v2 out of the box; motion_pose/food_vision/kinetics400
+    # remain for backward compatibility. Operators can override via the CAPABILITIES
+    # env var; a worker without pose_ok still won't advertise motion_unified_v2 at
+    # runtime (see capabilities.effective_capabilities).
+    capabilities: str = "motion_pose,food_vision,kinetics400,motion_unified_v2"
     local_vlm_base_url: str = "http://127.0.0.1:1234/v1"
     local_vlm_model: str = ""
     local_vlm_api_key: str = ""
@@ -46,6 +50,23 @@ class WorkerSettings(BaseSettings):
     # auto mode records the 400-class candidates but never overrides the rule
     # result; set True only after a passing same-set evaluation (see plan §3.3).
     kinetics400_override_enabled: bool = False
+    # --- Motion-unified V2 evidence pipeline (spec §5.1 / contract §5) ---------
+    # These used to be hard-coded inside motion_unified.py. They are deliberately
+    # SEPARATE knobs: pose sampling FPS, generic candidate FPS, on-screen preview
+    # count and per-frame byte budget are different parameters and must NOT share
+    # a single MAX_PREVIEWS limit.
+    motion_pose_sample_fps: float = Field(default=7.0, ge=2.0, le=15.0)
+    motion_candidate_fps: float = Field(default=2.0, ge=0.5, le=6.0)
+    motion_preview_long_edge: int = Field(default=720, ge=320, le=1280)
+    motion_max_duration_seconds: float = Field(default=60.0, ge=5.0, le=120.0)
+    motion_display_preview_count: int = Field(default=8, ge=1, le=16)
+    motion_preview_max_bytes: int = Field(default=100 * 1024, ge=20 * 1024, le=300 * 1024)
+    motion_evidence_pool_max_frames: int = Field(default=64, ge=8, le=200)
+    # Preview byte upload to the backend signed-URL store. When on (default), the
+    # worker PUTs rendered JPEG previews to the backend after analysis; upload
+    # failures degrade to a warning (local staging kept) and never block the
+    # receipt. Local dev points at the same api_base_url (本机后端).
+    preview_upload_enabled: bool = True
     model_config = SettingsConfigDict(
         env_file=".env", case_sensitive=False, extra="ignore"
     )

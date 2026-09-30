@@ -13,7 +13,12 @@ from app.harness.contracts import (
     ToolObservation,
 )
 from app.harness.kernel import ReActKernel
-from app.harness.motion_evidence import TOOL_ANALYSIS_READ, TOOL_FEEDBACK_READ
+from app.harness.motion_evidence import (
+    TOOL_ANALYSIS_READ,
+    TOOL_FEEDBACK_READ,
+    TOOL_HISTORY_COMPARE,
+    TOOL_TIMELINE_READ,
+)
 from app.harness.registry import ToolRegistry
 
 
@@ -67,6 +72,8 @@ WORKERS = {
             "health.resources.search",
             TOOL_ANALYSIS_READ,
             TOOL_FEEDBACK_READ,
+            TOOL_TIMELINE_READ,
+            TOOL_HISTORY_COMPARE,
         ),
     ),
     "nutritionist": WorkerProfile(
@@ -481,7 +488,12 @@ def _collect_evidence_chain(observations: list[ToolObservation]) -> list[dict[st
         )
 
     for obs in observations:
-        if obs.tool not in {TOOL_ANALYSIS_READ, TOOL_FEEDBACK_READ}:
+        if obs.tool not in {
+            TOOL_ANALYSIS_READ,
+            TOOL_FEEDBACK_READ,
+            TOOL_TIMELINE_READ,
+            TOOL_HISTORY_COMPARE,
+        }:
             continue
         if obs.status != "ok" or not isinstance(obs.output, dict):
             continue

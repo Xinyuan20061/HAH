@@ -10,6 +10,7 @@ import threading
 from pathlib import Path
 from typing import Optional
 
+from .. import catalog_data
 from ..config import settings
 
 _LABELS_PATH = Path(__file__).with_name("kinetics400_labels.txt")
@@ -22,19 +23,38 @@ _model = None
 # parallelizes job processing. Acquire it around every model.predict.
 SLOWFAST_SEMAPHORE = threading.Semaphore(1)
 
-# Kinetics-400 labels that map onto a HealthMate exercise with a full analyzer
-# (squat / pushup / lunge) or a known display slug shown in the mini-program.
-# Only the first three get a dedicated count+score; the rest are recognized
-# without scoring and surface as a familiar exercise name.
-KINETICS_TO_EXERCISE = {
-    "squat": "squat",
-    "push up": "pushup",
-    "lunge": "lunge",
-    "pull ups": "pullup",
-    "bench pressing": "chest_press",
-    "deadlifting": "deadlift",
-    "situp": "situp",
-}
+# Kinetics-400 label -> canonical action id. This used to be a hand-maintained
+# 7-entry table here; it now derives from the generated shared catalog
+# (catalog_data.KINETICS_TO_ID, single source of truth per spec §6.1/§6.2).
+# Labels the catalog does not onboard resolve to None and are kept as raw visual
+# reference — they are NEVER force-mapped to a legacy six-class action.
+KINETICS_TO_EXERCISE: dict[str, Optional[str]] = dict(catalog_data.KINETICS_TO_ID)
+
+
+def map_kinetics_label(label: str) -> Optional[str]:
+    """Map a raw Kinetics-400 label to a canonical action id, or None.
+
+    None means "the catalog has no exact mapping": the label is retained as a
+    visual reference (canonical_id=null in the V2 receipt), not force-mapped.
+    """
+    if not label:
+        return None
+    return catalog_data.KINETICS_TO_ID.get(label.strip())
+
+
+def kinetics_label_zh(label: str) -> str:
+    """Return the catalog Chinese display name for a mapped Kinetics label.
+
+    Unmapped labels fall back to "" (the standalone job keeps its curated display
+    table for those); this helper only reflects the catalog-owned names.
+    """
+    canonical = map_kinetics_label(label)
+    if not canonical:
+        return ""
+    for action in catalog_data.ACTIONS:
+        if action["id"] == canonical:
+            return str(action.get("name_zh") or "")
+    return ""
 
 
 def kinetics400_available() -> bool:

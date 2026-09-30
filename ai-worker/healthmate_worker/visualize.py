@@ -84,42 +84,64 @@ def _encode_jpeg(frame, cv2, max_bytes: int) -> bytes:
     raise ValueError("annotated preview cannot fit size budget")
 
 
-def render_motion_preview(frame, event: dict, *, max_bytes: int = 160 * 1024) -> dict:
+def render_motion_preview(
+    frame,
+    event: dict,
+    *,
+    max_bytes: int = 160 * 1024,
+    draw_skeleton: bool = False,
+    annotate: bool = False,
+    blur_face: bool = True,
+) -> dict:
+    """Render a REAL video frame as a preview (spec §5.3, three image uses).
+
+    * Personal preview (default): the real frame with background, equipment and
+      the full person kept; skeleton lines are hidden (``draw_skeleton=False``)
+      and the engineering header banner is off (``annotate=False``).
+    * Cloud ``redacted_frames``: same real frame with a face gaussian blur
+      (``blur_face=True``); the skeleton overlay stays optional.
+    * Cloud ``skeleton`` mode uses :func:`render_skeleton_canvas` instead.
+    """
     import cv2
 
     output = frame.copy()
     height, width = output.shape[:2]
     points = _point_map(event.get("skeleton") or [], width, height)
-    face_anonymized = _blur_face(output, points, cv2)
-    for start, end in LINKS:
-        if start in points and end in points:
-            cv2.line(output, points[start], points[end], (93, 238, 183), 4, cv2.LINE_AA)
-    for name, point in points.items():
-        is_focus = any(token in name for token in ("knee", "hip", "elbow"))
-        color = (63, 116, 255) if is_focus else (244, 249, 247)
-        cv2.circle(output, point, 7 if is_focus else 5, color, -1, cv2.LINE_AA)
-    overlay = output.copy()
-    cv2.rectangle(overlay, (0, 0), (width, min(74, height)), (21, 55, 46), -1)
-    cv2.addWeighted(overlay, 0.82, output, 0.18, 0, output)
-    event_name = str(event.get("event") or "pose_event")[:32]
-    timestamp = float(event.get("timestamp") or 0)
-    cv2.putText(
-        output,
-        f"AI POSE EVIDENCE  {timestamp:.1f}s  {event_name}",
-        (18, min(47, height - 10)),
-        cv2.FONT_HERSHEY_SIMPLEX,
-        0.55,
-        (244, 249, 247),
-        2,
-        cv2.LINE_AA,
-    )
+    face_anonymized = bool(blur_face) and bool(_blur_face(output, points, cv2))
+    if draw_skeleton:
+        for start, end in LINKS:
+            if start in points and end in points:
+                cv2.line(output, points[start], points[end], (93, 238, 183), 4, cv2.LINE_AA)
+        for name, point in points.items():
+            is_focus = any(token in name for token in ("knee", "hip", "elbow"))
+            color = (63, 116, 255) if is_focus else (244, 249, 247)
+            cv2.circle(output, point, 7 if is_focus else 5, color, -1, cv2.LINE_AA)
+    if annotate:
+        overlay = output.copy()
+        cv2.rectangle(overlay, (0, 0), (width, min(74, height)), (21, 55, 46), -1)
+        cv2.addWeighted(overlay, 0.82, output, 0.18, 0, output)
+        event_name = str(event.get("event") or "pose_event")[:32]
+        timestamp = float(event.get("timestamp") or 0)
+        cv2.putText(
+            output,
+            f"AI POSE EVIDENCE  {timestamp:.1f}s  {event_name}",
+            (18, min(47, height - 10)),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.55,
+            (244, 249, 247),
+            2,
+            cv2.LINE_AA,
+        )
     encoded = _encode_jpeg(output, cv2, max_bytes)
     return {
         "image_b64": base64.b64encode(encoded).decode("ascii"),
         "image_mime": "image/jpeg",
         "preview_sha256": hashlib.sha256(encoded).hexdigest(),
         "preview_bytes": len(encoded),
+        "width": width,
+        "height": height,
         "face_anonymized": face_anonymized,
+        "draw_skeleton": draw_skeleton,
     }
 
 
@@ -183,7 +205,12 @@ def annotate_keyframes(
                 if not ok:
                     continue
             try:
-                event.update(render_motion_preview(frame, event))
+                # Legacy motion_pose chain keeps its overlaid skeleton + banner.
+                event.update(
+                    render_motion_preview(
+                        frame, event, draw_skeleton=True, annotate=True
+                    )
+                )
             except (ValueError, cv2.error):
                 continue
     finally:

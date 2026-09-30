@@ -712,6 +712,17 @@ class MotionAnalysisRun(Base):
     status: Mapped[str] = mapped_column(String(30), default="queued", index=True)
     consent_version: Mapped[str] = mapped_column(String(40), default="")
     model_versions_json: Mapped[str] = mapped_column(Text, default="{}")
+    # V2 (migration 0025): idempotency fingerprint, result version, effective
+    # pipeline chosen by the server, cloud review mode and terminal error code.
+    request_fingerprint: Mapped[str | None] = mapped_column(
+        String(128), nullable=True, index=True
+    )
+    result_version: Mapped[int] = mapped_column(Integer, default=1)
+    effective_pipeline_version: Mapped[str | None] = mapped_column(
+        String(60), nullable=True
+    )
+    cloud_review_mode: Mapped[str] = mapped_column(String(30), default="off")
+    error_code: Mapped[str | None] = mapped_column(String(80), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, index=True)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
@@ -771,6 +782,18 @@ class ProviderInvocation(Base):
     operation: Mapped[str] = mapped_column(String(60))
     request_fingerprint: Mapped[str] = mapped_column(String(128), index=True)
     status: Mapped[str] = mapped_column(String(30), index=True)
+    # V2 (migration 0025): atomic pre-request reservation. reservation_key is the
+    # sha256 of (user_id, evidence_hash, operation, model, prompt_version,
+    # policy_version, consent_mode); the unique constraint lets the DB block a
+    # double-spend race before the external call.
+    reservation_key: Mapped[str | None] = mapped_column(
+        String(128), nullable=True, unique=True
+    )
+    evidence_hash: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    model_name: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    prompt_version: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    policy_version: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    consent_mode: Mapped[str | None] = mapped_column(String(30), nullable=True)
     latency_ms: Mapped[int] = mapped_column(Integer, default=0)
     token_or_char_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
     provider_request_id: Mapped[str | None] = mapped_column(
@@ -834,3 +857,87 @@ class VoiceUsageDaily(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=utc_now, onupdate=utc_now
     )
+
+
+class MotionEvidenceFrame(Base):
+    """Per-run generic evidence pool (V2, migration 0025).
+
+    One row per (run, frame_id). Receipt carries only references
+    (preview_asset_id), never image bytes; rows expire via expires_at and are
+    purged by the short-term storage worker. UNIQUE(run_id, frame_id) makes a
+    re-ingestion idempotent.
+    """
+
+    __tablename__ = "motion_evidence_frames"
+    __table_args__ = (
+        UniqueConstraint("run_id", "frame_id", name="uq_motion_evidence_frame"),
+    )
+    id: Mapped[int] = mapped_column(primary_key=True)
+    run_id: Mapped[int] = mapped_column(
+        ForeignKey("motion_analysis_runs.id"), index=True
+    )
+    frame_id: Mapped[str] = mapped_column(String(80))
+    timestamp_ms: Mapped[int] = mapped_column(Integer, default=0)
+    preview_asset_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    subject_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    observation_json: Mapped[str] = mapped_column(Text, default="{}")
+    expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime, nullable=True, index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+
+
+class MotionStageTask(Base):
+    """Persistent post-processing stage task (V2, migration 0025).
+
+    The worker receipt transaction only validates + stores local evidence, then
+    enqueues these rows. A background consumer claims and advances them,
+    committing at each status transition so polling sees real progress.
+    UNIQUE(run_id, stage, version) gives compare-and-set: a consumer holding an
+    older lease cannot complete a stage that has been re-enqueued at a newer
+    version. status: queued | processing | done | failed.
+    """
+
+    __tablename__ = "motion_stage_tasks"
+    __table_args__ = (
+        UniqueConstraint(
+            "run_id", "stage", "version", name="uq_motion_stage_task"
+        ),
+    )
+    id: Mapped[int] = mapped_column(primary_key=True)
+    run_id: Mapped[int] = mapped_column(
+        ForeignKey("motion_analysis_runs.id"), index=True
+    )
+    stage: Mapped[str] = mapped_column(String(40))
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    status: Mapped[str] = mapped_column(String(20), default="queued", index=True)
+    lease_token: Mapped[str] = mapped_column(String(80), default="")
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    available_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    error_code: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    payload_json: Mapped[str] = mapped_column(Text, default="{}")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=utc_now, onupdate=utc_now
+    )
+
+
+class MotionUserFeedback(Base):
+    """Per-feedback user annotations (V2, migration 0025).
+
+    Written separately from the computed result snapshot so a re-analysis never
+    overwrites user corrections. kind: useful | wrong_label | wrong_frame |
+    unhelpful_advice.
+    """
+
+    __tablename__ = "motion_user_feedback"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    run_id: Mapped[int] = mapped_column(
+        ForeignKey("motion_analysis_runs.id"), index=True
+    )
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    kind: Mapped[str] = mapped_column(String(30), index=True)
+    frame_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    corrected_label: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    comment: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, index=True)

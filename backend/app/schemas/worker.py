@@ -259,6 +259,125 @@ def validate_motion_worker_result_v1(result: dict) -> dict:
     return result
 
 
+# --------------------------------------------------------------------------- #
+# V2 unified receipt (contract section 5). Six evidence groups; the receipt
+# carries REFERENCES (preview_asset_id), never image bytes. finding/advice/phase
+# stay inline on frames[]. recognition_candidates mixes pose + kinetics sources;
+# the legacy worker still emits kinetics.candidates, so that field is parsed too.
+# --------------------------------------------------------------------------- #
+
+MOTION_WORKER_RESULT_V2_SCHEMA_VERSION = "motion-worker-v2"
+
+
+class V2VideoQuality(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    available: bool
+    decoded_ok: bool = True
+    duration_ms: int | None = Field(default=None, ge=0)
+    blur_summary: str | None = None
+
+
+class V2Subject(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    available: bool
+    subject_id: str | None = None
+    visible_regions: list[str] = Field(default_factory=list, max_length=12)
+
+
+class V2PoseEvidence(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    available: bool
+    fps: float | None = Field(default=None, ge=0)
+    frame_ids: list[str] = Field(default_factory=list, max_length=512)
+    measurement_summary: str | None = None
+
+
+class V2RecognitionCandidate(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    source: str = Field(min_length=1, max_length=24)
+    source_label: str = Field(min_length=1, max_length=80)
+    canonical_id: str | None = Field(default=None, max_length=40)
+    raw_score: float | None = None
+    score_type: str | None = Field(default=None, max_length=24)
+
+
+class V2KineticsBlock(BaseModel):
+    """R05: the current worker emits receipt.kinetics.candidates; keep it parsed."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    candidates: list[V2RecognitionCandidate] = Field(default_factory=list, max_length=20)
+
+
+class V2EvidenceFrame(BaseModel):
+    """Generic evidence pool row: reference only, no image bytes.
+
+    finding/advice/phase stay inline (contract note: V2 keeps the V1 row shape).
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    frame_id: str = Field(min_length=1, max_length=80)
+    timestamp_ms: int = Field(ge=0)
+    preview_asset_id: str | None = Field(default=None, max_length=128)
+    subject_id: str | None = Field(default=None, max_length=80)
+    visible_regions: list[str] = Field(default_factory=list, max_length=12)
+    blur: str | None = None
+    motion_delta: float | None = None
+    phase: str | None = Field(default=None, max_length=40)
+    finding: str | None = None
+    advice: str | None = None
+    next_step: str | None = None
+
+
+class V2Measurements(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    available: bool
+    exercise_id: str | None = Field(default=None, max_length=40)
+    reps: int | None = Field(default=None, ge=0, le=10000)
+    duration_ms: int | None = Field(default=None, ge=0)
+    quality: dict = Field(default_factory=dict)
+
+
+class MotionWorkerResultV2(BaseModel):
+    """V2 unified worker receipt (schema_version = motion-worker-v2).
+
+    V1 historical receipts keep parsing through MotionWorkerResultV1. A V2 receipt
+    must NOT carry image bytes; previews live in short-term storage and are
+    referenced by preview_asset_id.
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    schema_version: Literal["motion-worker-v2"]
+    video_quality: V2VideoQuality
+    subject: V2Subject
+    pose_evidence: V2PoseEvidence
+    recognition_candidates: list[V2RecognitionCandidate] = Field(
+        default_factory=list, max_length=24
+    )
+    kinetics: V2KineticsBlock | None = None
+    frames: list[V2EvidenceFrame] = Field(default_factory=list, max_length=512)
+    measurements: V2Measurements
+
+
+def validate_motion_worker_result_v2(result: dict) -> dict:
+    """Validate a v2 motion receipt; raise MotionResultSchemaError on failure."""
+    try:
+        MotionWorkerResultV2.model_validate(result)
+    except ValidationError as exc:
+        raise MotionResultSchemaError(
+            "动作分析结果(V2)格式不符合约定",
+            field_path=motion_result_first_error_path(exc),
+        ) from None
+    return result
+
+
 class WorkerHeartbeatIn(BaseModel):
     worker_id: str = Field(min_length=3, max_length=120)
     name: str = Field(default="HealthMate Local Worker", max_length=120)

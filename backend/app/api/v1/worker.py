@@ -13,9 +13,17 @@ from sqlalchemy.orm import Session
 from app.api.worker_deps import require_worker_token
 from app.core.config import settings
 from app.core.database import get_db
-from app.models import AIJob, FoodAnalysisSession, MotionScore, MotionEvent
+from app.models import (
+    AIJob,
+    FoodAnalysisSession,
+    MotionScore,
+    MotionEvent,
+    MotionAnalysisRun,
+    MotionEvidenceFrame,
+)
 from app.schemas.worker import (
     MOTION_WORKER_RESULT_SCHEMA_VERSION,
+    MOTION_WORKER_RESULT_V2_SCHEMA_VERSION,
     MotionResultSchemaError,
     WorkerClaimIn,
     WorkerCompleteIn,
@@ -23,6 +31,7 @@ from app.schemas.worker import (
     WorkerHeartbeatIn,
     WorkerProgressIn,
     validate_motion_worker_result_v1,
+    validate_motion_worker_result_v2,
 )
 from app.schemas.ai_results import FoodResult
 from pydantic import ValidationError
@@ -36,6 +45,13 @@ from app.services.ai_jobs import (
 from app.services.evaluation import record_metric
 from app.services.timeline import add_event
 from app.services.training_semantics import build_motion_semantics
+from app.services.motion.stage_tasks import (
+    enqueue_postprocessing_stages,
+    complete_stage,
+    fail_stage,
+    STAGE_VISION_REVIEW,
+    STAGE_FEEDBACK,
+)
 
 router = APIRouter(
     prefix="/worker", tags=["ai-worker"], dependencies=[Depends(require_worker_token)]
@@ -336,6 +352,17 @@ def _validate_motion_result_with_contract(result: dict, request: Request) -> dic
     if version is None:
         # Old worker on the deprecation path: legacy rules, same 422 semantics.
         return _validate_motion_result(result)
+    if version == MOTION_WORKER_RESULT_V2_SCHEMA_VERSION:
+        try:
+            return validate_motion_worker_result_v2(result)
+        except MotionResultSchemaError as exc:
+            logger.info(
+                "motion v2 result rejected rid=%s field_path=%s reason=%s",
+                rid,
+                exc.field_path,
+                exc.message,
+            )
+            raise
     if version != MOTION_WORKER_RESULT_SCHEMA_VERSION:
         logger.info(
             "motion result rejected rid=%s field_path=schema_version version=%r",
@@ -397,6 +424,55 @@ def _validate_kinetics400_result(result: dict) -> dict:
     if top_label not in seen:
         raise HTTPException(422, "top_label 不在候选中")
     return result
+
+
+def _persist_motion_evidence(db: Session, run: MotionAnalysisRun, result: dict) -> None:
+    """Idempotently store the generic evidence pool into motion_evidence_frames.
+
+    V2 receipts carry frame_id/timestamp_ms/preview_asset_id; legacy V1 receipts
+    carry event/timestamp(seconds). Image bytes are never stored here -- only
+    references. Rows expire via expires_at and are swept by the purge worker.
+    """
+    from datetime import timedelta
+
+    cutoff = utc_now() + timedelta(days=settings.motion_preview_retention_days)
+    raw_frames = result.get("frames") or []
+    if not isinstance(raw_frames, list):
+        return
+    for index, frame in enumerate(raw_frames):
+        if not isinstance(frame, dict):
+            continue
+        frame_id = frame.get("frame_id") or f"frame:{index}"
+        ts_ms = frame.get("timestamp_ms")
+        if not isinstance(ts_ms, int):
+            ts = frame.get("timestamp")
+            ts_ms = int(float(ts) * 1000) if isinstance(ts, (int, float)) else 0
+        observation = {
+            k: v
+            for k, v in frame.items()
+            if k not in {"image_b64", "image_mime", "preview_bytes"}
+        }
+        existing = db.scalar(
+            select(MotionEvidenceFrame).where(
+                MotionEvidenceFrame.run_id == run.id,
+                MotionEvidenceFrame.frame_id == frame_id,
+            )
+        )
+        values = dict(
+            timestamp_ms=ts_ms,
+            preview_asset_id=frame.get("preview_asset_id"),
+            subject_id=frame.get("subject_id"),
+            observation_json=json.dumps(observation, ensure_ascii=False, default=str),
+            expires_at=cutoff,
+        )
+        if existing is None:
+            db.add(
+                MotionEvidenceFrame(run_id=run.id, frame_id=frame_id, **values)
+            )
+        else:
+            for key, value in values.items():
+                setattr(existing, key, value)
+    db.flush()
 
 
 @router.post("/jobs/{job_id}/complete")
@@ -654,26 +730,35 @@ def complete(
             ref_id=job.id,
         )
     elif job.job_type == "motion_unified":
-        # P0-B unified chain: the receipt was already validated against
-        # MotionWorkerResultV1 above. Materialise the unified result contract,
-        # run the DeepSeek visual review + grounded summary and persist them.
-        from app.services.motion.orchestrator import handle_unified_worker_result
-
-        try:
-            handle_unified_worker_result(db, job, result, body.metrics)
-        except Exception:
-            logger.exception("motion_unified orchestration failed job=%s", job.id)
-            from app.models import MotionAnalysisRun
-
-            run = db.scalar(
-                select(MotionAnalysisRun).where(
-                    MotionAnalysisRun.ai_job_id == job.id
-                )
+        # R14 / spec 9.1: the receipt transaction ONLY validates, stores local
+        # evidence and enqueues post-processing stage rows; it commits before any
+        # external (DeepSeek) call. The post-processing then advances the persisted
+        # stages with compare-and-set versioning, so a restart resumes from the rows
+        # and a stale consumer cannot overwrite a newer result.
+        run = db.scalar(
+            select(MotionAnalysisRun).where(
+                MotionAnalysisRun.ai_job_id == job.id
             )
-            if run is not None:
-                run.status = "failed"
-                run.finished_at = utc_now()
-            raise
+        )
+        if run is None:
+            logger.warning("motion_unified job %s has no run row", job.id)
+        else:
+            _persist_motion_evidence(db, run, result)
+            consent = bool(json_loads(job.payload_json, {}).get("consent_deepseek_frames"))
+            run.result_version = 1
+            run.effective_pipeline_version = run.pipeline_version
+            # B-package contract: legacy consent_deepseek_frames=True maps to
+            # redacted_frames; any explicit cloud_review_mode in payload wins.
+            explicit_mode = json_loads(job.payload_json, {}).get("cloud_review_mode")
+            run.cloud_review_mode = explicit_mode or ("redacted_frames" if consent else "off")
+            run.status = "evidence_ready"
+            run.error_code = None
+            db.flush()
+            # Spec 9.1: commit the local evidence + queued stages and return.
+            # DeepSeek visual review / summary happen in the background consumer
+            # (stage_tasks.process_pending_stages); the HTTP receipt MUST NOT wait.
+            enqueue_postprocessing_stages(db, run_id=run.id, payload={"job_id": job.id})
+            db.commit()
     else:
         raise HTTPException(422, "不支持的 AI 任务类型")
 

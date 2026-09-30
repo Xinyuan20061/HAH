@@ -155,4 +155,12 @@ def effective_capabilities() -> list[str]:
     # worker must not claim unified jobs at all.
     if "motion_unified_v1" in settings.capability_list and pose_ok:
         usable.append("motion_unified_v1")
+    # V2 unified motion chain (contract "motion-worker-v2" receipt: video_quality /
+    # subject / pose_evidence / recognition_candidates / kinetics / frames /
+    # measurements). Same MediaPipe base requirement; kept additive so a worker can
+    # advertise v2 (and still be claimed by the backend, which gates unified jobs
+    # behind either declaration during the migration window). v1 remains advertised
+    # for backward compatibility with the old receipt contract.
+    if "motion_unified_v2" in settings.capability_list and pose_ok:
+        usable.append("motion_unified_v2")
     return usable

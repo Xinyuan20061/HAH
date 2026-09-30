@@ -5,12 +5,18 @@ import json
 from datetime import timedelta
 from uuid import uuid4
 
-from sqlalchemy import select, update, or_, case
+from sqlalchemy import select, update, or_, case, delete
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.time import utc_now, utc_iso
-from app.models import AIJob, AIWorkerNode, MediaAsset
+from app.models import (
+    AIJob,
+    AIWorkerNode,
+    MediaAsset,
+    MotionAnalysisFeedback,
+    MotionEvidenceFrame,
+)
 
 
 def json_loads(value: str, default):
@@ -117,15 +123,62 @@ def requeue_expired_jobs(db: Session) -> int:
     return exhausted + queued
 
 
+def _strip_image_bytes_from_result(result: dict) -> bool:
+    """Remove image bytes / data: URLs from a motion result blob (V1 or V2).
+
+    V1 motion_pose frames carry image_b64; the unified V2 result renders
+    keyframes[].image_url as a data:image/jpeg;base64 URL. Both are long-lived
+    TEXT columns and must be swept after the short retention window.
+    """
+    stripped = False
+    frames = result.get("frames")
+    if isinstance(frames, list):
+        for frame in frames:
+            if not isinstance(frame, dict):
+                continue
+            had_image = False
+            for key in ["image_b64", "image_mime", "preview_bytes"]:
+                if key in frame:
+                    frame.pop(key, None)
+                    had_image = True
+            url = frame.get("url")
+            if isinstance(url, str) and url.startswith("data:image/"):
+                frame["url"] = ""
+                had_image = True
+            # Legacy marker retained so historical readers/tests see the strip.
+            if had_image:
+                frame["preview_expired"] = True
+                stripped = True
+    keyframes = result.get("keyframes")
+    if isinstance(keyframes, list):
+        for keyframe in keyframes:
+            if not isinstance(keyframe, dict):
+                continue
+            url = keyframe.get("image_url")
+            if isinstance(url, str) and url.startswith("data:image/"):
+                keyframe["image_url"] = ""
+                stripped = True
+    return stripped
+
+
 def purge_expired_motion_previews(db: Session, *, now=None, limit: int = 100) -> int:
-    """Bound preview retention without deleting structured motion evidence."""
-    cutoff = (now or utc_now()) - timedelta(
-        days=settings.motion_preview_retention_days
-    )
+    """Bound preview retention without deleting structured motion evidence.
+
+    R15: covers BOTH the legacy motion_pose chain AND the unified V2 chain --
+    AIJob.result_json (raw receipt frames) and MotionAnalysisFeedback.result_json
+    (the unified snapshot with data: URLs in keyframes) -- plus expired
+    motion_evidence_frames rows. Expiry, media deletion and account deletion all
+    flow through this sweeper.
+    """
+    now = now or utc_now()
+    cutoff = now - timedelta(days=settings.motion_preview_retention_days)
+    changed = 0
+
+    # --- AIJob raw receipts (motion_pose + motion_unified) ---------------------
     jobs = db.scalars(
         select(AIJob)
         .where(
-            AIJob.job_type == "motion_pose",
+            AIJob.job_type.in_(["motion_pose", "motion_unified"]),
             AIJob.status == "done",
             AIJob.finished_at < cutoff,
             AIJob.result_json.contains('"image_b64"'),
@@ -133,24 +186,39 @@ def purge_expired_motion_previews(db: Session, *, now=None, limit: int = 100) ->
         .order_by(AIJob.finished_at, AIJob.id)
         .limit(max(1, min(limit, 500)))
     ).all()
-    changed = 0
     for job in jobs:
         result = json_loads(job.result_json, {})
-        frames = result.get("frames") if isinstance(result, dict) else None
-        if not isinstance(frames, list):
+        if not isinstance(result, dict):
             continue
-        stripped = False
-        for frame in frames:
-            if not isinstance(frame, dict) or "image_b64" not in frame:
-                continue
-            for key in ["image_b64", "image_mime", "preview_bytes"]:
-                frame.pop(key, None)
-            frame["preview_expired"] = True
-            stripped = True
-        if stripped:
+        if _strip_image_bytes_from_result(result):
             job.result_json = json.dumps(result, ensure_ascii=False, default=str)
             db.add(job)
             changed += 1
+
+    # --- unified result snapshots (MotionAnalysisFeedback.result_json) ----------
+    feedbacks = db.scalars(
+        select(MotionAnalysisFeedback)
+        .where(
+            MotionAnalysisFeedback.created_at < cutoff,
+            MotionAnalysisFeedback.result_json.contains("data:image/"),
+        )
+        .order_by(MotionAnalysisFeedback.created_at, MotionAnalysisFeedback.id)
+        .limit(max(1, min(limit, 500)))
+    ).all()
+    for fb in feedbacks:
+        result = json_loads(fb.result_json, {})
+        if not isinstance(result, dict):
+            continue
+        if _strip_image_bytes_from_result(result):
+            fb.result_json = json.dumps(result, ensure_ascii=False, default=str)
+            db.add(fb)
+            changed += 1
+
+    # --- expired generic evidence frames (reference-only rows) ------------------
+    deleted = db.execute(
+        delete(MotionEvidenceFrame).where(MotionEvidenceFrame.expires_at < now)
+    ).rowcount
+    changed += int(deleted or 0)
     return changed
 
 
@@ -195,9 +263,13 @@ def claim_next_job(
     supported = [
         x for x in capabilities if x in {"motion_pose", "food_vision", "kinetics400"}
     ]
-    # The unified motion chain is only claimed by workers that explicitly declare
-    # the motion_unified_v1 capability (single-decode processor spec 3.2).
-    if "motion_unified_v1" in capabilities:
+    # The unified motion chain (job_type "motion_unified") is only claimed by
+    # workers that explicitly declare a unified capability: motion_unified_v1 (old
+    # receipt contract) or motion_unified_v2 (contract "motion-worker-v2"). A worker
+    # declaring neither cannot claim unified jobs; the run's effective_pipeline_version
+    # selects the receipt shape server-side. During the migration window a v1 worker may
+    # still claim a unified job, which is the intended backward-compatible rollout.
+    if "motion_unified_v1" in capabilities or "motion_unified_v2" in capabilities:
         supported.append("motion_unified")
     if not supported:
         return None

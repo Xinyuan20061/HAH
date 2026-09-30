@@ -200,5 +200,48 @@ class CloudAPI:
             },
         )
 
+    def request_preview_upload_urls(self, job_id: int, *, frame_ids: list[str], asset_prefix: str):
+        """Ask the backend for signed per-frame upload URLs (worker side, byte chain).
+
+        Returns ``{"uploads": [{frame_id, asset_id, upload_url}, ...]}``. The
+        backend binds each URL to user_id/run_id/asset_prefix/exp; the worker
+        cannot pick an arbitrary external URL.
+        """
+        return self._post(
+            f"/worker/jobs/{job_id}/preview-upload-urls",
+            {
+                "worker_id": settings.worker_id,
+                "job_id": job_id,
+                "frame_ids": list(frame_ids),
+                "asset_prefix": asset_prefix,
+            },
+        )
+
+    def put_preview(self, upload_url: str, body: bytes) -> None:
+        """PUT a rendered JPEG to a backend-minted signed upload URL.
+
+        ``upload_url`` is the path+query returned by request_preview_upload_urls;
+        it already carries the signature. Uses the same worker-token client as
+        POST /complete. Raises CloudAPIError on non-2xx.
+        """
+        for attempt in range(settings.api_max_retries + 1):
+            try:
+                response = self.client.put(
+                    self.base + upload_url,
+                    content=body,
+                    headers={"Content-Type": "image/jpeg"},
+                )
+                if response.is_success:
+                    return
+                error = self._error_from_response(response, upload_url)
+                if not error.retryable or attempt >= settings.api_max_retries:
+                    raise error
+                time.sleep(min(5.0, 2 ** attempt))
+            except httpx.TransportError:
+                if attempt >= settings.api_max_retries:
+                    raise CloudAPIError(503, upload_url) from None
+                time.sleep(min(5.0, 2 ** attempt))
+        raise CloudAPIError(503, upload_url)
+
     def close(self):
         self.client.close()

@@ -1,14 +1,17 @@
 # -*- coding: utf-8 -*-
-"""P0-B unified motion chain tests.
+"""P0-B unified motion chain V2 tests.
 
-Covers:
+Covers MotionWorkerResultV2 evidence pipeline:
   * single decode (VideoCapture opened exactly once, frames reused),
-  * motion_unified_v1 capability declaration,
-  * Kinetics offline degradation,
-  * pose-engine-unavailable degradation,
-  * both-engines-down hard failure,
-  * pure-canvas skeleton keyframe desensitization (pixel-level),
-  * MotionWorkerResultV1 local pre-validation (valid + invalid fixtures).
+  * generic evidence pool independent of six-class rejection (R04 / T02),
+  * real-frame personal previews decoupled from cloud consent (R02/R10 / T09),
+  * timeline sorted by real timestamp (R08 / T06),
+  * six-group receipt local pre-validation,
+  * the synthetic bicep-curl offline sample fixture end-to-end.
+
+Baseline was 117 v1 tests; the two "six-class reject => frames must be empty"
+contract points are deliberately split into "no pose measurement" vs
+"no video image" (spec §11.1).
 """
 
 from __future__ import annotations
@@ -33,6 +36,9 @@ from healthmate_worker.visualize import (
     render_skeleton_canvas,
 )
 
+FIXTURE_DIR = Path(__file__).resolve().parent / "fixtures"
+BICEP_FIXTURE = FIXTURE_DIR / "bicep_curl_offline_sample.mp4"
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -49,6 +55,22 @@ def _make_video(path: Path, frames: int = 60, size=(64, 64), fps: float = 30.0):
         img[10:40, 20:44] = (0, 0, 255)  # red "person blob"
         writer.write(img)
     writer.release()
+
+
+def _evidence_entry(ts_ms: float, motion_delta: float = 0.1) -> dict:
+    return {
+        "frame_index": int(ts_ms // 33),
+        "timestamp_ms": ts_ms,
+        "bgr": np.zeros((48, 64, 3), dtype=np.uint8),
+        "width": 64,
+        "height": 48,
+        "blur_var": 80.0,
+        "brightness": 120.0,
+        "motion_delta": motion_delta,
+        "skeleton": None,
+        "visible_regions": [],
+        "subject_bbox": None,
+    }
 
 
 class _FakePoseResult:
@@ -69,11 +91,11 @@ class _FakePose:
 class _FakeKineticsModel:
     def predict(self, clip, topk=5):
         return {
-            "top_label": "squat",
-            "top_probability": 0.72,
+            "top_label": "front raises",
+            "top_probability": 0.73,
             "candidates": [
-                {"label": "squat", "class_index": 300, "probability": 0.72},
-                {"label": "tai chi", "class_index": 346, "probability": 0.11},
+                {"label": "front raises", "class_index": 134, "probability": 0.73},
+                {"label": "squat", "class_index": 300, "probability": 0.11},
             ],
         }
 
@@ -86,14 +108,14 @@ def video_file(tmp_path):
 
 
 def _patch_no_pose_landmarks(monkeypatch):
-    """Make MediaPipe Pose return no landmarks (so six-class stays empty)."""
+    """Make MediaPipe Pose return no landmarks (so six-class stays rejected)."""
     import mediapipe as mp
 
     monkeypatch.setattr(mp.solutions.pose, "Pose", _FakePose)
 
 
 # ---------------------------------------------------------------------------
-# Single decode
+# Single decode + split "no pose" vs "no video image" (§11.1)
 # ---------------------------------------------------------------------------
 
 
@@ -108,7 +130,6 @@ def test_single_decode_opens_video_exactly_once(monkeypatch, video_file):
     monkeypatch.setattr(cv2, "VideoCapture", counting_capture)
     monkeypatch.setattr(motion_unified, "_pose_engine_available", lambda: True)
     _patch_no_pose_landmarks(monkeypatch)
-    # Kinetics weights offline -> chain must still complete six-action path.
     monkeypatch.setattr(motion_unified, "get_kinetics400", lambda: None)
 
     result = motion_unified.analyze_motion_unified(
@@ -116,12 +137,122 @@ def test_single_decode_opens_video_exactly_once(monkeypatch, video_file):
     )
     # The whole chain decodes the file exactly once (pose + clip reuse the pass).
     assert len(opens) == 1
-    assert result["kinetics"]["status"] == "unavailable"
-    # No landmarks -> abstain, no score, no visual content.
-    assert result["recognition"]["accepted"] is False
-    assert result["pose"]["available"] is False
-    assert result["score"]["available"] is False
-    assert result["frames"] == []
+    # No landmarks -> no pose measurement, no score; kinetics offline too.
+    assert not [c for c in result["recognition_candidates"] if c["source"] == "kinetics"]
+    # No landmarks -> no pose measurement, no score.
+    assert result["pose_evidence"]["available"] is False
+    assert result["measurements"]["available"] is False
+    # SPLIT (was: result["frames"] == []). The video decoded successfully, so the
+    # generic evidence pool / timeline is NON-EMPTY even with no pose landmarks.
+    # "No pose measurement" must not be reported as "no video / no person".
+    assert result["video_quality"]["decoded_ok"] is True
+    assert len(result["frames"]) >= 1
+    result["schema_version"] = SCHEMA_VERSION
+    validate_motion_result_local(result)
+
+
+def test_no_video_image_frames_empty(tmp_path):
+    """The other half of the split: a genuinely undecodable video yields no frames."""
+    empty = tmp_path / "empty.mp4"
+    empty.write_bytes(b"not a real mp4")
+    with pytest.raises(ProcessingError) as exc:
+        motion_unified.analyze_motion_unified(empty)
+    assert exc.value.code == "invalid_media"
+
+
+# ---------------------------------------------------------------------------
+# T02: non-six-class rejection still carries real evidence
+# ---------------------------------------------------------------------------
+
+
+def test_t02_rejected_six_class_still_has_timeline_and_real_frames(
+    monkeypatch, tmp_path
+):
+    monkeypatch.setattr(motion_unified, "_pose_engine_available", lambda: True)
+    _patch_no_pose_landmarks(monkeypatch)  # six-class event detector finds nothing
+    monkeypatch.setattr(motion_unified, "get_kinetics400", lambda: None)
+
+    out_dir = tmp_path / "previews"
+    result = motion_unified.analyze_motion_unified(
+        BICEP_FIXTURE,
+        requested_exercise="auto",
+        cloud_review_mode="redacted_frames",
+        preview_out_dir=out_dir,
+    )
+    # Six-class recognition rejected (no landmarks), but the decoded video still
+    # produces a usable timeline with real frame references.
+    assert result["pose_evidence"]["available"] is False
+    assert result["measurements"]["available"] is False
+    assert result["video_quality"]["decoded_ok"] is True
+    assert len(result["frames"]) >= 4, "timeline must not be empty on six-class reject"
+    # No fabricated "no person" refusal: rows carry real frame references.
+    for frame in result["frames"]:
+        assert frame["frame_id"]
+        assert frame["timestamp_ms"] >= 0
+        assert frame["preview_asset_id"]
+        assert frame["preview_sha256"]
+        assert frame["preview_dimensions"]["width"] > 0
+        assert frame["preview_bytes"] <= settings.motion_preview_max_bytes
+    # Personal previews were rendered to disk as real JPEGs.
+    files = sorted(out_dir.glob("*.jpg"))
+    assert len(files) == len(result["frames"])
+    raw = files[0].read_bytes()
+    assert raw.startswith(b"\xff\xd8") and raw.endswith(b"\xff\xd9")
+    result["schema_version"] = SCHEMA_VERSION
+    validate_motion_result_local(result)
+
+
+# ---------------------------------------------------------------------------
+# T06: strict real-time ordering; phases not faked from array ends
+# ---------------------------------------------------------------------------
+
+
+def test_t06_frames_sorted_by_real_timestamp_ascending():
+    evidence = [_evidence_entry(t * 1000.0) for t in (9.3, 0.9, 4.8, 2.8)]
+    event_frames = [
+        {"timestamp": 9.3, "event": "squat_bottom", "reason": "x"},
+        {"timestamp": 0.9, "event": "squat_top", "reason": "y"},
+        {"timestamp": 4.8, "event": "squat_completed", "reason": "z"},
+        {"timestamp": 2.8, "event": "squat_deepest", "reason": "w"},
+    ]
+    out = motion_unified._select_timeline_frames(
+        evidence, event_frames, display_count=8, duration=10.0
+    )
+    ts = [round(f["timestamp_ms"] / 1000.0, 1) for f in out]
+    assert ts == sorted(ts), f"timeline not time-sorted: {ts}"
+    assert set(ts) >= {0.9, 2.8, 4.8, 9.3}
+    # Phases come from evidence, not from "first element = start".
+    phases = {round(f["timestamp_ms"] / 1000.0, 1): f["phase"] for f in out}
+    assert phases[9.3] != phases[0.9] or phases[9.3]
+
+
+# ---------------------------------------------------------------------------
+# T09: cloud off still yields previews + timeline, zero external calls
+# ---------------------------------------------------------------------------
+
+
+def test_t09_cloud_off_personal_previews_still_work_no_external_calls(
+    monkeypatch, tmp_path
+):
+    monkeypatch.setattr(motion_unified, "_pose_engine_available", lambda: True)
+    _patch_no_pose_landmarks(monkeypatch)
+    monkeypatch.setattr(motion_unified, "get_kinetics400", lambda: None)
+
+    out_dir = tmp_path / "previews"
+    result = motion_unified.analyze_motion_unified(
+        BICEP_FIXTURE,
+        requested_exercise="auto",
+        cloud_review_mode="off",
+        preview_out_dir=out_dir,
+    )
+    assert result["cloud_review_mode"] == "off"
+    # Personal timeline + previews unaffected by turning third-party off.
+    assert len(result["frames"]) >= 4
+    assert list(out_dir.glob("*.jpg")), "personal previews must render even with cloud off"
+    # No cloud image bytes prepared and no external provider calls.
+    assert result["external_provider_calls"] == 0
+    for frame in result["frames"]:
+        assert "cloud_preview_sha256" not in frame
     result["schema_version"] = SCHEMA_VERSION
     validate_motion_result_local(result)
 
@@ -156,11 +287,12 @@ def test_kinetics_offline_continues_six_action(monkeypatch, video_file):
     result = motion_unified.analyze_motion_unified(
         video_file, requested_exercise="auto", consent_deepseek_frames=False
     )
-    assert result["kinetics"]["status"] == "unavailable"
-    assert result["kinetics"]["candidates"] == []
-    # Chain still produced a (rejected) six-class recognition, not a crash.
-    assert result["recognition"]["mode"] == "auto"
-    assert result["pose"]["available"] is False
+    assert result["video_quality"]["decoded_ok"] is True
+    # Kinetics offline -> no kinetics-sourced candidates.
+    assert not [c for c in result["recognition_candidates"] if c["source"] == "kinetics"]
+    # Chain still produced a (rejected) result, not a crash.
+    assert result["pose_evidence"]["available"] is False
+    assert result["measurements"]["available"] is False
 
 
 def test_pose_unavailable_still_emits_kinetics_candidates(monkeypatch, video_file):
@@ -171,29 +303,38 @@ def test_pose_unavailable_still_emits_kinetics_candidates(monkeypatch, video_fil
     result = motion_unified.analyze_motion_unified(
         video_file, requested_exercise="auto", consent_deepseek_frames=False
     )
-    assert result["pose"]["available"] is False
-    assert result["score"]["available"] is False
-    assert result["recognition"]["accepted"] is False
-    assert result["recognition"]["selected_type"] is None
-    # Kinetics candidates still surface (400-class layer).
-    assert result["kinetics"]["status"] == "available"
-    assert result["kinetics"]["top_label"] == "squat"
-    assert result["kinetics"]["candidates"][0]["probability"] == 0.72
+    assert result["pose_evidence"]["available"] is False
+    assert result["measurements"]["available"] is False
+    # Kinetics candidates surface, namespace-normalized (R05).
+    kin = [c for c in result["recognition_candidates"] if c["source"] == "kinetics"]
+    assert kin, "kinetics candidates must still surface when pose engine is down"
+    top = kin[0]
+    assert top["source_label"] == "front raises"
+    assert top["canonical_id"] == "front_raise"  # catalog mapping
+    assert top["raw_score"] == 0.73
+    assert top["score_type"] == "softmax"
+    # Decoded video still yields a timeline even without pose landmarks.
+    assert len(result["frames"]) >= 1
     result["schema_version"] = SCHEMA_VERSION
     validate_motion_result_local(result)
 
 
-def test_both_engines_down_is_hard_failure(monkeypatch, video_file):
+def test_both_engines_down_still_timeline_not_hard_failure(monkeypatch, video_file):
+    """V2: decoded video alone still gives a timeline; only undecodable media fails."""
     monkeypatch.setattr(motion_unified, "_pose_engine_available", lambda: False)
     monkeypatch.setattr(motion_unified, "get_kinetics400", lambda: None)
-    with pytest.raises(ProcessingError) as exc:
-        motion_unified.analyze_motion_unified(video_file)
-    assert exc.value.retryable is False
-    assert "both_engines" in exc.value.code
+    result = motion_unified.analyze_motion_unified(video_file)
+    assert result["video_quality"]["decoded_ok"] is True
+    assert result["pose_evidence"]["available"] is False
+    assert result["measurements"]["available"] is False
+    assert result["recognition_candidates"] == []
+    assert len(result["frames"]) >= 1  # generic evidence pool survives
+    result["schema_version"] = SCHEMA_VERSION
+    validate_motion_result_local(result)
 
 
 # ---------------------------------------------------------------------------
-# Pure-canvas desensitization
+# Pure-canvas desensitization (skeleton-only cloud mode) — unchanged units
 # ---------------------------------------------------------------------------
 
 
@@ -201,24 +342,22 @@ def _event_with_skeleton():
     skeleton = []
     for i, (x, y) in enumerate(
         [
-            (0.5, 0.15),  # nose-ish (not used)
-            (0.42, 0.25),  # left_shoulder
-            (0.58, 0.25),  # right_shoulder
-            (0.40, 0.40),  # left_elbow
-            (0.60, 0.40),  # right_elbow
-            (0.38, 0.55),  # left_wrist
-            (0.62, 0.55),  # right_wrist
-            (0.44, 0.55),  # left_hip
-            (0.56, 0.55),  # right_hip
-            (0.43, 0.75),  # left_knee
-            (0.57, 0.75),  # right_knee
-            (0.42, 0.92),  # left_ankle
-            (0.58, 0.92),  # right_ankle
+            (0.5, 0.15),
+            (0.42, 0.25),
+            (0.58, 0.25),
+            (0.40, 0.40),
+            (0.60, 0.40),
+            (0.38, 0.55),
+            (0.62, 0.55),
+            (0.44, 0.55),
+            (0.56, 0.55),
+            (0.43, 0.75),
+            (0.57, 0.75),
+            (0.42, 0.92),
+            (0.58, 0.92),
         ]
     ):
-        skeleton.append(
-            {"id": f"pt{i}", "x": x, "y": y, "visibility": 0.9}
-        )
+        skeleton.append({"id": f"pt{i}", "x": x, "y": y, "visibility": 0.9})
     return {"timestamp": 2.4, "event": "squat_bottom", "skeleton": skeleton}
 
 
@@ -227,87 +366,104 @@ def test_pure_canvas_keyframe_is_desensitized():
     preview = render_skeleton_canvas(event, max_bytes=80 * 1024)
     assert preview["image_mime"] == "image/jpeg"
     raw = base64.b64decode(preview["image_b64"])
-    # JPEG magic + size budget.
     assert raw.startswith(b"\xff\xd8") and raw.endswith(b"\xff\xd9")
     assert len(raw) <= 80 * 1024
 
-    # The "original" frame: a busy photo-like image with a person blob.
     original = np.random.randint(0, 255, (480, 320, 3), dtype=np.uint8)
     original[120:360, 110:210] = (0, 0, 255)
     check = assert_desensitized_canvas(raw, original_bgr=original)
-    # Outside thin skeleton strokes, the canvas is the flat background colour.
     assert check["bg_fraction"] >= 0.88
-    # And it carries no photographic content from the original frame.
     assert abs(check["correlation_with_original"]) <= 0.10
 
 
 def test_desensitization_check_rejects_photo_blit():
-    """Sanity: the pixel check itself must catch a real photo on the canvas."""
     original = np.random.randint(0, 255, (480, 320, 3), dtype=np.uint8)
     ok, encoded = cv2.imencode(".jpg", original, [int(cv2.IMWRITE_JPEG_QUALITY), 70])
     assert ok
     with pytest.raises(ProcessingError):
-        # A photo JPEG has almost no flat background pixels -> bg_fraction fails.
         assert_desensitized_canvas(encoded.tobytes(), min_bg_fraction=0.88)
 
 
 # ---------------------------------------------------------------------------
-# Receipt contract: valid + invalid fixtures
+# Receipt contract: split fixtures (§11.1)
 # ---------------------------------------------------------------------------
 
 
-def _valid_rejected_result():
+def _no_pose_measurement_result():
+    """Six-class rejected AND no pose measurement, but video decoded fine.
+
+    Under V2 this is NOT the empty-frames case: the generic evidence pool /
+    timeline survives (frames non-empty), only pose_evidence.available is False.
+    """
     return {
         "schema_version": SCHEMA_VERSION,
-        "pose": {
-            "available": False,
-            "message": "证据不足，未做姿态评分。",
-            "exercise_type": None,
-            "reps": 0,
-            "keypoint_valid_rate": 0.0,
-            "errors": [],
-        },
-        "score": {"available": False, "reason": "证据不足"},
-        "recognition": {
-            "mode": "auto",
-            "requested_type": "auto",
-            "selected_type": None,
-            "accepted": False,
-            "confidence": 0.0,
-            "margin": 0.0,
-            "method": "rule_feature_matching_v1",
-            "candidates": [],
-        },
+        "video_quality": {"decoded_ok": True, "duration_ms": 2000},
+        "subject": {"available": False, "subject_id": None, "visible_regions": []},
+        "pose_evidence": {"available": False, "measurement_summary": "无姿态测量。"},
+        "recognition_candidates": [],
+        "measurements": {"available": False, "reason": "无姿态测量。"},
+        "frames": [
+            {
+                "frame_id": "f_000",
+                "timestamp_ms": 0,
+                "preview_asset_id": "preview_0000",
+                "preview_sha256": "ab" * 32,
+                "preview_bytes": 50000,
+                "preview_dimensions": {"width": 720, "height": 405},
+            }
+        ],
+    }
+
+
+def _no_video_image_result():
+    """Genuinely no decodable video -> frames empty."""
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "video_quality": {"decoded_ok": False, "duration_ms": 0},
+        "subject": {"available": False, "subject_id": None, "visible_regions": []},
+        "pose_evidence": {"available": False, "measurement_summary": "无视频。"},
+        "recognition_candidates": [],
+        "measurements": {"available": False, "reason": "无视频。"},
         "frames": [],
     }
 
 
-def test_valid_rejected_receipt_passes():
-    validate_motion_result_local(_valid_rejected_result())
+def test_valid_no_pose_measurement_receipt_passes():
+    validate_motion_result_local(_no_pose_measurement_result())
+
+
+def test_valid_no_video_image_receipt_passes():
+    validate_motion_result_local(_no_video_image_result())
 
 
 def test_rejected_but_scoring_is_rejected():
-    result = _valid_rejected_result()
-    result["score"] = {"available": True, "overall": 80}
+    result = _no_video_image_result()
+    result["measurements"] = {"available": True, "exercise_id": "squat", "reps": 3}
+    # No pose candidate accepted -> measurements must stay unavailable.
+    result["recognition_candidates"] = []
     with pytest.raises(ProcessingError) as exc:
         validate_motion_result_local(result)
     assert exc.value.retryable is False
 
 
 def test_too_many_previews_rejected():
-    result = _valid_rejected_result()
-    result["recognition"] = dict(result["recognition"], accepted=True, selected_type="squat")
-    result["pose"] = dict(result["pose"], available=True, reps=3, keypoint_valid_rate=0.6)
-    result["score"] = {"available": False, "reason": "x"}
-    good_jpeg = render_skeleton_canvas(_event_with_skeleton(), max_bytes=80 * 1024)
+    result = _no_video_image_result()
+    result["recognition_candidates"] = [
+        {"source": "pose", "source_label": "squat", "canonical_id": "squat",
+         "raw_score": 0.9, "score_type": "rule"}
+    ]
+    result["measurements"] = {"available": True, "exercise_id": "squat", "reps": 3}
+    good_sha = "ab" * 32
     frames = []
-    for i in range(5):  # 5 > 4 preview budget
+    for i in range(settings.motion_display_preview_count + 1):  # over budget
         frames.append(
             {
-                "timestamp": float(i),
-                "event": f"squat_bottom",
-                "image_b64": good_jpeg["image_b64"],
-                "image_mime": "image/jpeg",
+                "frame_id": f"f_{i:03d}",
+                "timestamp_ms": float(i * 1000),
+                "preview_asset_id": f"preview_{i:04d}",
+                "preview_sha256": good_sha,
+                "preview_bytes": 50000,
+                "preview_dimensions": {"width": 720, "height": 405},
             }
         )
     result["frames"] = frames
@@ -315,28 +471,35 @@ def test_too_many_previews_rejected():
         validate_motion_result_local(result)
 
 
-def test_bad_jpeg_magic_rejected():
-    result = _valid_rejected_result()
-    result["recognition"] = dict(result["recognition"], accepted=True, selected_type="squat")
-    result["pose"] = dict(result["pose"], available=True, reps=3, keypoint_valid_rate=0.6)
-    result["score"] = {"available": False, "reason": "x"}
-    bad = base64.b64encode(b"not a jpeg").decode("ascii")
+def test_image_bytes_in_rejected():
+    """V2: the receipt must never carry image bytes, only references."""
+    result = _no_pose_measurement_result()
+    result["frames"][0]["image_b64"] = "AAAA"
+    with pytest.raises(ProcessingError):
+        validate_motion_result_local(result)
+
+
+def test_unsorted_frames_rejected():
+    result = _no_pose_measurement_result()
     result["frames"] = [
-        {"timestamp": 0.0, "event": "squat_bottom", "image_b64": bad, "image_mime": "image/jpeg"}
+        {"frame_id": "f_1", "timestamp_ms": 4800, "preview_asset_id": "preview_0",
+         "preview_sha256": "ab" * 32, "preview_dimensions": {"width": 720, "height": 405}},
+        {"frame_id": "f_0", "timestamp_ms": 900, "preview_asset_id": "preview_1",
+         "preview_sha256": "cd" * 32, "preview_dimensions": {"width": 720, "height": 405}},
     ]
     with pytest.raises(ProcessingError):
         validate_motion_result_local(result)
 
 
 def test_schema_version_required():
-    result = _valid_rejected_result()
+    result = _no_video_image_result()
     del result["schema_version"]
     with pytest.raises(ProcessingError):
         validate_motion_result_local(result)
 
 
 # ---------------------------------------------------------------------------
-# Happy path: accepted six-class result with pose score + desensitized preview
+# Happy path: accepted six-class result with pose score + real-frame preview
 # ---------------------------------------------------------------------------
 
 
@@ -379,11 +542,26 @@ def _squat_rows():
     return rows
 
 
-def test_happy_path_accepted_with_score_and_preview(monkeypatch, video_file):
-    # Short-circuit the decode: feed real analyzer-grade squat samples.
+def test_happy_path_accepted_with_score_and_real_preview(monkeypatch, video_file, tmp_path):
     from healthmate_worker.processors import recognition as recognition_mod
 
     samples = {c: _squat_rows() for c in recognition_mod.SUPPORTED_EXERCISES}
+    canned_evidence = [
+        {
+            "frame_index": i,
+            "timestamp_ms": i * 500,
+            "bgr": np.random.randint(0, 255, (48, 64, 3), dtype=np.uint8),
+            "width": 64,
+            "height": 48,
+            "blur_var": 90.0,
+            "brightness": 120.0,
+            "motion_delta": 0.05,
+            "skeleton": None,
+            "visible_regions": [],
+            "subject_bbox": None,
+        }
+        for i in range(8)
+    ]
     canned = {
         "fps": 30.0,
         "total_frames": 60,
@@ -391,26 +569,30 @@ def test_happy_path_accepted_with_score_and_preview(monkeypatch, video_file):
         "sample_sets": samples,
         "clip_frames": [],
         "sampled": len(_squat_rows()),
+        "evidence": canned_evidence,
+        "pose_observations": [],
     }
     monkeypatch.setattr(motion_unified, "_run_single_pass_decode", lambda *a, **k: canned)
     monkeypatch.setattr(motion_unified, "get_kinetics400", lambda: None)
 
+    out_dir = tmp_path / "previews"
     result = motion_unified.analyze_motion_unified(
-        video_file, requested_exercise="squat", consent_deepseek_frames=True
+        video_file,
+        requested_exercise="squat",
+        cloud_review_mode="off",
+        preview_out_dir=out_dir,
     )
-    assert result["recognition"]["mode"] == "manual"
-    assert result["recognition"]["accepted"] is True
-    assert result["recognition"]["selected_type"] == "squat"
-    assert result["pose"]["available"] is True
-    assert result["pose"]["exercise_type"] == "squat"
-    assert result["pose"]["reps"] >= 1
-    assert result["score"]["available"] is True
-    # consent on: up to 4 desensitized previews attached
-    previews = [f for f in result["frames"] if f.get("image_b64")]
-    assert 1 <= len(previews) <= 4
+    pose_candidates = [c for c in result["recognition_candidates"] if c["source"] == "pose"]
+    assert pose_candidates and pose_candidates[0]["canonical_id"] == "squat"
+    assert result["pose_evidence"]["available"] is True
+    assert result["measurements"]["available"] is True
+    assert result["measurements"]["exercise_id"] == "squat"
+    # Real-frame personal previews written, references only (no image_b64).
+    previews = [f for f in result["frames"] if f.get("preview_asset_id")]
+    assert 1 <= len(previews) <= settings.motion_display_preview_count
     for p in previews:
-        raw = base64.b64decode(p["image_b64"])
-        assert raw.startswith(b"\xff\xd8") and raw.endswith(b"\xff\xd9")
-        assert len(raw) <= 80 * 1024
+        assert "image_b64" not in p
+        assert p["preview_bytes"] <= settings.motion_preview_max_bytes
+    assert list(out_dir.glob("*.jpg"))
     result["schema_version"] = SCHEMA_VERSION
     validate_motion_result_local(result)

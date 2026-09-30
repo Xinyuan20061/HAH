@@ -6,9 +6,13 @@ from app.harness.contracts import ToolContext, ToolSpec
 from app.harness.motion_evidence import (
     TOOL_ANALYSIS_READ,
     TOOL_FEEDBACK_READ,
+    TOOL_HISTORY_COMPARE,
+    TOOL_TIMELINE_READ,
+    compare_history,
     owner_id,
     read_analyses,
     read_feedback_signals,
+    read_timeline,
 )
 from app.harness.registry import ToolRegistry
 from app.services.agent.actions import list_actions
@@ -69,6 +73,28 @@ def _motion_feedback_read(context: ToolContext, arguments: dict):
     return read_feedback_signals(context.db, uid)
 
 
+def _motion_timeline_read(context: ToolContext, arguments: dict):
+    """Read-only frame timeline with concrete times (V2, spec §9.4)."""
+    uid = owner_id(context)
+    if uid is None:
+        return {"found": False, "reason": "no_owner"}
+    raw = arguments.get("analysis_id")
+    try:
+        analysis_id = int(raw)
+    except (TypeError, ValueError):
+        return {"found": False, "reason": "analysis_id_required"}
+    return read_timeline(context.db, uid, analysis_id=analysis_id)
+
+
+def _motion_history_compare(context: ToolContext, arguments: dict):
+    """Read-only history comparison; only same-exercise + same rubric (V2)."""
+    uid = owner_id(context)
+    if uid is None:
+        return {"found": False, "reason": "no_owner"}
+    exercise_type = arguments.get("exercise_type") or None
+    return compare_history(context.db, uid, exercise_type=exercise_type)
+
+
 @lru_cache
 def get_tool_registry() -> ToolRegistry:
     registry = ToolRegistry(
@@ -123,6 +149,29 @@ def get_tool_registry() -> ToolRegistry:
                 handler=_motion_feedback_read,
                 kind="read",
                 input_schema={},
+            ),
+            ToolSpec(
+                name=TOOL_TIMELINE_READ,
+                title="读取动作时间轴帧",
+                description=(
+                    "按当前用户范围读取某次动作分析的时间轴，返回带具体时间点的帧"
+                    "（时间戳、阶段、观察、讲解、下一步），便于回答时精确引用某一秒；"
+                    "只读，图片字节不外泄。"
+                ),
+                handler=_motion_timeline_read,
+                kind="read",
+                input_schema={"analysis_id": "integer 必填"},
+            ),
+            ToolSpec(
+                name=TOOL_HISTORY_COMPARE,
+                title="对比动作历史",
+                description=(
+                    "仅在同动作、同评分口径、且可比对时比较用户历史评分；机位不可比"
+                    "或样本不足时说明缺什么证据，不编造进步百分比；只读，不修改训练目标。"
+                ),
+                handler=_motion_history_compare,
+                kind="read",
+                input_schema={"exercise_type": "string 可选"},
             ),
         ]
     )

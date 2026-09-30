@@ -43,4 +43,7 @@ from .models import (
     ProviderInvocation,
     ProviderConnectionCheck,
     VoiceUsageDaily,
+    MotionEvidenceFrame,
+    MotionStageTask,
+    MotionUserFeedback,
 )

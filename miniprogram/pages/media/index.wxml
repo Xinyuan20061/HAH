@@ -4,9 +4,9 @@
   <view class="media-hero"><view class="kicker">动作反馈</view><view class="title">录一段，看看动作</view><view class="subtitle">保持全身入镜，建议拍摄 5–20 秒。</view></view>
 
   <view class="drop tappable" bindtap="choose" hover-class="tap" hover-start-time="0" hover-stay-time="80"><view class="upload-icon ui-fixed-circle"><image src="/assets/icons/upload.png" mode="aspectFit"/></view><text class="b">{{file?'已选择视频':'选择动作视频'}}</text><text class="small">{{file?name:'支持 MP4 / MOV'}}</text></view>
-  <video wx:if="{{file&&type==='video'}}" src="{{file}}" controls class="preview"></video>
+  <video wx:if="{{file&&type==='video'}}" id="motionVideo" src="{{file}}" controls object-fit="contain" class="preview"></video>
 
-  <view class="privacy-note">默认使用纯色画布骨架图进行云端复核；仅在您同意时使用真实关键帧并经脱敏处理。结果仅供一般健身参考，不做医疗判断。</view>
+  <view class="privacy-note">开启云端复核时，会自动查看这段视频的关键画面（已模糊人脸）；关闭则只用动作轨迹本地分析。结果仅供一般健身参考，不做医疗判断。</view>
 
   <picker mode="selector" range="{{exerciseOptions}}" value="{{exerciseIndex}}" bindchange="changeExercise"><view class="motion-picker">动作：{{exerciseOptions[exerciseIndex]}}<text>切换</text></view></picker>
 
@@ -16,64 +16,90 @@
   <view wx:if="{{jobStatus&&!analyzing&&!vm}}" class="state-card"><view class="state-desc">{{jobStatus}}</view></view>
 
   <view wx:if="{{vm}}" class="motion-result">
+    <!-- ① 动作 -->
     <view class="result-head">
       <view class="badge-row">
-        <view class="source-badge {{vm.abstained||vm.uncertain?'warn':''}}">{{vm.stateBadge}}</view>
-        <view wx:if="{{vm.reviewBadge}}" class="source-badge review">{{vm.reviewBadge}}</view>
+        <view wx:if="{{vm.detectionBadge}}" class="source-badge warn">{{vm.detectionBadge}}</view>
         <view wx:if="{{vm.localOnly}}" class="source-badge local">仅本地分析</view>
       </view>
-      <view class="motion-name">{{vm.detectedName}}</view>
-      <view wx:if="{{vm.reason}}" class="muted">{{vm.reason}}</view>
+      <view class="motion-name">{{vm.detectionName}}</view>
+      <view wx:if="{{vm.detectionNote}}" class="muted">{{vm.detectionNote}}</view>
     </view>
 
+    <!-- ② 点评 -->
     <view wx:if="{{vm.summaryText}}" class="ai-summary-card">
       <view class="ai-summary-title">整体点评</view>
       <view class="ai-summary-text">{{vm.summaryText}}</view>
-      <view wx:if="{{vm.summaryDegraded}}" class="ai-summary-degraded">{{vm.summaryDegradedNote}}</view>
+      <view wx:if="{{vm.summaryNextStep}}" class="ai-summary-next">下一遍：{{vm.summaryNextStep}}</view>
     </view>
 
-    <view wx:if="{{vm.abstained||vm.uncertain}}" class="recognition-action">暂不能确定这段动作：可能存在低光、遮挡、多人、未拍完整动作周期或判断意见不一致。可在上方手动选择动作后重新分析，或重拍一段更完整的视频。</view>
-
+    <!-- ③ 指标（按实际能力显示；缺失给具体原因） -->
     <view class="score-block">
-      <block wx:if="{{vm.qualityAvailable}}">
-        <view class="rep-line"><view><b>{{vm.qualityOverall}}</b><text>动作质量</text></view><view><b>{{vm.qualityReps}}</b><text>次数</text></view></view>
-        <view wx:if="{{vm.qualityDims.length}}" class="score-grid"><view wx:for="{{vm.qualityDims}}" wx:key="label"><text>{{item.label}}</text><b>{{item.value}}</b></view></view>
-      </block>
-      <view wx:else class="no-score-note">{{vm.noScoreNote}}<text wx:if="{{vm.noScoreReason}}">（{{vm.noScoreReason}}）</text></view>
-    </view>
-
-    <view wx:if="{{vm.keyframes.length}}" class="keyframes-block">
-      <view class="block-title">关键帧拆解</view>
-      <view class="kf-card" wx:for="{{vm.keyframes}}" wx:key="id">
-        <image wx:if="{{item.imageUrl}}" src="{{item.imageUrl}}" mode="aspectFill" class="kf-img"/>
-        <view class="kf-meta"><text class="kf-time">{{item.tLabel}}</text><text wx:if="{{item.phase}}" class="kf-phase">{{item.phase}}</text></view>
-        <view class="kf-finding">{{item.finding}}</view>
-        <view class="kf-advice">{{item.advice}}</view>
-        <view class="kf-evidence">{{vm.evidenceLabel}}：{{item.evidenceTypeLabel}}</view>
+      <view wx:if="{{vm.metricRows.length}}" class="score-grid">
+        <view wx:for="{{vm.metricRows}}" wx:key="label"><text>{{item.label}}</text><b>{{item.value}}{{item.unit}}</b></view>
       </view>
+      <view wx:if="{{vm.metricNote}}" class="no-score-note">{{vm.metricNote}}</view>
     </view>
 
+    <!-- ④ 时间轴：主画面 + 横向时间条 -->
+    <view wx:if="{{vm.timelineFrames.length}}" class="timeline-block">
+      <view class="block-title">动作时间轴</view>
+      <view wx:if="{{vm.activeFrame}}" class="frame-detail-card">
+        <image wx:if="{{vm.activeFrame.previewUrl && !brokenImgs[vm.activeFrame.id]}}" src="{{vm.activeFrame.previewUrl}}" mode="aspectFit" class="frame-hero-img" data-id="{{vm.activeFrame.id}}" binderror="onFrameImgError"/>
+        <view wx:elif class="frame-hero-placeholder">暂无画面，文字讲解见下</view>
+        <view class="frame-detail-head">
+          <view class="frame-detail-title">{{vm.activeFrame.timeLabel}}<text wx:if="{{vm.activeFrame.phase}}"> · {{vm.activeFrame.phase}}</text></view>
+          <view class="replay-btn tappable" bindtap="replayFrame" hover-class="tap" hover-start-time="0" hover-stay-time="80">回看这一刻</view>
+        </view>
+        <view wx:if="{{vm.activeFrame.adviceKindLabel}}" class="frame-stage">{{vm.activeFrame.adviceKindLabel}}</view>
+        <view class="frame-explanation">
+          <view wx:if="{{vm.activeFrame.observation}}"><b>看到什么</b><text>{{vm.activeFrame.observation}}</text></view>
+          <view wx:if="{{vm.activeFrame.explanation}}"><b>为什么要留意</b><text>{{vm.activeFrame.explanation}}</text></view>
+          <view wx:if="{{vm.activeFrame.nextStep}}"><b>下一遍怎么做</b><text>{{vm.activeFrame.nextStep}}</text></view>
+        </view>
+      </view>
+      <scroll-view scroll-x enhanced show-scrollbar="{{false}}" class="frame-strip">
+        <view wx:for="{{vm.timelineFrames}}" wx:key="id"
+              class="frame-item {{vm.activeFrame.id===item.id?'on':''}}"
+              data-id="{{item.id}}" bindtap="selectFrame" hover-class="tap" hover-start-time="0" hover-stay-time="80">
+          <image wx:if="{{item.previewUrl && !brokenImgs[item.id]}}" src="{{item.previewUrl}}" mode="aspectFill" data-id="{{item.id}}" binderror="onFrameImgError"/>
+          <view wx:elif class="frame-thumb-placeholder"></view>
+          <view class="frame-time">{{item.timeLabel}}</view>
+          <view class="frame-phase">{{item.phase}}</view>
+        </view>
+      </scroll-view>
+    </view>
+
+    <!-- ⑤ 建议反馈 -->
     <view class="feedback-row">
-      <view class="fb-btn tappable" bindtap="confirmLabel" hover-class="tap" hover-start-time="0" hover-stay-time="80">识别对了</view>
-      <view class="fb-btn tappable" bindtap="correctLabel" hover-class="tap" hover-start-time="0" hover-stay-time="80">动作不对</view>
-      <view class="fb-btn soft tappable" data-kind="frame" bindtap="sendFeedback" hover-class="tap" hover-start-time="0" hover-stay-time="80">关键帧不准</view>
-      <view class="fb-btn soft tappable" data-kind="advice" bindtap="sendFeedback" hover-class="tap" hover-start-time="0" hover-stay-time="80">建议无用</view>
+      <view class="fb-btn tappable" data-kind="useful" bindtap="sendFeedback" hover-class="tap" hover-start-time="0" hover-stay-time="80">有帮助</view>
+      <view class="fb-btn soft tappable" bindtap="correctLabel" hover-class="tap" hover-start-time="0" hover-stay-time="80">动作不对</view>
+      <view class="fb-btn soft tappable" data-kind="wrong_frame" bindtap="sendFeedback" hover-class="tap" hover-start-time="0" hover-stay-time="80">关键帧不准</view>
+      <view class="fb-btn soft tappable" data-kind="unhelpful_advice" bindtap="sendFeedback" hover-class="tap" hover-start-time="0" hover-stay-time="80">建议无用</view>
+    </view>
+
+    <!-- 纠错面板：目录选择 + 自由描述 -->
+    <view wx:if="{{showCorrect}}" class="correct-panel">
+      <view class="correct-title">这段动作实际是？</view>
+      <picker mode="selector" range="{{categoryOptions}}" range-key="name_zh" value="{{correctIndex}}" bindchange="changeCorrect">
+        <view class="correct-picker"><text>{{categoryOptions[correctIndex].name_zh}}</text><view class="correct-pick-hint">选择</view></view>
+      </picker>
+      <input wx:if="{{correctIndex===0}}" class="correct-input" placeholder="输入动作名称，如：哑铃弯举" value="{{freeLabel}}" bindinput="onFreeLabel"/>
+      <view class="correct-actions">
+        <view class="fb-btn soft tappable" bindtap="cancelCorrect" hover-class="tap" hover-start-time="0" hover-stay-time="80">取消</view>
+        <view class="fb-btn primary tappable" bindtap="confirmLabel" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">确认并重新分析</view>
+      </view>
     </view>
 
     <view class="detail-toggle tappable" bindtap="toggleDetails" hover-class="tap" hover-start-time="0" hover-stay-time="80"><text>{{showDetails?'收起详情':'查看详情与来源'}}</text><image class="ui-chevron {{showDetails?'open':''}}" src="/assets/icons/chevron.png" mode="aspectFit"/></view>
     <view class="disclosure {{showDetails?'open':''}}" style="height:{{detailsHeight}}" bindtransitionend="onDisclosureEnd"><view class="disclosure-body" id="detailsBody"><view class="motion-details">
       <view class="detail-section">
-        <view class="detail-title">候选与判断把握</view>
-        <view wx:if="{{vm.candidatePct!==null}}" class="candidate"><view class="row space"><text>{{vm.candidateNote}}</text><b>{{vm.candidatePct}}%</b></view></view>
-        <view wx:elif="{{!vm.candidatePct}}" class="muted">本次未提供候选分值。</view>
-        <view wx:if="{{vm.showConfidence}}" class="confidence-line">判断把握度：{{vm.confidencePct}}%</view>
-        <view wx:else class="muted">判断把握度：暂无校准结果，不显示数值。</view>
-        <view wx:if="{{vm.sourceList}}" class="muted">参与来源：{{vm.sourceList}}</view>
+        <view class="detail-title">分析依据</view>
+        <view wx:if="{{vm.sourceText}}" class="muted">依据：{{vm.sourceText}}</view>
         <view wx:if="{{traceInfo}}" class="trace-box">
           <view wx:if="{{traceInfo.note}}">{{traceInfo.note}}</view>
           <view wx:if="{{traceInfo.summary}}">{{traceInfo.summary}}</view>
         </view>
-        <view wx:if="{{vm.traceId}}" class="muted">分析编号：{{vm.traceId}}</view>
       </view>
       <view wx:if="{{vm.limitations.length}}" class="detail-section"><view class="detail-title">使用限制</view><view wx:for="{{vm.limitations}}" wx:key="*this" class="muted">{{item}}</view></view>
     </view></view></view>

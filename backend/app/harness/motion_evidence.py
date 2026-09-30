@@ -36,6 +36,9 @@ MAX_LIST_LIMIT = 5
 # Tool names exposed to agents — mirrored in collaboration.py worker scopes.
 TOOL_ANALYSIS_READ = "motion.analysis.read"
 TOOL_FEEDBACK_READ = "motion.feedback.read"
+# V2 (work package F): frame-timeline read + history comparison (read-only).
+TOOL_TIMELINE_READ = "motion.timeline.read"
+TOOL_HISTORY_COMPARE = "motion.history.compare"
 
 
 def owner_id(context: Any) -> int | None:
@@ -227,3 +230,133 @@ def read_feedback_signals(db: Session, user_id: int) -> dict[str, Any]:
             }
         )
     return {"found": True, "count": len(signals), "signals": signals}
+
+
+# --------------------------------------------------------------------------- #
+# V2 read-only tools (work package F, spec §9.4).
+# --------------------------------------------------------------------------- #
+def read_timeline(
+    db: Session,
+    user_id: int,
+    *,
+    analysis_id: int,
+) -> dict[str, Any]:
+    """Return the caller's own run timeline with concrete frame times.
+
+    The Coach Agent can then say "在 4.8 秒这一帧（抬起阶段）" and the user can
+    open that original frame. Image bytes / data URLs are stripped; only
+    ``has_image`` survives. Never triggers a model call.
+    """
+    runs = _scoped_runs(db, user_id, analysis_id, 1)
+    if not runs:
+        return {"found": False, "analysis_id": analysis_id, "reason": "not_found_or_not_owned"}
+    run = runs[0]
+    snapshot = _feedback_snapshot(db, run.id)
+    timeline = snapshot.get("timeline") or {}
+    frames = []
+    for frame in timeline.get("frames") or []:
+        if not isinstance(frame, dict):
+            continue
+        # preview bytes / data URLs are deliberately dropped.
+        frames.append(
+            {
+                "id": frame.get("id"),
+                "timestamp_ms": frame.get("timestamp_ms"),
+                "phase": frame.get("phase"),
+                "observation": frame.get("observation"),
+                "explanation": frame.get("explanation"),
+                "next_step": frame.get("next_step"),
+                "advice_kind": frame.get("advice_kind"),
+                "has_image": bool(frame.get("preview_asset_id") or frame.get("preview_url")),
+            }
+        )
+    recognition = snapshot.get("recognition") or {}
+    return {
+        "found": True,
+        "analysis_id": run.id,
+        "status": run.status,
+        "recognition": {
+            "state": recognition.get("state"),
+            "canonical_id": recognition.get("canonical_id"),
+            "display_name": recognition.get("display_name"),
+        },
+        "duration_ms": timeline.get("duration_ms"),
+        "frames": frames,
+        "content_is_untrusted_data": True,
+    }
+
+
+def compare_history(
+    db: Session,
+    user_id: int,
+    *,
+    exercise_type: str | None = None,
+) -> dict[str, Any]:
+    """Compare the caller's own scored sessions, ONLY when evidence is comparable.
+
+    Comparability gates (spec §9.4):
+      * same exercise (exercise_type);
+      * same scoring rubric (same exercise rows share the registered scorer);
+      * comparable camera — no camera metadata is stored, so this is reported as
+        unknown and the Coach must not claim a direct improvement it cannot verify.
+
+    When there are fewer than two comparable sessions, the tool explains exactly
+    what evidence is missing instead of fabricating a progress percentage. It never
+    writes goals or targets — saving a training plan still goes through the
+    proposal -> user-confirmed -> apply_plan gate.
+    """
+    from app.models import MotionScore
+
+    stmt = (
+        select(MotionScore)
+        .where(MotionScore.user_id == user_id)
+        .order_by(MotionScore.created_at.asc(), MotionScore.id.asc())
+    )
+    rows = db.scalars(stmt).all()
+    if exercise_type:
+        rows = [r for r in rows if r.exercise_type == exercise_type]
+
+    groups: list[dict[str, Any]] = []
+    exercises = sorted({r.exercise_type for r in rows})
+    for ex in exercises:
+        ex_rows = [r for r in rows if r.exercise_type == ex]
+        if len(ex_rows) < 2:
+            groups.append(
+                {
+                    "exercise_type": ex,
+                    "comparable": False,
+                    "reason": "need_at_least_two_sessions",
+                    "sessions": len(ex_rows),
+                }
+            )
+            continue
+        first = ex_rows[0]
+        latest = ex_rows[-1]
+        delta = None
+        try:
+            delta = round(float(latest.overall) - float(first.overall), 1)
+        except (TypeError, ValueError):
+            pass
+        groups.append(
+            {
+                "exercise_type": ex,
+                "comparable": True,
+                "sessions": len(ex_rows),
+                "first_overall": first.overall,
+                "latest_overall": latest.overall,
+                "overall_delta_points": delta,
+                "scoring_rubric": "same_exercise_registered_scorer",
+            }
+        )
+
+    comparable = [g for g in groups if g.get("comparable")]
+    return {
+        "found": bool(rows),
+        "compared": bool(comparable),
+        "groups": groups,
+        "caveats": [
+            "未记录拍摄机位，无法确认两次视频机位一致；差值仅在同动作、同评分口径下参考",
+            "本工具只读，不会修改训练目标；保存训练计划仍需用户确认",
+        ],
+        "content_is_untrusted_data": True,
+    }

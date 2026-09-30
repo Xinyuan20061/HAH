@@ -1,6 +1,8 @@
-// 统一动作分析结果契约 → 页面展示模型（规格 4.3 / 4.4）。
+// 统一动作分析 V2 结果契约 → 页面展示模型（规格 §3.2 / §4 / §8.4）。
 // 纯函数，不依赖 wx，便于单测。前端只按此形状对接，不实现后端。
-const PIPELINE_VERSION = 'motion-unified-v1'
+// 阅读顺序：动作 → 点评 → 指标 → 时间轴 → 建议。
+const PIPELINE_VERSION = 'motion-unified-v2'
+
 const STAGE_LABELS = {
   queued: '任务排队中',
   decoding: '正在读取视频',
@@ -10,77 +12,189 @@ const STAGE_LABELS = {
   feedback_generation: '正在生成点评',
   completed: '完成',
   partial: '完成（部分降级）',
-  abstained: '暂不能确定',
   failed: '分析失败',
   cancelled: '已取消'
 }
-const TERMINAL_STATUSES = ['completed', 'partial', 'abstained', 'failed', 'cancelled']
+// V2 运行终态（abstained 已不再是运行状态，而是 recognition.state）。
+const TERMINAL_STATUSES = ['completed', 'partial', 'failed', 'cancelled']
+
+// 来源 → 中文（§4.3：界面不出现 local_worker / deepseek_vision / kinetics400 等英文 ID）。
+const SOURCE_LABELS = {
+  vision: 'AI 分析',
+  deepseek_vision: 'AI 分析',
+  visual_coach: 'AI 分析',
+  pose: '动作轨迹',
+  local_worker: '动作轨迹',
+  mediapipe: '动作轨迹',
+  kinetics: '视频画面',
+  kinetics400: '视频画面',
+  video_model: '视频画面',
+  user_selected: '手动选择'
+}
+
+// advice_kind → 中文标签（§4.2：区分观察到的问题 / 一般要点 / 拍摄提示）。
+const ADVICE_KIND_LABELS = {
+  observed_correction: '观察到的问题',
+  general_tip: '一般动作要点',
+  capture_tip: '拍摄提示'
+}
+
+// 指标 id → 中文标签（§4.1：次数 / 持续时间 / 节奏 / 质量维度）。
+const METRIC_LABELS = {
+  reps: '次数', repetition_count: '次数', count: '次数',
+  duration_ms: '持续时间', duration: '持续时间',
+  rhythm: '节奏', rhythm_control: '节奏',
+  overall: '动作质量', quality: '动作质量', score: '动作质量',
+  completeness: '完成度', stability: '稳定性'
+}
 
 function fmtSeconds(ms) {
   const n = Number(ms)
   if (!Number.isFinite(n) || n < 0) return '--'
   return (n / 1000).toFixed(1).replace(/\.0$/, '') + 's'
 }
-function reviewBadge(s) {
-  if (s === 'used') return '云端视觉已复核'
-  if (s === 'unavailable') return '云端视觉暂不可用（仅本地结果）'
-  if (s === 'degraded') return '云端复核降级'
-  return ''
+
+// 把后端来源字段翻译成中文；未知来源不回吐英文 ID。
+function mapSource(src) {
+  if (!src) return ''
+  return SOURCE_LABELS[src] || ''
 }
 
-// 关键边界：
-//  - candidate_score 只进折叠详情并标注“模型候选分值，未经校准”，绝不放进主圆环当分数；
-//  - calibrated_confidence 为 null 时不显示“判断把握度”；
-//  - score.available 为 false 时显示“已识别类别，暂无可靠数值评分”，但仍保留关键帧与谨慎点评。
+// 三态归一：V2 只允许 identified | likely | unknown；
+// 兼容 V1 历史结果（recognized→identified，abstained/uncertain→unknown）。
+function normalizeState(state) {
+  if (state === 'identified' || state === 'recognized') return 'identified'
+  if (state === 'likely') return 'likely'
+  return 'unknown'
+}
+
+// reason 原码不直出：看起来像诊断码/帧号/引擎名的一律不展示（R11）。
+function sanitizeReason(reason) {
+  if (!reason) return ''
+  const s = String(reason).trim()
+  if (!s) return ''
+  if (/^[A-Z][A-Z0-9_]{3,}$/.test(s)) return ''          // NOT_RECOGNIZED / NO_VALIDATED_SCORER
+  if (/^(frame|pose|trace)[_:]/i.test(s)) return ''      // frame:0 / trace-xxx / pose:shoulder
+  if (/local_worker|deepseek_vision|candidate_score|mediapipe|kinetics/i.test(s)) return ''
+  return s
+}
+
+// §8.4：过滤非法时间戳、按时间升序、timeLabel 格式化；全量映射，不再 .slice(0,4)。
+function normalizeTimeline(timeline) {
+  const frames = (timeline && Array.isArray(timeline.frames)) ? timeline.frames : []
+  return frames
+    .filter(f => f && Number.isFinite(Number(f.timestamp_ms)) && Number(f.timestamp_ms) >= 0)
+    .slice()
+    .sort((a, b) => Number(a.timestamp_ms) - Number(b.timestamp_ms))
+    .map((f, index) => ({
+      id: f.id || ('frame_' + index),
+      timestamp_ms: Number(f.timestamp_ms),
+      previewUrl: f.preview_url || f.image_url || '',
+      phase: f.phase || '',
+      observation: f.observation || f.finding || '',
+      explanation: f.explanation || '',
+      nextStep: f.next_step || f.advice || '',
+      adviceKind: f.advice_kind || '',
+      adviceKindLabel: ADVICE_KIND_LABELS[f.advice_kind] || '',
+      timeLabel: (Number(f.timestamp_ms) / 1000).toFixed(1) + ' 秒'
+    }))
+}
+
+function formatMetric(m) {
+  const id = m.id || ''
+  let value = m.value
+  if (value == null) return null
+  if (id === 'duration_ms' && Number.isFinite(Number(value))) value = (Number(value) / 1000).toFixed(1) + 's'
+  return { label: METRIC_LABELS[id] || id, value, unit: m.unit || '' }
+}
+
+// /evidence 只读返回帧级预览映射（frame_id → 可渲染签名 URL）。
+// 兼容 {frames:[...]} / {evidence:[...]} / 顶层数组；键名容忍 frame_id 或 id。
+function buildPreviewMap(evidence) {
+  const list = (evidence && (evidence.frames || evidence.evidence)) || (Array.isArray(evidence) ? evidence : [])
+  const map = {}
+  for (const e of list) {
+    if (!e) continue
+    const fid = e.frame_id || e.id
+    const url = e.preview_url || e.previewUrl || e.url
+    if (fid && url) map[fid] = url
+  }
+  return map
+}
+
+// 结果帧已带 preview_url 时优先用；为空的才用 evidence 映射补齐（不覆盖已有 URL）。
+function mergeEvidencePreviews(frames, evidence) {
+  const map = buildPreviewMap(evidence)
+  if (!Object.keys(map).length) return frames
+  return frames.map(f => (f.previewUrl ? f : { ...f, previewUrl: map[f.id] || '' }))
+}
+
+// 关键边界（R11 / §4.3）：
+//  - 三态按 recognition.state 展示，绝不同时出现“已识别类别”与“暂未确认动作”；
+//  - candidate_score / calibrated_confidence / trace / 引擎版本一律不进用户视图；
+//  - 数值缺失由 notices 给具体原因，不再硬编“已识别类别，暂无可靠数值评分”。
 function buildViewModel(raw) {
   const r = raw || {}
   const recognition = r.recognition || {}
-  const score = r.score || {}
+  const capabilities = r.capabilities || {}
   const summary = r.summary || {}
-  const state = recognition.state || 'uncertain'
+  const metrics = Array.isArray(r.metrics) ? r.metrics : []
+  const notices = Array.isArray(r.notices) ? r.notices : []
+  const state = normalizeState(recognition.state)
+
+  // 动作名：V2 用 display_name；兼容 V1 label_zh。
+  let detectionName = recognition.display_name || recognition.label_zh || ''
+  if (!detectionName) detectionName = state === 'identified' ? '已识别动作' : '暂未确认具体动作'
+
+  // 徽章只由三态决定：identified 不打“待确认/暂未确认”，避免同屏矛盾。
+  const detectionBadge = state === 'identified' ? '' : state === 'likely' ? '待确认' : '暂未确认'
+
+  // likely：一个具体分歧；unknown：尽量描述可见运动。均来自后端中文 reason，经去码过滤。
+  const detectionNote = sanitizeReason(recognition.reason)
+
+  // 来源中文化（动作轨迹 / 视频画面 / AI 分析 / 手动选择）。
+  const sourceText = [recognition.source, summary.source]
+    .map(mapSource).filter(Boolean)
+    .filter((v, i, arr) => arr.indexOf(v) === i)
+    .join('、')
+
+  // 指标：按实际能力显示；空数组表示无指标，不用 0 凑数。
+  const metricRows = metrics.map(formatMetric).filter(Boolean)
+  let metricNote = (notices.find(n => n && n.kind === 'metric_unavailable') || {}).text || ''
+  if (!metricNote && metricRows.length === 0 && capabilities.quality_score === 'unavailable') {
+    metricNote = '这类动作本次先看画面讲解，暂不显示数值评分。'
+  }
+
+  // 时间轴：V2 timeline.frames 全量；兼容 V1 keyframes（t_ms/image_url/finding/advice）。
+  const v1Frames = Array.isArray(r.keyframes)
+    ? r.keyframes.map(k => ({ ...k, timestamp_ms: k.t_ms, preview_url: k.image_url, observation: k.finding, next_step: k.advice }))
+    : []
+  const timelineFrames = normalizeTimeline(r.timeline || { frames: v1Frames })
+  const activeFrame = timelineFrames[0] || null
+
   return {
     analysisId: r.analysis_id,
     pipelineVersion: r.pipeline_version || PIPELINE_VERSION,
     state,
-    stateBadge: state === 'recognized' ? '已识别' : state === 'uncertain' ? '暂不能确定' : '证据不足',
-    detectedName: recognition.label_zh || recognition.label_id || '暂未确认动作',
-    labelId: recognition.label_id || '',
-    reason: recognition.reason || '',
-    evidenceLabel: '所用证据',
-    sourceList: (recognition.sources || []).join('、'),
-    reviewStatus: recognition.review_status || '',
-    reviewBadge: reviewBadge(recognition.review_status),
+    detectionName,
+    detectionBadge,
+    detectionNote,
     summaryText: summary.text || '',
-    summaryDegraded: !!summary.degraded,
-    summaryDegradedNote: summary.degraded ? '云端点评暂不可用，以下为本地规则点评' : '',
-    qualityAvailable: !!score.available,
-    qualityOverall: score.overall == null ? '--' : Math.round(Number(score.overall)),
-    qualityReps: score.reps == null ? '--' : score.reps,
-    qualityDims: [
-      { label: '完成度', value: score.completeness },
-      { label: '稳定性', value: score.stability },
-      { label: '节奏', value: score.rhythm_control }
-    ].filter(d => d.value != null).map(d => ({ label: d.label, value: Math.round(Number(d.value)) })),
-    noScoreNote: '已识别类别，暂无可靠数值评分',
-    noScoreReason: score.reason_code === 'NO_VALIDATED_SCORER' ? '该动作暂无经过校准的评分器' : (score.reason_code || ''),
-    candidatePct: Number.isFinite(Number(recognition.candidate_score)) ? Math.round(Number(recognition.candidate_score) * 100) : null,
-    candidateNote: '模型候选分值，未经校准，不等于真实准确率',
-    showConfidence: recognition.calibrated_confidence != null,
-    confidencePct: recognition.calibrated_confidence == null ? null : Math.round(Number(recognition.calibrated_confidence) * 100),
-    keyframes: (r.keyframes || []).slice(0, 4).map(k => ({
-      id: k.id || '',
-      tLabel: fmtSeconds(k.t_ms),
-      phase: k.phase || '',
-      finding: k.finding || '',
-      advice: k.advice || '',
-      imageUrl: k.image_url || '',
-      evidenceTypeLabel: k.evidence_type === 'visual_observation' ? '画面观察' : (k.evidence_type || '')
-    })),
+    summaryNextStep: summary.primary_next_step || '',
+    metricRows,
+    metricNote,
+    timelineFrames,
+    activeFrame,
+    sourceText,
+    notices: notices.map(n => (n && n.text) || '').filter(Boolean),
     limitations: r.limitations || [],
-    traceId: r.trace_id || '',
-    abstained: state === 'abstained',
-    uncertain: state === 'uncertain'
+    capabilities
   }
 }
 
-module.exports = { buildViewModel, STAGE_LABELS, TERMINAL_STATUSES, fmtSeconds, PIPELINE_VERSION }
+module.exports = {
+  buildViewModel, normalizeTimeline, mapSource, sanitizeReason,
+  buildPreviewMap, mergeEvidencePreviews,
+  STAGE_LABELS, TERMINAL_STATUSES, fmtSeconds, PIPELINE_VERSION,
+  SOURCE_LABELS, ADVICE_KIND_LABELS
+}

@@ -7,6 +7,7 @@ __all__ = [
     "analyze_motion",
     "analyze_kinetics400",
     "analyze_motion_unified",
+    "evaluate_measurements",
 ]
 
 
@@ -19,4 +20,6 @@ def __getattr__(name: str):
         return import_module(".kinetics", __name__).analyze_kinetics400
     if name == "analyze_motion_unified":
         return import_module(".motion_unified").analyze_motion_unified
+    if name == "evaluate_measurements":  # G package: counter/scorer entry point
+        return import_module(".counters", __name__).evaluate_measurements
     raise AttributeError(name)

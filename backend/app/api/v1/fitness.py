@@ -19,6 +19,22 @@ from app.services.model_governance import model_readiness
 router = APIRouter(prefix="/fitness", tags=["fitness-profile"])
 
 
+@router.get("/motion-capabilities")
+def motion_capabilities(
+    user=Depends(current_user),
+):
+    """V2: expose the motion catalog version + per-action recognition / coaching /
+    repetition / scoring capabilities. Reads the catalog accessor (never a
+    hand-maintained mapping) so the miniprogram shows only registered capabilities.
+    """
+    from app.services.motion import catalog
+
+    return {
+        "catalog_version": catalog.catalog_version(),
+        "actions": catalog.list_capabilities(),
+    }
+
+
 class TrainingIntentIn(BaseModel):
     target_body_parts: list[str] = Field(default_factory=list, max_length=8)
     goals: list[str] = Field(default_factory=list, max_length=5)
