@@ -23,6 +23,7 @@ import json
 import logging
 import uuid
 from datetime import timedelta
+from pathlib import Path
 from typing import Callable
 
 from sqlalchemy import select, update
@@ -366,11 +367,36 @@ def _evidence_from_receipt(receipt: dict) -> dict:
 
 
 def _frames_for_review(db: Session, run: MotionAnalysisRun) -> list:
-    """Build DeepSeek frame inputs from the evidence pool. JPEG bytes are not
-    persisted (contract: result_json holds references only); a production worker
-    resolves jpeg from preview_asset_id. Tests mock the reviewer, so an empty
-    jpeg is fine.
+    """Build DeepSeek frame inputs from the evidence pool.
+
+    JPEG bytes are not persisted (contract: result_json holds references only);
+    the bytes live in MediaStorage under ``preview_asset_id``. When bytes are
+    missing (legacy rows / failed upload), the frame is still passed with a
+    text-only observation so the model can answer from the whitelisted facts;
+    the reviewer must tolerate frames without image bytes.
     """
+    from app.services.motion.media_storage import (
+        LocalPreviewStore,
+        MediaStorage,
+        PreviewNotFound,
+        SqlEvidenceFrameStore,
+    )
+    from app.core.database import Base as app_base
+
+    table = app_base.metadata.tables.get("motion_evidence_frames")
+    storage = None
+    if table is not None:
+        try:
+            store = LocalPreviewStore(
+                Path(settings.upload_dir) / "motion-previews"
+            )
+            storage = MediaStorage(
+                store, SqlEvidenceFrameStore(db, table),
+                secret=settings.secret_key or "local-dev",
+            )
+        except Exception:  # noqa: BLE001 - never break review on storage errors
+            storage = None
+
     rows = db.scalars(
         select(MotionEvidenceFrame)
         .where(MotionEvidenceFrame.run_id == run.id)
@@ -383,12 +409,22 @@ def _frames_for_review(db: Session, run: MotionAnalysisRun) -> list:
             obs = json.loads(row.observation_json or "{}") or {}
         except (ValueError, TypeError):
             obs = {}
+        jpeg: bytes | None = None
+        if storage is not None and row.preview_asset_id:
+            try:
+                jpeg = storage.read_preview_bytes(row.preview_asset_id)
+            except (PreviewNotFound, LookupError):
+                jpeg = None
         frames.append(
             {
                 "frame_id": row.frame_id,
                 "timestamp_ms": row.timestamp_ms or 0,
-                "jpeg": obs.get("jpeg"),
+                "jpeg": jpeg,
                 "visible_regions": obs.get("visible_regions"),
+                "motion_delta": obs.get("motion_delta"),
+                "blur": obs.get("blur"),
+                "event": obs.get("event"),
+                "phase": obs.get("phase"),
             }
         )
     return frames
@@ -438,13 +474,26 @@ def _run_stage(
         # Skip DeepSeek entirely for offline / no-consent runs.
         if mode != "off":
             call_reviewer = reviewer or _default_reviewer
-            coach = call_reviewer(
-                _frames_for_review(db, run), _review_context(receipt)
-            )
+            try:
+                coach = call_reviewer(
+                    _frames_for_review(db, run), _review_context(receipt)
+                )
+            except Exception as exc:  # noqa: BLE001 - review is best-effort:
+                # degrade to the local-only result instead of failing the stage
+                # (missing preview bytes, provider transport error, or a
+                # non-JSON model response must never block the run's terminal
+                # state or retry forever).
+                logger.warning(
+                    "vision_review degraded for run %s (mode=%s): %s",
+                    run.id,
+                    mode,
+                    exc,
+                )
+                coach = None
         from app.services.motion.orchestrator import apply_post_review
 
         # apply_post_review writes the feedback result_json, flips run to
-        # completed and commits.
+        # completed and commits. coach=None => local evidence only.
         apply_post_review(
             db,
             run_id=run.id,

@@ -63,6 +63,9 @@ def api(migrated_engine, monkeypatch):
     monkeypatch.setattr(settings, "deepseek_api_key", "")
     monkeypatch.setattr(settings, "local_llm_model_dir", "")
     monkeypatch.setattr(settings, "env", "test")
+    # Deterministic isolated tests: the V2 background stage consumer would claim
+    # rows across tests; disable it (stage_tasks are exercised directly instead).
+    monkeypatch.setattr(settings, "motion_stage_consumer_enabled", False)
     # Deterministic isolated tests: the in-memory rate limiter is a production
     # guard, not behaviour under test; repeated /agent/ calls must not 429.
     monkeypatch.setattr(settings, "rate_limit_enabled", False)

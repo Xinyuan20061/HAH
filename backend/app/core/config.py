@@ -99,6 +99,12 @@ class Settings(BaseSettings):
     worker_offline_after_seconds: int = Field(default=45, ge=10)
     motion_preview_retention_days: int = Field(default=7, ge=1, le=30)
 
+    # V2 post-processing stage consumer (spec 9.1): a background daemon claims
+    # motion_stage_tasks rows and drives runs from evidence_ready to a terminal
+    # state. On by default; tests disable it for deterministic isolation.
+    motion_stage_consumer_enabled: bool = True
+    motion_stage_poll_seconds: float = Field(default=3.0, ge=0.5, le=60)
+
     # Comma-separated WeChat openids allowed to call the read-only motion admin
     # diagnostics endpoint (error codes / candidates / versions / trace). Empty
     # by default => nobody may call it; normal users get a 403.

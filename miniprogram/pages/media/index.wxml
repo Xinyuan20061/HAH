@@ -46,7 +46,7 @@
       <view class="block-title">动作时间轴</view>
       <view wx:if="{{vm.activeFrame}}" class="frame-detail-card">
         <image wx:if="{{vm.activeFrame.previewUrl && !brokenImgs[vm.activeFrame.id]}}" src="{{vm.activeFrame.previewUrl}}" mode="aspectFit" class="frame-hero-img" data-id="{{vm.activeFrame.id}}" binderror="onFrameImgError"/>
-        <view wx:elif class="frame-hero-placeholder">暂无画面，文字讲解见下</view>
+        <view wx:elif="{{!(vm.activeFrame.previewUrl && !brokenImgs[vm.activeFrame.id])}}" class="frame-hero-placeholder">暂无画面，文字讲解见下</view>
         <view class="frame-detail-head">
           <view class="frame-detail-title">{{vm.activeFrame.timeLabel}}<text wx:if="{{vm.activeFrame.phase}}"> · {{vm.activeFrame.phase}}</text></view>
           <view class="replay-btn tappable" bindtap="replayFrame" hover-class="tap" hover-start-time="0" hover-stay-time="80">回看这一刻</view>
@@ -63,7 +63,7 @@
               class="frame-item {{vm.activeFrame.id===item.id?'on':''}}"
               data-id="{{item.id}}" bindtap="selectFrame" hover-class="tap" hover-start-time="0" hover-stay-time="80">
           <image wx:if="{{item.previewUrl && !brokenImgs[item.id]}}" src="{{item.previewUrl}}" mode="aspectFill" data-id="{{item.id}}" binderror="onFrameImgError"/>
-          <view wx:elif class="frame-thumb-placeholder"></view>
+          <view wx:elif="{{!(item.previewUrl && !brokenImgs[item.id])}}" class="frame-thumb-placeholder"></view>
           <view class="frame-time">{{item.timeLabel}}</view>
           <view class="frame-phase">{{item.phase}}</view>
         </view>

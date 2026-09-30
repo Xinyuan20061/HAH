@@ -4,6 +4,7 @@ from uuid import uuid4
 import json
 import logging
 import re
+import threading
 import time
 
 from fastapi import FastAPI, Request
@@ -31,7 +32,39 @@ logging.getLogger("httpcore").setLevel(logging.WARNING)
 async def lifespan(app: FastAPI):
     settings.validate_configuration()
     logger.info("startup configuration=%s", json.dumps(settings.safe_summary()))
+    stop = threading.Event()
+
+    def _stage_consumer_loop():
+        """Consume V2 post-processing stage rows (spec 9.1, work-package E).
+
+        The worker receipt enqueues vision_review / feedback_generation and
+        returns at evidence_ready; this daemon claims those rows and drives the
+        run to a terminal state. Each transition commits independently, so
+        polling observes real progress and a restart resumes from persisted
+        rows. claim_stage uses a CAS UPDATE, so multiple instances are safe.
+        """
+        from app.core.database import SessionLocal
+        from app.services.motion.stage_tasks import process_pending_stages
+
+        while not stop.is_set():
+            try:
+                db = SessionLocal()
+                try:
+                    process_pending_stages(db)
+                finally:
+                    db.close()
+            except Exception:  # noqa: BLE001 - consumer must survive one bad cycle
+                logger.exception("motion stage consumer cycle failed")
+            stop.wait(settings.motion_stage_poll_seconds)
+
+    if settings.motion_stage_consumer_enabled:
+        thread = threading.Thread(
+            target=_stage_consumer_loop, name="motion-stage-consumer", daemon=True
+        )
+        thread.start()
+        logger.info("motion stage consumer started (poll=%.1fs)", settings.motion_stage_poll_seconds)
     yield
+    stop.set()
     engine.dispose()
 
 
