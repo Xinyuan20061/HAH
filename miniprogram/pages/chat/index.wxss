@@ -180,3 +180,24 @@
 @keyframes thinkingDot {0%,60%,100% {opacity: .28;transform: translateY(0);}30% {opacity: 1;transform: translateY(-8rpx);}}
 @keyframes cursorPulse {0%,100% {opacity: .22;}50% {opacity: 1;}}
 @keyframes statusPulse {0%,100% {opacity: .35;transform: scale(.8);}50% {opacity: 1;transform: scale(1.15);}}
+
+/* Real pipeline stage chips (spec 8.7). Labelled as progress, not live model output. */
+.stage-strip{display:flex;flex-wrap:wrap;gap:8rpx;margin:12rpx 0}
+.stage-chip{padding:8rpx 16rpx;border-radius:999rpx;background:#f7f7f2;color:#5f665f;font-size:18rpx}
+.stage-chip.running{background:#e9efd9;color:#506336}
+.stage-chip.failed{background:rgba(192,57,43,.1);color:#c0392b}
+
+/* Action proposal confirm cards (spec 8.5). Rendered from actions[] only. */
+.action-cards{margin:16rpx 0}
+.action-card{margin-bottom:24rpx;padding:24rpx;border:1rpx solid #eeeee6;border-radius:22rpx;background:#fff;box-shadow:0 8rpx 26rpx rgba(17,22,19,.035)}
+.action-head{display:flex;align-items:flex-start;gap:16rpx}
+.action-head .grow{min-width:0;flex:1}
+.action-title{color:#111613;font-size:26rpx;font-weight:760;margin-top:4rpx}
+.action-state{flex:none;padding:8rpx 16rpx;border-radius:999rpx;background:#f7f7f2;color:#5f665f;font-size:18rpx}
+.action-state.done{background:#e9efd9;color:#506336}
+.action-summary{margin-top:12rpx;color:#5f665f;font-size:21rpx;line-height:1.6}
+.action-actions{display:flex;justify-content:flex-end;gap:16rpx;margin-top:20rpx}
+.action-btn{padding:16rpx 24rpx;border-radius:999rpx;font-size:22rpx}
+.action-btn.soft{background:#f7f7f2;color:#111613}
+.action-btn.primary{background:#c4e267;color:#111613;font-weight:720}
+.action-note{margin-top:12rpx;color:#9b5b00;font-size:20rpx;line-height:1.55}

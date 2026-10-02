@@ -356,8 +356,20 @@ def test_t14_v1_and_v2_receipt_schemas_both_parse():
         "measurements": {"available": True, "exercise_id": "squat", "reps": 5},
     }
     parsed = validate_motion_worker_result_v2(v2)
-    # kinetics.candidates field must be preserved (R05).
-    assert parsed["kinetics"]["candidates"][0]["source_label"] == "front raises"
+    # The kinetics namespace is preserved inside the V2 group it belongs to
+    # (spec §7.3: sources are never mixed, and no separate V1 mirror is read).
+    kinetics = [
+        c for c in parsed["recognition_candidates"] if c["source"] == "kinetics"
+    ]
+    assert kinetics and kinetics[0]["source_label"] == "front raises"
+
+    # A migration-window receipt that still mirrors the V1 keys is accepted but
+    # the V1 keys are ignored; a genuinely unknown group is rejected.
+    legacy_mirror = dict(v2)
+    legacy_mirror["pose"] = {"available": False}
+    assert validate_motion_worker_result_v2(legacy_mirror) is not None
+    with pytest.raises(MotionResultSchemaError):
+        validate_motion_worker_result_v2({**v2, "brand_new_group": {}})
 
     # A V2 receipt missing required groups must 422, not silently pass.
     with pytest.raises(MotionResultSchemaError):

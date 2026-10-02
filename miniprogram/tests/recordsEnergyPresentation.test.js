@@ -50,7 +50,9 @@ test('recording tools stay above analytics and use photo recognition with round 
   const script = read('pages/records/index.js')
 
   assert.match(view, /bindtap="scan"[\s\S]{0,180}camera\.png/)
-  assert.doesNotMatch(view, /bindtap="diet"/)
+  // FOOD-01: the dashboard must expose the diet ledger, otherwise the
+  // registered /pages/records/diet page has no entry point at all.
+  assert.match(view, /bindtap="diet"/)
   assert.match(style, /\.quick-circle\{[^}]*width:82rpx;[^}]*height:82rpx;[^}]*border-radius:50%/)
   assert.match(script, /\/health\/energy-dashboard/)
   assert.match(script, /\/pages\/scan\/index/)
@@ -61,9 +63,16 @@ test('recording tools stay above analytics and use photo recognition with round 
   assert.ok(toolsIndex >= 0 && toolsIndex < overviewIndex, 'recording tools must stay above energy analytics')
 })
 
-test('food photo save returns to the live records dashboard', () => {
+test('food photo save stays on a saved card linked to the new record', () => {
   const script = read('pages/scan/index.js')
-  assert.match(script, /wx\.redirectTo\(\{url:'\/pages\/records\/index'\}\)/)
+  const view = read('pages/scan/index.wxml')
+  // The old contract bounced to the dashboard after a fixed delay without ever
+  // showing what was written; the saved card now names the record and links to it.
+  assert.match(view, /saved-card/)
+  assert.match(script, /savedRecord/)
+  assert.match(script, /already_finalized/)
+  assert.match(script, /pages\/records\/diet/)
+  assert.doesNotMatch(script, /setTimeout\(\(\)\s*=>\s*wx\.redirectTo/)
 })
 
 test('records page rebinds the canvas after returning from seven-day trends', () => {

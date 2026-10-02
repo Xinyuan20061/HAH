@@ -330,7 +330,7 @@ DeepSeek 与本地识别 = **权重关系**，一个 `AI_MODE` 三档配置决�
 
 
 
-* 备份生产 MySQL → 在受控环境对备份执行迁移到当前唯一 head `0018_seed_knowledge_documents` → 重跑 fresh/incremental/repeat 三种迁移校验（用专用审计库，禁止直接动业务库）。
+* 备份生产 MySQL → 在受控环境对备份执行迁移到当前唯一 head（以 `alembic heads` 命令结果为准，禁止手写 revision）→ 重跑 fresh/incremental/repeat 三种迁移校验（用专用审计库，禁止直接动业务库）。
 
 ### R4.2 真实微信云托管识餐验收
 

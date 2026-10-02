@@ -10,17 +10,18 @@
     <view class="flow-line"><view class="flow-fill {{step>=3?'on':''}}"></view></view>
     <view class="flow-item {{step>=3?'on':''}} {{step>3?'done':''}}"><text>{{step>3?'✓':'3'}}</text>确认</view>
     <view class="flow-line"><view class="flow-fill {{step>=4?'on':''}}"></view></view>
-    <view class="flow-item {{step>=4?'on':''}}"><text>4</text>入库</view>
+    <view class="flow-item {{step>=4?'on':''}}"><text>{{step>4?'✓':'4'}}</text>已保存</view>
   </view>
   <view class="camera tappable" bindtap="choose" hover-class="tap" hover-start-time="0" hover-stay-time="80"><image wx:if="{{image}}" src="{{image}}" mode="aspectFill"/><view wx:else class="empty-camera"><view class="lens ui-fixed-circle"><image src="/assets/icons/camera.png" mode="aspectFit"/></view><text class="b">拍照或选择照片</text></view><view wx:if="{{loading}}" class="scan-status"><view class="scan-dot"></view><text>{{jobStatus||'正在估算'}}</text></view></view>
   <button wx:if="{{!result}}" class="analyze tappable" bindtap="analyze" loading="{{loading}}" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">{{loading?'正在估算…':(jobId?'查看进度':(image?'开始识别':'选择餐食照片'))}}</button>
   <view wx:if="{{jobStatus&&!loading&&!result}}" class="notice">{{jobStatus}}</view>
-  <view wx:if="{{state==='error'}}" class="state-panel state-error"><view class="state-title">这一步没有完成</view><view class="state-desc">{{error}}</view><button class="btn-soft mini tappable" bindtap="retry" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">重新尝试</button></view>
+  <view wx:if="{{state==='error'}}" class="state-panel state-error"><view class="state-title">这一步没有完成</view><view class="state-desc">{{error}}</view><view class="state-actions"><button class="btn-soft mini tappable" bindtap="retry" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">重新尝试</button><button class="btn-soft mini tappable" bindtap="manualRecord" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">手动记录</button></view></view>
   <view wx:if="{{result}}" class="meal-result">
     <view wx:if="{{result.summary}}" class="ai-summary-card"><view class="ai-summary-title">整体点评</view><view class="ai-summary-text">{{result.summary}}</view></view>
     <view class="meal-head"><view><view class="source-badge">{{result.sourceLabel}} · 估算</view><view class="dish">{{form.dish_name}}</view><view class="muted">{{form.portion||'份量待确认'}} · {{form.cooking_method||'做法待确认'}}</view></view><view class="kcal"><text class="b">{{form.calories}}</text><text class="small">千卡</text></view></view>
     <view class="macro simple-macro"><view><text class="b">{{form.protein}}g</text><text class="small">蛋白质</text></view><view><text class="b">{{form.carbs}}g</text><text class="small">碳水</text></view><view><text class="b">{{form.fat}}g</text><text class="small">脂肪</text></view></view>
     <view class="result-actions"><button class="edit-btn tappable" bindtap="toggleEdit" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">{{editing?'收起校正':'校正'}}</button><view class="tappable" bindtap="toggleDetails" hover-class="tap" hover-start-time="0" hover-stay-time="80">{{showDetails?'收起详情':'查看详情'}}</view></view>
+    <view wx:if="{{needsConfirmation}}" class="confirm-callout"><view class="confirm-title">请先确认再保存</view><view class="confirm-text">{{confirmHint}}</view><button class="btn-soft mini tappable" bindtap="toggleEdit" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">去校正</button></view>
     <view wx:if="{{editing}}" class="edit-grid">
       <view class="field wide"><text>菜名</text><input value="{{form.dish_name}}" data-field="dish_name" bindinput="onField"/></view><view class="field"><text>份量</text><input value="{{form.portion}}" data-field="portion" bindinput="onField" placeholder="如 1 碗"/></view><view class="field"><text>做法</text><input value="{{form.cooking_method}}" data-field="cooking_method" bindinput="onField" placeholder="如 清蒸"/></view>
       <view class="item-editor wide" wx:for="{{form.items}}" wx:key="index"><view class="item-editor-title">{{item.name}}</view><view class="item-editor-grid"><view class="field"><text>名称</text><input value="{{item.name}}" data-index="{{index}}" data-field="name" bindinput="onItemField"/></view><view class="field"><text>份量</text><input value="{{item.portion}}" data-index="{{index}}" data-field="portion" bindinput="onItemField"/></view><view class="field"><text>重量 g</text><input type="digit" value="{{item.weight_g}}" data-index="{{index}}" data-field="weight_g" bindinput="onItemField"/></view><view class="field"><text>热量</text><input type="digit" value="{{item.calories}}" data-index="{{index}}" data-field="calories" bindinput="onItemField"/></view></view></view>
@@ -34,7 +35,21 @@
       <view wx:if="{{result.items&&result.items.length}}" class="food-item" wx:for="{{result.items}}" wx:key="index"><view class="row space"><text>{{item.name}}</text><b>{{item.calories}} 千卡</b></view><view class="item-meta">{{item.portion||'份量待确认'}} · {{item.evidence||item.portion_basis}}</view></view>
       <view wx:if="{{result.uncertainty_reasons&&result.uncertainty_reasons.length}}" class="uncertainty"><view class="evidence-title">需要确认</view><view wx:for="{{result.uncertainty_reasons}}" wx:key="*this">{{item}}</view></view>
     </view></view></view>
-    <button class="save tappable" bindtap="save" loading="{{saving}}" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">{{dirty?'保存校正并确认':'确认并保存'}}</button><view wx:if="{{state==='saved'}}" class="state-panel state-success"><view class="state-title">已保存到今日饮食</view></view>
+    <view class="meal-picker">
+      <text class="meal-picker-label">这一餐是</text>
+      <picker range="{{mealLabels}}" value="{{mealIndex}}" bindchange="onMealChange">
+        <view class="meal-picker-value tappable" hover-class="tap-chip" hover-start-time="0" hover-stay-time="80">{{mealLabels[mealIndex]}}<image src="/assets/icons/chevron.png" mode="aspectFit"/></view>
+      </picker>
+    </view>
+    <button wx:if="{{state!=='saved'}}" class="save tappable" bindtap="save" loading="{{saving}}" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">{{dirty?'保存校正并确认':'确认并保存'}}</button>
+    <view wx:if="{{state==='saved'}}" class="saved-card">
+      <view class="saved-title">已保存</view>
+      <view class="saved-row"><text>{{savedRecord.meal_label}}</text><text class="saved-name">{{savedRecord.name}}</text><text class="saved-kcal">{{savedRecord.calories}} 千卡</text></view>
+      <view class="saved-actions">
+        <view class="saved-action tappable" bindtap="viewRecord" hover-class="tap-chip" hover-start-time="0" hover-stay-time="80">查看记录</view>
+        <view class="saved-action tappable" bindtap="scanAnother" hover-class="tap-chip" hover-start-time="0" hover-stay-time="80">再记一餐</view>
+      </view>
+    </view>
   </view>
-  <view class="notice">热量为估算值，请确认份量。</view>
+  <view class="notice">热量为估算草稿，确认后才写入记录。</view>
 </view>

@@ -1,3 +1,5 @@
+HISTORICAL: 本文是 H4 多模态升级轮的落地说明，其中的迁移号（如 `0016_food_item_evidence`）是当时的事实记录，不是当前 head。当前 head 以 `alembic heads` 命令结果为准。
+
 # HealthMate H4 多模态升级：严格审核与落地说明
 
 ## 结论

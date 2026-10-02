@@ -270,16 +270,18 @@ MOTION_WORKER_RESULT_V2_SCHEMA_VERSION = "motion-worker-v2"
 
 
 class V2VideoQuality(BaseModel):
-    model_config = ConfigDict(extra="ignore")
+    model_config = ConfigDict(extra="forbid")
 
     available: bool
     decoded_ok: bool = True
     duration_ms: int | None = Field(default=None, ge=0)
+    fps: float | None = Field(default=None, ge=0, le=1000)
+    total_frames: int | None = Field(default=None, ge=0)
     blur_summary: str | None = None
 
 
 class V2Subject(BaseModel):
-    model_config = ConfigDict(extra="ignore")
+    model_config = ConfigDict(extra="forbid")
 
     available: bool
     subject_id: str | None = None
@@ -287,47 +289,47 @@ class V2Subject(BaseModel):
 
 
 class V2PoseEvidence(BaseModel):
-    model_config = ConfigDict(extra="ignore")
+    model_config = ConfigDict(extra="forbid")
 
     available: bool
-    fps: float | None = Field(default=None, ge=0)
+    fps: float | None = Field(default=None, ge=0, le=1000)
     frame_ids: list[str] = Field(default_factory=list, max_length=512)
+    sample_count: int | None = Field(default=None, ge=0, le=100000)
+    keypoint_valid_rate: float | None = Field(default=None, ge=0, le=1)
     measurement_summary: str | None = None
 
 
 class V2RecognitionCandidate(BaseModel):
-    model_config = ConfigDict(extra="ignore")
+    model_config = ConfigDict(extra="forbid")
 
     source: str = Field(min_length=1, max_length=24)
     source_label: str = Field(min_length=1, max_length=80)
     canonical_id: str | None = Field(default=None, max_length=40)
-    raw_score: float | None = None
+    class_index: int | None = Field(default=None, ge=0, le=100000)
+    raw_score: float | None = Field(default=None, ge=0, le=1)
     score_type: str | None = Field(default=None, max_length=24)
-
-
-class V2KineticsBlock(BaseModel):
-    """R05: the current worker emits receipt.kinetics.candidates; keep it parsed."""
-
-    model_config = ConfigDict(extra="ignore")
-
-    candidates: list[V2RecognitionCandidate] = Field(default_factory=list, max_length=20)
 
 
 class V2EvidenceFrame(BaseModel):
     """Generic evidence pool row: reference only, no image bytes.
 
     finding/advice/phase stay inline (contract note: V2 keeps the V1 row shape).
+    ``image_b64`` is explicitly forbidden: previews travel by ``preview_asset_id``.
     """
 
-    model_config = ConfigDict(extra="ignore")
+    model_config = ConfigDict(extra="forbid")
 
     frame_id: str = Field(min_length=1, max_length=80)
     timestamp_ms: int = Field(ge=0)
     preview_asset_id: str | None = Field(default=None, max_length=128)
+    preview_sha256: str | None = Field(default=None, max_length=64)
+    preview_bytes: int | None = Field(default=None, ge=0)
+    preview_dimensions: dict | None = None
     subject_id: str | None = Field(default=None, max_length=80)
     visible_regions: list[str] = Field(default_factory=list, max_length=12)
     blur: str | None = None
     motion_delta: float | None = None
+    event: str | None = Field(default=None, max_length=60)
     phase: str | None = Field(default=None, max_length=40)
     finding: str | None = None
     advice: str | None = None
@@ -335,35 +337,55 @@ class V2EvidenceFrame(BaseModel):
 
 
 class V2Measurements(BaseModel):
-    model_config = ConfigDict(extra="ignore")
+    model_config = ConfigDict(extra="forbid")
 
     available: bool
     exercise_id: str | None = Field(default=None, max_length=40)
     reps: int | None = Field(default=None, ge=0, le=10000)
     duration_ms: int | None = Field(default=None, ge=0)
     quality: dict = Field(default_factory=dict)
+    reason: str | None = Field(default=None, max_length=300)
 
 
 class MotionWorkerResultV2(BaseModel):
     """V2 unified worker receipt (schema_version = motion-worker-v2).
 
-    V1 historical receipts keep parsing through MotionWorkerResultV1. A V2 receipt
-    must NOT carry image bytes; previews live in short-term storage and are
-    referenced by preview_asset_id.
+    ``extra="forbid"`` is deliberate (spec §7.1): a producer that adds a field
+    the consumer does not understand must fail loudly at the boundary instead of
+    having its evidence silently dropped by a lenient parser.
+
+    Every field the shipped local worker emits is therefore declared here:
+    ``pipeline_version``, ``model_versions``, ``external_provider_calls``,
+    ``cloud_review_mode`` and ``source``. V1 historical receipts keep parsing
+    through ``MotionWorkerResultV1``. A V2 receipt must NOT carry image bytes;
+    previews live in short-term storage and are referenced by ``preview_asset_id``.
     """
 
-    model_config = ConfigDict(extra="ignore")
+    model_config = ConfigDict(extra="forbid")
 
     schema_version: Literal["motion-worker-v2"]
     video_quality: V2VideoQuality
     subject: V2Subject
     pose_evidence: V2PoseEvidence
     recognition_candidates: list[V2RecognitionCandidate] = Field(
-        default_factory=list, max_length=24
+        default_factory=list, max_length=50
     )
-    kinetics: V2KineticsBlock | None = None
-    frames: list[V2EvidenceFrame] = Field(default_factory=list, max_length=512)
+    frames: list[V2EvidenceFrame] = Field(default_factory=list, max_length=120)
     measurements: V2Measurements
+    # Provenance the post-processing adapter forwards into the stored result.
+    pipeline_version: str | None = Field(default=None, max_length=60)
+    model_versions: dict[str, str] = Field(default_factory=dict)
+    external_provider_calls: int | None = Field(default=None, ge=0)
+    cloud_review_mode: str | None = Field(default=None, max_length=30)
+    source: str | None = Field(default=None, max_length=30)
+    # Migration window: a receipt produced while a worker still emitted the V1
+    # view alongside the V2 groups may carry these three keys. They are declared
+    # (so a *new* unknown group still fails loudly) but deliberately IGNORED:
+    # the V2 groups are the single source of evidence, and reading these would
+    # reintroduce the silent V1 path this contract removes (spec §7.3).
+    pose: dict | None = None
+    score: dict | None = None
+    kinetics: dict | None = None
 
 
 def validate_motion_worker_result_v2(result: dict) -> dict:

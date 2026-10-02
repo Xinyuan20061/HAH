@@ -10,11 +10,15 @@ from app.core.config import settings
 from app.core.database import get_db
 from app.core.database import engine
 from app.models import PrivacyAudit
+from app.schemas.errors import ApiException
 from app.services.agent.actions import ACTION_REGISTRY, execute_action
+from app.services.media_reconciliation import (
+    deletion_summary,
+    finalize_account_deletion,
+)
 from app.services.privacy import (
     build_export_zip,
     cloud_file_ids,
-    delete_account_data,
     export_preview,
 )
 
@@ -107,22 +111,47 @@ def export_data(
 def delete_account(
     body: ConfirmIn, user=Depends(current_user), db: Session = Depends(get_db)
 ):
+    """Delete the account with a server-verifiable media ledger (spec §10.2).
+
+    The typed confirmation is mandatory — a generic ``confirmation=true`` cannot
+    authorize this action. CloudBase objects cannot be removed without the user's
+    WeChat session, so whatever the server cannot itself verify is reported as
+    ``manual_review`` instead of a blanket success.
+    """
     if body.confirmation != "DELETE MY DATA":
-        raise HTTPException(400, "请输入 DELETE MY DATA 进行二次确认")
+        raise ApiException(
+            422,
+            "TYPED_CONFIRMATION_REQUIRED",
+            "请输入 DELETE MY DATA 进行二次确认",
+            details={"required_confirmation": "DELETE MY DATA"},
+        )
     spec = ACTION_REGISTRY["privacy.account.delete"]
     if not spec.requires_confirmation:
-        raise HTTPException(500, "删除策略配置异常")
+        raise ApiException(
+            500, "DELETION_POLICY_MISCONFIGURED", "删除策略配置异常"
+        )
     files = cloud_file_ids(db, user.id)
     if set(files) != set(body.cloud_files_deleted):
-        raise HTTPException(
+        raise ApiException(
             409,
-            "请先由小程序删除全部关联 CloudBase 文件，再提交删除确认；后端无法替您删除云文件",
+            "CLOUD_MEDIA_NOT_DELETED",
+            "请先由小程序删除全部关联 CloudBase 文件，再提交删除确认；"
+            "后端无法替您删除云文件",
+            details={"status": "client_deletion_incomplete"},
         )
-    result = delete_account_data(db, user.id)
+    result = finalize_account_deletion(db, user_id=user.id, reason="user_request")
     return {
         "ok": True,
         "deleted": True,
+        # Kept for one release cycle: the client still reads this value, and it
+        # is genuinely a *client* report — it is not the deletion verification.
         "cloud_media_deletion": "client_reported" if files else "no_cloud_files",
         **result,
         "message": "账户与关联健康数据已删除，当前登录凭证将不再有效。",
     }
+
+
+@router.get("/deletion-status")
+def deletion_status(user=Depends(current_user), db: Session = Depends(get_db)):
+    """What the server can actually prove about this account's media deletion."""
+    return deletion_summary(db, user.id)

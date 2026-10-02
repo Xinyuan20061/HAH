@@ -149,7 +149,7 @@ def test_login_profile_records_and_utc(api):
     )
     response = api.post("/api/v1/diet/records", json={"name": "早餐", "calories": 200})
     assert response.status_code == 200 and response.json()["recorded_at"].endswith("Z")
-    assert api.get("/api/v1/diet/records").json()[0]["name"] == "早餐"
+    assert api.get("/api/v1/diet/records").json()["items"][0]["name"] == "早餐"
 
 
 @pytest.mark.parametrize("token", ["invalid.jwt.token", "expired", "subject"])
@@ -341,7 +341,7 @@ def test_food_item_correction_recomputes_and_persists_evidence(
         json={"confirmed": True},
     ).json()
     with Session(migrated_engine) as db:
-        record = db.get(DietRecord, finalized["record_id"])
+        record = db.get(DietRecord, finalized["record"]["id"])
         assert record.calories == 400
         assert [item["name"] for item in record.items] == ["米饭", "鸡胸"]
 
@@ -964,7 +964,8 @@ def test_unavailable_ai_is_explicit_and_does_not_break_records(api, monkeypatch)
     # local fallback engine so the 503 contract stays stable.
     monkeypatch.setattr(settings, "local_llm_model_dir", "")
     response = api.post("/api/v1/chat", json={"message": "今天吃什么"})
-    assert response.status_code == 503 and response.json()["code"] == 30001
+    assert response.status_code == 503
+    assert response.json()["error"]["code"] == "AI_UNAVAILABLE"
     assert (
         api.post(
             "/api/v1/diet/records", json={"name": "手动记录", "calories": 100}

@@ -1,3 +1,5 @@
+HISTORICAL: 本文是特定轮次的验收快照，其中引用的迁移 head 是当时的事实，不是当前 head。当前 head 以 `alembic heads` 命令结果为准。
+
 # HealthMate 实际验收记录
 
 初次执行日期：2026-09-18；最近本地复核：2026-09-27，Windows PowerShell。以下只记录已经执行的结果，不把单元测试或本地报告写成正式微信环境验收。

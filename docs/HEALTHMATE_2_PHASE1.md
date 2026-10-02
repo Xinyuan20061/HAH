@@ -1,3 +1,5 @@
+HISTORICAL: 本文是特定轮次的交付/验证快照，其中引用的迁移 head 是当时的事实，不是当前 head。当前 head 以 `alembic heads` 命令结果为准。
+
 # HealthMate 2.0 第一阶段落地说明
 
 本阶段在现有“微信小程序 → 云托管 API → MySQL 队列 → 本地 AI Worker”链路上完成运动教练闭环，不改变既有媒体安全和异步调度边界。

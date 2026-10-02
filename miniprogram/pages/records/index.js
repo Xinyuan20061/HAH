@@ -13,7 +13,8 @@ Page({
   data: {
     loading: true, error: '', dashboard: null, today: null, target: null, resting: null, meals: [],
     activeSummary: '触摸柱形查看单日餐次与运动数据', netText: '--',
-    targetExceeded: false, budgetFillStyle: 'width:0%', budgetWindowStyle: 'left:0%;width:0%'
+    targetExceeded: false, budgetFillStyle: 'width:0%', budgetWindowStyle: 'left:0%;width:0%',
+    businessDate: '', hasRecords: false
   },
   onLoad() { this._loadedOnce = false },
   onShow() { this.load() },
@@ -46,11 +47,15 @@ Page({
       })
       const balance = this.balanceCopy(today.balance, today.net)
       const budget = this.budgetCopy(today, target)
+      const hasRecords = ['breakfast', 'lunch', 'dinner', 'snack'].some(key => Number(today[key]) > 0)
+        || Number(today.intake) > 0 || Number(today.exercise) > 0
       this.setData({
         loading: false, dashboard, today, target, resting: dashboard.resting || {}, meals,
         netText: balance.net,
         targetExceeded: budget.exceeded, budgetFillStyle: budget.fillStyle,
         budgetWindowStyle: budget.windowStyle,
+        businessDate: dashboard.business_date || dashboard.date || '',
+        hasRecords,
         activeSummary: this.daySummary(today)
       }, () => {
         this._chartTimer = setTimeout(() => {
@@ -102,5 +107,15 @@ Page({
   scan() { wx.navigateTo({ url: '/pages/scan/index' }) },
   checkin() { wx.navigateTo({ url: '/pages/checkin/index' }) },
   exercise() { wx.navigateTo({ url: '/pages/records/exercise' }) },
-  motion() { wx.navigateTo({ url: '/pages/media/index' }) }
+  motion() { wx.navigateTo({ url: '/pages/media/index' }) },
+  /**
+   * Entry point to the diet ledger (spec §6.5). Without this the registered
+   * `/pages/records/diet` page had zero references anywhere in the product.
+   */
+  diet(e) {
+    const mealType = (e && e.currentTarget && e.currentTarget.dataset.meal) || ''
+    const query = [`date=${this.data.businessDate || ''}`]
+    if (mealType) query.push(`meal_type=${mealType}`)
+    wx.navigateTo({ url: `/pages/records/diet?${query.join('&')}` })
+  }
 })

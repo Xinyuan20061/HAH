@@ -91,6 +91,11 @@
       </view>
     </view>
 
+    <view wx:if="{{previousResultAvailable}}" class="previous-strip">
+      <text class="previous-text">当前显示的是重新分析后的结果，不会与上一次混合。</text>
+      <view class="previous-action tappable" bindtap="viewPrevious" hover-class="tap-chip" hover-start-time="0" hover-stay-time="80">查看上一次结果</view>
+    </view>
+
     <view class="detail-toggle tappable" bindtap="toggleDetails" hover-class="tap" hover-start-time="0" hover-stay-time="80"><text>{{showDetails?'收起详情':'查看详情与来源'}}</text><image class="ui-chevron {{showDetails?'open':''}}" src="/assets/icons/chevron.png" mode="aspectFit"/></view>
     <view class="disclosure {{showDetails?'open':''}}" style="height:{{detailsHeight}}" bindtransitionend="onDisclosureEnd"><view class="disclosure-body" id="detailsBody"><view class="motion-details">
       <view class="detail-section">

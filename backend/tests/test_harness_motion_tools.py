@@ -435,14 +435,38 @@ def test_embedded_motion_text_cannot_inject_tool_calls_or_writes(migrated_engine
 # 6. Write gate proposal_only -> user_confirmed is not bypassed
 # --------------------------------------------------------------------------- #
 
-def test_write_actions_still_stop_at_confirmation_gate():
+def test_write_actions_still_stop_at_confirmation_gate(api, migrated_engine):
+    from sqlalchemy.orm import Session
+
+    from app.models import HealthAgentRun, User
+
     registry = get_tool_registry()
-    plan_obs = registry.execute(
-        "plan.apply",
-        ToolContext(db=None, user=None, agent_id="xiaojian"),
-        {"proposal": {"title": "x"}},
-    )
-    assert plan_obs.status == "approval_required"
+    with Session(migrated_engine) as db:
+        run = HealthAgentRun(
+            user_id=api.user_id,
+            intent="plan",
+            user_message="计划",
+            result_json=json.dumps(
+                {"plan": {"title": "t", "items": [{"date_offset": 0, "category": "exercise", "title": "a", "description": "b", "target": {}}]}}
+            ),
+            provider="test",
+            status="completed",
+        )
+        db.add(run)
+        db.commit()
+        context = ToolContext(
+            db=db, user=db.get(User, api.user_id), agent_id="xiaojian"
+        )
+        context.state["run_id"] = run.id
+        context.state["action_source"] = "agent"
+        plan_obs = registry.execute(
+            "plan.apply",
+            context,
+            {"arguments": {"run_id": run.id}},
+        )
+        # proposal_only: the handler persists a proposal and never writes.
+        assert plan_obs.status == "approval_required"
+        assert plan_obs.output["proposal_id"].startswith("ap_")
 
     # Motion tools are reads: even a forced execute never mutates, and they
     # carry no confirmation flag / risk.

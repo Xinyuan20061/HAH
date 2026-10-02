@@ -44,8 +44,36 @@
             <text>{{statusText}}</text>
           </view>
 
+          <!-- Real pipeline stages (spec §8.7): this is truthful progress, not a
+               simulated token stream. -->
+          <view wx:if="{{msg.pending&&stages.length}}" class="stage-strip">
+            <view wx:for="{{stages}}" wx:key="index" class="stage-chip {{item.status==='running'?'running':item.status==='failed'?'failed':''}}">{{item.label}}</view>
+          </view>
+
           <view wx:if="{{msg.content}}" class="response-text">
             <text>{{msg.content}}</text><text wx:if="{{streaming&&msgIndex===messages.length-1}}" class="cursor"></text>
+          </view>
+
+          <!-- Confirm cards come ONLY from actions[] (spec §8.5). -->
+          <view wx:if="{{msg.actions&&msg.actions.length}}" class="action-cards">
+            <view wx:for="{{msg.actions}}" wx:key="proposalId" class="action-card content-reveal">
+              <view class="action-head">
+                <view class="grow">
+                  <view class="section-label">需要你确认 · {{item.riskLevel==='high'||item.riskLevel==='critical'?'高风险':'常规'}}</view>
+                  <view class="action-title">{{item.title}}</view>
+                </view>
+                <view wx:if="{{item.state==='executed'}}" class="action-state done">已执行</view>
+                <view wx:elif="{{item.state==='rejected'}}" class="action-state">已拒绝</view>
+                <view wx:elif="{{item.state==='expired'}}" class="action-state">已过期</view>
+                <view wx:elif="{{item.state==='executing'}}" class="action-state">执行中</view>
+              </view>
+              <view wx:if="{{item.summary}}" class="action-summary">{{item.summary}}</view>
+              <view wx:if="{{item.state==='pending'}}" class="action-actions">
+                <view class="action-btn soft tappable" data-proposal="{{item.proposalId}}" bindtap="rejectAction" hover-class="tap" hover-start-time="0" hover-stay-time="80">拒绝</view>
+                <view class="action-btn primary tappable" data-proposal="{{item.proposalId}}" bindtap="confirmAction" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">确认执行</view>
+              </view>
+              <view wx:elif="{{item.state==='expired'||item.state==='failed'}}" class="action-note">{{item.error||'这次确认已失效，请让小管家重新整理一次。'}}</view>
+            </view>
           </view>
 
           <view wx:if="{{msg.safetyLevel&&msg.safetyLevel!=='normal'}}" class="safety-note">

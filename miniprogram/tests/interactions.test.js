@@ -181,7 +181,9 @@ test('页面侧接线完整：挂载手势、绑定事件、且不用 catch 吃�
     const js = read(`pages/records/${kind}.js`)
     assert.match(js, /\.\.\.swipeDelete\(\)/, `${kind} 未挂载 swipeDelete`)
     assert.match(js, /confirmRemove\(id,\s*done\)/, `${kind} 缺少可回调的 confirmRemove`)
-    assert.match(js, /else if\(done\)done\(\)/, `${kind} 在确认框取消时必须调用 done() 把卡片弹回`)
+    // Whitespace/brace style is not the contract: the cancel branch must hand
+    // control back to swipeDelete so the card snaps home.
+    assert.match(js, /res\.confirm[\s\S]{0,200}done\(\)/, `${kind} 在确认框取消时必须调用 done() 把卡片弹回`)
 
     const wxml = read(`pages/records/${kind}.wxml`)
     for (const ev of [

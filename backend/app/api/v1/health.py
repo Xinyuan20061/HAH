@@ -20,6 +20,7 @@ from app.models import (
     MotionScore,
     PlanTaskState,
 )
+from app.schemas.errors import ApiException
 from app.schemas.health_extra import CheckInIn, PlanTaskIn, CustomPlanIn
 from app.services.agent.actions import execute_action
 from app.services.ai.gateway import get_provider
@@ -601,47 +602,52 @@ def dynamic_goal_evaluate(
 def dynamic_goal_apply(
     adjustment_id: int, user=Depends(current_user), db: Session = Depends(get_db)
 ):
-    def perform():
-        a = apply_adjustment(db, user.id, adjustment_id)
-        if not a:
-            raise LookupError("目标调整建议不存在或已过期")
-        add_event(
-            db,
-            user.id,
-            "goal_adjustment_applied",
-            {
-                "metric": a.metric,
-                "previous_target": a.previous_target,
-                "new_target": a.recommended_target,
-                "window_days": a.window_days,
-            },
-            source="rule_engine",
-            ref_type="goal_adjustment",
-            ref_id=a.id,
-        )
-        db.flush()
-        return {
-            "adjustment_id": a.id,
-            "metric": a.metric,
-            "new_target": a.recommended_target,
-            "goals": get_goal_settings(db, user.id, user.profile),
-        }
+    """Apply one dynamic goal suggestion through the unified proposal protocol.
 
-    try:
-        action = execute_action(
-            db,
-            user.id,
-            "goal.adjustment.apply",
-            perform,
-            confirmed=True,
-            source="user",
-            input_data={"adjustment_id": adjustment_id},
-        )
-    except LookupError:
-        from fastapi import HTTPException
+    The tap is an explicit user confirmation, so the proposal is created and
+    confirmed in a single request: the write still travels propose -> confirm and
+    therefore cannot be double-executed (spec §8.4). The execution itself is the
+    registered ``goal.adjustment.apply`` executor, so this endpoint cannot drift
+    from the Agent path.
+    """
+    from app.models import HealthGoalAdjustment
+    from app.services.agent.action_proposals import confirm_proposal, propose_action
 
-        raise HTTPException(status_code=404, detail="目标调整建议不存在或已过期")
-    return {"ok": True, "action_audit_id": action["audit_id"], **action["result"]}
+    adjustment = db.get(HealthGoalAdjustment, adjustment_id)
+    if adjustment is None or adjustment.user_id != user.id:
+        raise ApiException(
+            404, "GOAL_ADJUSTMENT_NOT_FOUND", "目标调整建议不存在或已过期"
+        )
+
+    proposal, _reason = propose_action(
+        db,
+        user_id=user.id,
+        action_key="goal.adjustment.apply",
+        arguments={"adjustment_id": adjustment_id},
+        title="应用动态目标",
+        risk_level="medium",
+        requires_confirmation=True,
+        user_visible_reason="用户在目标页确认应用规则建议",
+    )
+    if proposal is None:
+        raise ApiException(
+            409, "GOAL_ADJUSTMENT_NOT_PROPOSABLE", "该建议暂不可应用，请刷新后重试"
+        )
+    outcome = confirm_proposal(db, user.id, proposal.proposal_id, confirmation=True)
+    result = outcome.get("result") or {}
+    if not result:
+        raise ApiException(
+            404, "GOAL_ADJUSTMENT_NOT_FOUND", "目标调整建议不存在或已过期"
+        )
+    return {
+        "ok": True,
+        "proposal_id": proposal.proposal_id,
+        "action_audit_id": outcome.get("audit_id"),
+        "adjustment_id": result.get("adjustment_id"),
+        "metric": result.get("metric"),
+        "new_target": result.get("applied_target"),
+        "goals": get_goal_settings(db, user.id, user.profile),
+    }
 
 
 @router.post("/goals/dynamic/explain")

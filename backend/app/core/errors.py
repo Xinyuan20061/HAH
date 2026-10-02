@@ -1,14 +1,23 @@
-from enum import IntEnum
-from uuid import uuid4
 from fastapi import HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from sqlalchemy.exc import SQLAlchemyError
 
+from app.schemas.errors import (
+    STATUS_CODE_MAP,
+    ApiException,
+    error_body,
+)
 from app.schemas.worker import MotionResultSchemaError
 
 
-class ErrorCode(IntEnum):
+class ErrorCode:
+    """Legacy numeric codes, kept only for internal metrics/log correlation.
+
+    The client contract is the string ``code`` in the unified envelope (spec
+    §5.2); numeric codes are never returned to a client any more.
+    """
+
     OK = 0
     BAD_REQUEST = 10001
     UNAUTHORIZED = 10002
@@ -25,19 +34,8 @@ class ErrorCode(IntEnum):
     MEDIA_PROCESSING_ERROR = 40001
 
 
-_STATUS_CODE_MAP = {
-    503: ErrorCode.AI_UNAVAILABLE,
-    400: ErrorCode.BAD_REQUEST,
-    401: ErrorCode.UNAUTHORIZED,
-    403: ErrorCode.FORBIDDEN,
-    404: ErrorCode.NOT_FOUND,
-    409: ErrorCode.CONFLICT,
-    413: ErrorCode.PAYLOAD_TOO_LARGE,
-    422: ErrorCode.VALIDATION_ERROR,
-}
-
-
 def payload(code, message, data=None, request_id=None):
+    """Deprecated internal helper; prefer ``error_body`` for client responses."""
     return {
         "code": int(code),
         "message": message,
@@ -47,31 +45,52 @@ def payload(code, message, data=None, request_id=None):
 
 
 def register_exception_handlers(app):
+    @app.exception_handler(ApiException)
+    async def api_exc(request: Request, exc: ApiException):
+        rid = getattr(request.state, "request_id", None)
+        return JSONResponse(
+            status_code=exc.status_code,
+            content=error_body(
+                code=exc.code,
+                message=exc.user_message,
+                request_id=rid,
+                retryable=exc.retryable,
+                details=exc.safe_details,
+            ),
+            headers=exc.headers,
+        )
+
     @app.exception_handler(HTTPException)
     async def http_exc(request: Request, exc: HTTPException):
         rid = getattr(request.state, "request_id", None)
-        msg = exc.detail if isinstance(exc.detail, str) else "请求失败"
+        if isinstance(exc, ApiException):  # pragma: no cover - handler ordering
+            return await api_exc(request, exc)  # type: ignore[misc]
+        message = exc.detail if isinstance(exc.detail, str) else "请求失败"
         return JSONResponse(
             status_code=exc.status_code,
-            content=payload(
-                _STATUS_CODE_MAP.get(exc.status_code, ErrorCode.BAD_REQUEST),
-                msg,
-                exc.detail if not isinstance(exc.detail, str) else None,
-                rid,
+            content=error_body(
+                code=STATUS_CODE_MAP.get(exc.status_code, "BAD_REQUEST"),
+                message=message,
+                request_id=rid,
+                retryable=exc.status_code >= 500,
+                details=exc.detail if isinstance(exc.detail, dict) else None,
             ),
+            headers=getattr(exc, "headers", None),
         )
 
     @app.exception_handler(RequestValidationError)
     async def validation_exc(request: Request, exc: RequestValidationError):
         rid = getattr(request.state, "request_id", None)
-        safe_errors = [
-            {"loc": x["loc"], "type": x["type"], "msg": "字段格式或范围错误"}
-            for x in exc.errors()
-        ]
+        # Only the field location survives; validator text may echo input values.
+        first = exc.errors()[0] if exc.errors() else {}
+        location = [str(part) for part in (first.get("loc") or []) if part != "body"]
         return JSONResponse(
             status_code=422,
-            content=payload(
-                ErrorCode.VALIDATION_ERROR, "提交的数据格式不正确", safe_errors, rid
+            content=error_body(
+                code="VALIDATION_ERROR",
+                message="提交的数据格式不正确",
+                request_id=rid,
+                details={"field_path": ".".join(location) or "body"},
             ),
         )
 
@@ -83,13 +102,12 @@ def register_exception_handlers(app):
         rid = getattr(request.state, "request_id", None)
         return JSONResponse(
             status_code=422,
-            content={
-                "code": "MOTION_RESULT_SCHEMA_INVALID",
-                "message": exc.message,
-                "request_id": rid,
-                "retryable": False,
-                "details": {"field_path": exc.field_path},
-            },
+            content=error_body(
+                code="MOTION_RESULT_SCHEMA_INVALID",
+                message=exc.message,
+                request_id=rid,
+                details={"field_path": exc.field_path},
+            ),
         )
 
     @app.exception_handler(SQLAlchemyError)
@@ -97,7 +115,12 @@ def register_exception_handlers(app):
         rid = getattr(request.state, "request_id", None)
         return JSONResponse(
             status_code=500,
-            content=payload(ErrorCode.DATABASE_ERROR, "数据库操作失败", None, rid),
+            content=error_body(
+                code="DATABASE_ERROR",
+                message="数据库操作失败，请稍后重试",
+                request_id=rid,
+                retryable=True,
+            ),
         )
 
     @app.exception_handler(Exception)
@@ -105,5 +128,10 @@ def register_exception_handlers(app):
         rid = getattr(request.state, "request_id", None)
         return JSONResponse(
             status_code=500,
-            content=payload(ErrorCode.INTERNAL_ERROR, "服务器内部错误", None, rid),
+            content=error_body(
+                code="INTERNAL_ERROR",
+                message="服务器内部错误，请稍后重试",
+                request_id=rid,
+                retryable=True,
+            ),
         )

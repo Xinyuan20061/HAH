@@ -139,6 +139,7 @@ def _squat_receipt():
                     "visible_regions": ["hip", "knee", "ankle"]},
         "pose_evidence": {"available": True, "fps": 6.0,
                            "frame_ids": ["p_001", "p_002", "p_003"],
+                           "sample_count": 3, "keypoint_valid_rate": 0.8,
                            "measurement_summary": "squat 5 reps"},
         "recognition_candidates": [
             {"source": "pose", "source_label": "squat", "canonical_id": "squat",
@@ -159,18 +160,12 @@ def _squat_receipt():
              "phase": "起身", "finding": "蹬地起身，回到站立位置。",
              "advice": "起身时呼气，避免前倾。"},
         ],
-        "measurements": {"available": True, "exercise_id": "squat", "reps": 5,
-                         "duration_ms": 16000, "quality": {}},
-        # Decision evidence consumed by apply_post_review (extra="ignore" kept).
-        "recognition": {"mode": "auto", "requested_type": "auto",
-                        "selected_type": "squat", "accepted": True,
-                        "confidence": 0.9, "margin": 15.0, "method": "rules_v1",
-                        "candidates": [{"exercise_type": "squat", "match_score": 91.0}]},
-        "pose": {"available": True, "exercise_type": "squat",
-                 "keypoint_valid_rate": 0.8, "reps": 5, "errors": []},
-        "score": {"available": True, "completeness": 80.0, "stability": 78.0,
-                   "rhythm_control": 75.0, "risk_index": 12.0, "overall": 78.0,
-                   "confidence": 0.8},
+        "measurements": {
+            "available": True, "exercise_id": "squat", "reps": 5,
+            "duration_ms": 16000,
+            "quality": {"completeness": 80.0, "stability": 78.0,
+                        "rhythm_control": 75.0, "risk_index": 12.0, "overall": 78.0},
+        },
     }
 
 
@@ -188,7 +183,7 @@ def _curl_receipt():
                           "duration_ms": 16000, "blur_summary": "ok"},
         "subject": {"available": True, "subject_id": "s_01",
                     "visible_regions": ["shoulder", "elbow", "wrist"]},
-        "pose_evidence": {"available": True, "fps": 6.0,
+        "pose_evidence": {"available": False, "fps": 6.0,
                            "frame_ids": ["p_001", "p_002", "p_003"],
                            "measurement_summary": "elbow flexion visible, six-class no match"},
         "recognition_candidates": [
@@ -220,15 +215,10 @@ def _curl_receipt():
              "phase": "抬起", "finding": "前臂向上弯曲，哑铃逐渐靠近胸前。",
              "advice": "避免耸肩借力，保持大臂稳定。"},
         ],
-        "measurements": {"available": False, "exercise_id": None, "reps": None,
-                         "duration_ms": 16000, "quality": {}},
         # Six-class rules rejected: no accepted local label / no scored exercise.
-        "recognition": {"mode": "auto", "requested_type": "auto",
-                        "selected_type": None, "accepted": False,
-                        "confidence": 0.3, "margin": 5.0, "method": "rules_v1",
-                        "candidates": []},
-        "pose": {"available": False, "message": "六类规则未匹配到动作", "errors": []},
-        "score": {"available": False},
+        "measurements": {"available": False, "exercise_id": None,
+                         "duration_ms": 16000, "quality": {},
+                         "reason": "六类规则未匹配到动作"},
     }
 
 

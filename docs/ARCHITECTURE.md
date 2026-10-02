@@ -22,7 +22,7 @@ AIJob状态：queued → processing → done/failed。签名URL缺失/过期进�
 
 本机Worker真实探测OpenCV/MediaPipe，姿态在CPU上运行；`VLM_PROVIDER` 可显式选择本地 OpenAI-compatible VLM 或 DeepSeek 视觉服务。三动作独立 analyzer 输出二维启发指标、动作评分、事件时刻和匿名骨骼坐标；最多四张事件预览在本机模糊脸部、叠加骨骼并压缩，后端校验摘要与大小，默认7天后清除图片，只保留结构化事件。评分写入历史后聚合为30日动作画像并进入Agent只读上下文。VLM结果按逐食材证据校验和汇总，用户校正、确认后才入库。
 
-Web默认启动不执行DDL。独立Alembic迁移到0016_food_item_evidence。live不访问外部；ready只要求数据库连通且迁移head，不依赖Worker/DeepSeek。UTC DATETIME保留，API输出Z，健康日按北京时间。
+Web默认启动不执行DDL。迁移 head 不手写：以命令结果为准（`.\.venv\Scripts\python.exe -m alembic heads`），CI 通过 `backend/scripts/audit_migration_head.py` 校验文档与仓库一致。live不访问外部；ready只要求数据库连通且迁移head，不依赖Worker/DeepSeek。UTC DATETIME保留，API输出Z，健康日按北京时间。
 
 ## 权威知识检索
 

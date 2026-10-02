@@ -1,7 +1,7 @@
 import json
 from datetime import timedelta
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -9,22 +9,33 @@ from app.api.deps import current_user
 from app.core.database import get_db
 from app.core.streaming import display_tokens
 from app.core.time import utc_iso, utc_now
-from app.models import EvaluationEvent
+from app.models import EvaluationEvent, HealthAgentRun
 from app.schemas.agent import (
     AgentRequest,
     AgentPlanItemUpdate,
     AgentInsightFeedback,
     AgentExperimentStart,
+    ActionConfirmIn,
+    ActionRejectIn,
 )
 from app.services.agent.orchestrator import (
     agent_stats,
+    cancel_run,
+    get_run_view,
     respond,
+    retry_run,
     apply_plan,
     current_plan,
     update_plan_item,
 )
 from app.services.agent.tools import read_context
 from app.services.agent.actions import list_actions
+from app.services.agent.action_proposals import (
+    confirm_proposal,
+    expire_stale_proposals,
+    get_proposal as get_action_proposal,
+    reject_proposal,
+)
 from app.services.agent.proactive import (
     build_proactive_insights,
     PROACTIVE_CODES,
@@ -233,6 +244,50 @@ def action_registry(user=Depends(current_user)):
     }
 
 
+@router.get("/actions/{proposal_id}")
+def read_action_proposal(
+    proposal_id: str,
+    user=Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    """Read one durable proposal (spec §8.4). Foreign ids answer 404."""
+    expire_stale_proposals(db, user.id)
+    return get_action_proposal(db, user.id, proposal_id)
+
+
+@router.post("/actions/{proposal_id}/confirm")
+def confirm_action_proposal(
+    proposal_id: str,
+    body: ActionConfirmIn,
+    user=Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    """Confirm and execute exactly once (spec §8.4).
+
+    * expired → 410; foreign → 404; mutated payload → 409;
+    * a bare ``confirmation=true`` cannot authorise ``privacy.account.delete``;
+    * repeating the call returns the first result instead of writing twice.
+    """
+    return confirm_proposal(
+        db,
+        user.id,
+        proposal_id,
+        version=body.version,
+        confirmation=body.confirmation,
+        typed_confirmation=body.typed_confirmation,
+    )
+
+
+@router.post("/actions/{proposal_id}/reject")
+def reject_action_proposal(
+    proposal_id: str,
+    body: ActionRejectIn,
+    user=Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    return reject_proposal(db, user.id, proposal_id, version=body.version)
+
+
 @router.get("/profiles")
 def agent_profiles(user=Depends(current_user)):
     return {"agents": list_personas(), "default_agent_id": "steward"}
@@ -277,44 +332,122 @@ async def agent_respond(
 
 @router.post("/respond/stream")
 async def agent_respond_stream(
-    body: AgentRequest, user=Depends(current_user), db: Session = Depends(get_db)
+    body: AgentRequest,
+    http_request: Request,
+    user=Depends(current_user),
+    db: Session = Depends(get_db),
 ):
-    """Stream an already validated Agent response as NDJSON display tokens.
+    """Stream real *stage* events, then the already safety-reviewed answer.
 
-    The orchestrator must finish its safety review, plan validation and
-    deterministic guardrails before headers are sent.  Structured cards are
-    delivered with the final event so the client cannot expose an unvalidated
-    plan while text is still appearing.
+    Health advice must pass the output safety review before the user sees it, so
+    raw model tokens are never pushed: the stream reports genuine pipeline stage
+    transitions (routing / worker:* / decision), and the final ``answer`` event
+    carries the reviewed text (spec §8.7). The UI may animate that text, but it
+    must be described as "逐字展示", not as live model generation.
     """
-
     result = await respond(db, user, body.message, body.agent_id, body.channel)
     reply = str(result.get("reply") or "")
     final_result = {key: value for key, value in result.items() if key != "reply"}
+    trace = result.get("trace") or {}
+    stages = trace.get("stages") or []
+    harness_trace_id = (trace.get("multi_agent") or {}).get("harness_trace_id")
+    request_id = getattr(http_request.state, "request_id", None)
 
     async def generate():
-        yield json.dumps(
+        yield ndjson(
             {
                 "type": "meta",
+                "run_id": result.get("run_id"),
+                "request_id": request_id,
+                "harness_trace_id": harness_trace_id,
                 "intent": result.get("intent"),
                 "safety_level": result.get("safety_level", "normal"),
                 "agent": result.get("agent"),
-            },
-            ensure_ascii=False,
-        ) + "\n"
+            }
+        )
+        for stage in stages:
+            yield ndjson(
+                {
+                    "type": "stage",
+                    "stage": stage.get("stage_key"),
+                    "status": stage.get("status"),
+                    "label": STAGE_LABELS.get(stage.get("stage_key"), "处理中"),
+                    "attempt": stage.get("attempt"),
+                }
+            )
+        yield ndjson({"type": "answer", "reply": reply})
+        # Display animation only: the text below is already final and reviewed.
         for token in display_tokens(reply):
-            yield json.dumps(
-                {"type": "delta", "content": token}, ensure_ascii=False
-            ) + "\n"
-        yield json.dumps(
+            yield ndjson({"type": "delta", "content": token})
+        yield ndjson(
             {
                 "type": "done",
                 "provider": result.get("provider"),
-                "result": final_result,
-            },
-            ensure_ascii=False,
-        ) + "\n"
+                "result": {**final_result, "reply": reply},
+            }
+        )
 
     return StreamingResponse(generate(), media_type="application/x-ndjson")
+
+
+def ndjson(payload: dict) -> str:
+    return json.dumps(payload, ensure_ascii=False) + "\n"
+
+
+# Stage key -> honest user-facing label (spec §8.7). Never claims live inference.
+STAGE_LABELS = {
+    "safety": "正在做安全评估",
+    "router": "正在理解你的问题",
+    "decision": "正在整理建议",
+    "action": "正在准备待确认的操作",
+    "worker:coach": "正在核对训练记录",
+    "worker:nutritionist": "正在核对饮食记录",
+    "worker:recovery": "正在核对恢复情况",
+    "worker:records": "正在核对健康记录",
+    "worker:planner": "正在整理计划",
+    "worker:general": "正在核对健康信息",
+}
+
+
+@router.get("/runs/{run_id}")
+def agent_run_detail(
+    run_id: int, user=Depends(current_user), db: Session = Depends(get_db)
+):
+    """Read one owned run with its durable stage ledger (spec §8.8)."""
+    view = get_run_view(db, user.id, run_id)
+    if view is None:
+        raise HTTPException(status_code=404, detail="Agent run 不存在")
+    return view
+
+
+@router.post("/runs/{run_id}/cancel")
+def agent_run_cancel(
+    run_id: int, user=Depends(current_user), db: Session = Depends(get_db)
+):
+    result = cancel_run(db, user.id, run_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Agent run 不存在")
+    return result
+
+
+@router.post("/runs/{run_id}/retry")
+async def agent_run_retry(
+    run_id: int, user=Depends(current_user), db: Session = Depends(get_db)
+):
+    """Re-run a failed/cancelled turn from the failed stage (spec §8.8).
+
+    Non-idempotent writes are never replayed: only read-only stages are reused,
+    and any earlier proposal must be confirmed again by the user.
+    """
+    prepared = retry_run(db, user, run_id)
+    if prepared is None:
+        raise HTTPException(status_code=404, detail="Agent run 不存在")
+    agent_id, _attempt_id = prepared
+    run = db.get(HealthAgentRun, run_id)
+    result = await respond(
+        db, user, run.user_message, agent_id, "text", run=run
+    )
+    return {**result, "retried": True, "attempt_id": _attempt_id}
 
 
 @router.post("/runs/{run_id}/apply-plan")

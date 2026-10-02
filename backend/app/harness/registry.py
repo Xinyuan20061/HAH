@@ -53,24 +53,32 @@ class ToolRegistry:
         spec = self._tools.get(name)
         if spec is None or context.agent_id not in spec.allowed_agents:
             return ToolObservation(name, "blocked", None, "工具未注册或当前智能体无权使用", step)
-        if spec.kind == "action" and (spec.proposal_only or (spec.requires_confirmation and not confirmed)):
-            return ToolObservation(
-                name,
-                "approval_required",
-                {
-                    "tool": name,
-                    "title": spec.title,
-                    "risk_level": spec.risk_level,
-                    "requires_confirmation": True,
-                },
-                "写操作已停在用户确认前",
-                step,
-            )
         try:
             output = spec.handler(context, arguments or {})
-            return ToolObservation(name, "ok", output, _summarize(output), step)
         except Exception as exc:
-            return ToolObservation(name, "error", None, f"工具执行失败: {type(exc).__name__}", step)
+            # The reason is a whitelisted contract message, never provider text:
+            # it makes a rejected proposal diagnosable instead of opaque.
+            reason = str(exc)[:160] or type(exc).__name__
+            return ToolObservation(
+                name, "error", None, f"工具执行失败: {reason}", step
+            )
+        # An action handler never writes: it persists a proposal and reports
+        # ``approval_required`` (spec §8.3). A handler that reports it explicitly
+        # keeps that status; anything else on an action tool is a contract bug.
+        if spec.kind == "action":
+            status = "approval_required"
+            if isinstance(output, dict) and output.get("approval_required") is False:
+                status = "ok" if confirmed else "approval_required"
+            return ToolObservation(
+                name, status, output, _summarize_action(output), step
+            )
+        return ToolObservation(name, "ok", output, _summarize(output), step)
+
+
+def _summarize_action(output: Any) -> str:
+    if isinstance(output, dict) and output.get("approval_required"):
+        return "写操作已生成待确认提案，等待用户确认"
+    return _summarize(output)
 
 
 def _summarize(value: Any) -> str:

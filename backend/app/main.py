@@ -15,6 +15,7 @@ from sqlalchemy import text
 from app.core.config import settings
 from app.core.database import engine
 from app.core.errors import register_exception_handlers
+from app.schemas.errors import error_body
 from app.api.v1.router import api_router
 from app.core.rate_limit import limiter
 
@@ -88,7 +89,13 @@ async def request_context(request: Request, call_next):
     if retry_after is not None:
         response = JSONResponse(
             status_code=429,
-            content={"detail": "请求过于频繁，请稍后重试", "request_id": rid},
+            content=error_body(
+                code="RATE_LIMITED",
+                message="请求过于频繁，请稍后重试",
+                request_id=rid,
+                retryable=True,
+                details={"retry_after_seconds": int(retry_after)},
+            ),
             headers={"Retry-After": str(retry_after)},
         )
         response.headers[settings.request_id_header] = rid

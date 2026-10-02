@@ -16,13 +16,36 @@ function detailMessage(detail) {
   if (detail.message) return detail.message
   try { return JSON.stringify(detail) } catch (e) { return String(detail) }
 }
+/**
+ * Normalise every failure shape into one object the pages can branch on.
+ *
+ * The backend answers business errors with the unified envelope
+ * `{ error: { code, message, retryable, request_id, details } }` (spec §5.2);
+ * older endpoints may still answer `{ detail: ... }`. Pages switch on `code`
+ * (for example DIET_RECORD_VERSION_CONFLICT) instead of matching message text.
+ */
 function httpError(res, url) {
-  const body = res && res.data || {}
-  const detail = detailMessage(body.detail || body.data)
+  const body = (res && res.data) || {}
+  const envelope = body.error && typeof body.error === 'object' ? body.error : null
   const status = res && res.statusCode
-  let message = body.message || detail || `接口请求失败（HTTP ${status || 'unknown'}）`
-  if (status === 401) message = '登录状态失效，正在尝试重新登录'
-  return { statusCode: status, code: body.code, message, detail: body, requestId: body.request_id, url }
+  let code = envelope ? envelope.code : (body.code || null)
+  let message = envelope
+    ? envelope.message
+    : (body.message || detailMessage(body.detail || body.data) || `接口请求失败（HTTP ${status || 'unknown'}）`)
+  let details = envelope ? (envelope.details || {}) : (body.details || {})
+  let retryable = envelope ? !!envelope.retryable : status >= 500
+  if (!envelope && status === 401) message = '登录状态失效，正在尝试重新登录'
+  if (!code && status === 401) code = 'UNAUTHENTICATED'
+  return {
+    statusCode: status,
+    code: typeof code === 'string' ? code : null,
+    message: message || '请求失败',
+    retryable,
+    details,
+    detail: body,
+    requestId: envelope ? envelope.request_id : body.request_id,
+    url
+  }
 }
 function networkError(err, url) {
   const root = baseUrl()
@@ -134,27 +157,47 @@ function upload(url, filePath, name = 'file', retried = false) {
   }))
 }
 
-function parseChunk(onMeta, onDelta, onDone) {
+function parseChunk(onMeta, onDelta, onDone, onStage) {
   let textBuffer = '', decoder = typeof TextDecoder !== 'undefined' ? new TextDecoder('utf-8') : null
   const decode = ab => { if (decoder) return decoder.decode(new Uint8Array(ab), { stream: true }); const u = new Uint8Array(ab); let s = ''; for (let i = 0; i < u.length; i++) s += String.fromCharCode(u[i]); try { return decodeURIComponent(escape(s)) } catch (e) { return s } }
   return data => {
     textBuffer += decode(data); const lines = textBuffer.split('\n'); textBuffer = lines.pop() || ''
-    lines.forEach(line => { if (!line.trim()) return; try { const x = JSON.parse(line); if (x.type === 'meta') onMeta && onMeta(x); if (x.type === 'delta') onDelta && onDelta(x.content || ''); if (x.type === 'done') onDone && onDone(x) } catch (e) {} })
+    lines.forEach(line => {
+      if (!line.trim()) return
+      try {
+        const x = JSON.parse(line)
+        // Stage events are real pipeline progress (spec §8.7), not fake deltas.
+        if (x.type === 'meta') onMeta && onMeta(x)
+        if (x.type === 'stage') onStage && onStage(x)
+        if (x.type === 'delta') onDelta && onDelta(x.content || '')
+        // The final answer arrives only after the safety review has passed.
+        if (x.type === 'answer') onDelta && onDelta(x.reply || '')
+        if (x.type === 'done') onDone && onDone(x)
+      } catch (e) {}
+    })
   }
 }
 
-function streamPost(url, data, { onMeta, onDelta, onDone, onError } = {}) {
+function streamPost(url, data, { onMeta, onStage, onDelta, onDone, onError } = {}) {
   // A public Cloud Run HTTPS URL enables true wx.request chunk streaming. Without it,
   // use the private callContainer path and degrade gracefully to a single final chunk.
   if (!config.USE_STREAMING || (isCloud() && !config.PUBLIC_API_BASE_URL)) {
     let cancelled = false
     request({ url: url.replace(/\/stream$/, ''), method: 'POST', data, timeout: 120000, allowCache: false })
-      .then(r => { if (cancelled) return; onMeta && onMeta({ session_id: r.session_id, safety_level: r.safety_level }); onDelta && onDelta(r.reply || ''); onDone && onDone({ provider: r.provider, result: r }) })
+      .then(r => {
+        if (cancelled) return
+        onMeta && onMeta({ session_id: r.session_id, safety_level: r.safety_level, run_id: r.run_id })
+        // No stage events are available without streaming: report the honest
+        // single-shot path instead of animating a fake pipeline.
+        onStage && onStage({ type: 'stage', stage: 'single_shot', status: 'completed', label: '已生成回答' })
+        onDelta && onDelta(r.reply || '')
+        onDone && onDone({ provider: r.provider, result: r })
+      })
       .catch(e => { if (!cancelled) onError && onError(e) })
     return { abort(){ cancelled = true } }
   }
   const root = isCloud() ? config.PUBLIC_API_BASE_URL.replace(/\/+$/, '') + '/api/v1' : httpBaseUrl()
-  const consume = parseChunk(onMeta, onDelta, onDone)
+  const consume = parseChunk(onMeta, onDelta, onDone, onStage)
   const task = wx.request({ url: root + url, method: 'POST', data, enableChunked: true, responseType: 'arraybuffer', header: headers(), timeout: 60000,
     success: res => { if (res.statusCode < 200 || res.statusCode >= 300) onError && onError(httpError(res, url)) }, fail: e => onError && onError(networkError(e, url)) })
   if (task.onChunkReceived) task.onChunkReceived(r => consume(r.data))
@@ -194,13 +237,22 @@ async function health() {
   } catch (e) { if (e.statusCode) throw e; throw networkError(e, '/health') }
 }
 
+/** Create a record/job idempotently. The key must be unique per user action. */
+function idempotencyKey(scope) {
+  const suffix = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`
+  return `${scope}-${suffix}`.slice(0, 120)
+}
+
 module.exports = {
   get: (url, opts={}) => request({ url, ...opts }),
   post: (url, data, headers) => request({ url, method: 'POST', data, headers }),
+  postIdempotent: (url, data, scope) =>
+    request({ url, method: 'POST', data, headers: { 'Idempotency-Key': idempotencyKey(scope || 'post') } }),
   postLong: (url, data) => request({ url, method: 'POST', data, timeout: 120000 }),
+  patch: (url, data) => request({ url, method: 'PATCH', data }),
   put: (url, data) => request({ url, method: 'PUT', data }),
   del: (url, data={}) => request({ url, method: 'DELETE', data }),
-  downloadPost, upload, streamPost, health, ensureToken,
+  downloadPost, upload, streamPost, health, ensureToken, idempotencyKey,
   getBaseUrl: baseUrl, isCloud, getTransport: config.getTransport,
   setBaseUrl: config.setApiBaseUrl, clearBaseUrl: config.clearApiBaseUrl
 }

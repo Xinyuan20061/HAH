@@ -57,6 +57,7 @@ Page({
     streaming: false,
     scrollTop: 0,
     messages: [],
+    stages: [],
     activeAgent: normalizeAgent(STEWARD),
     suggestions: STEWARD_SUGGESTIONS
   },
@@ -153,7 +154,10 @@ Page({
       canSend: false,
       sending: true,
       streaming: true,
-      statusText: activeAgent.id === 'steward' ? '正在整理你的记录' : '正在想怎么跟你说'
+      // Stage events are truthful pipeline progress, not live model tokens
+      // (spec §8.7). The label below is replaced by whatever stage really runs.
+      stages: [],
+      statusText: activeAgent.id === 'steward' ? '正在理解你的问题' : '正在理解你的问题'
     })
     this._pendingChannel = requestChannel
     this.scrollBottom()
@@ -162,9 +166,26 @@ Page({
         if (meta.session_id) this.setData({ sessionId: meta.session_id })
         if (meta.safety_level && meta.safety_level !== 'normal') this.setData({ statusText: '正在执行安全检查' })
       },
+      onStage: stage => this.onStageEvent(stage),
       onDelta: chunk => this.queueTokens(chunk),
       onDone: result => this.completeWhenDrained(result),
       onError: error => this.handleStreamError(error, q, activeAgent.id, requestChannel)
+    })
+  },
+
+  /** Record one real pipeline stage. Never fabricates progress. */
+  onStageEvent(stage) {
+    if (!stage || !stage.stage) return
+    const stages = (this.data.stages || []).concat([{
+      stage: stage.stage,
+      status: stage.status,
+      label: stage.label || '处理中'
+    }])
+    const running = stages.filter(item => item.status === 'running').pop()
+    const latest = running || stages[stages.length - 1]
+    this.setData({
+      stages,
+      statusText: latest && latest.label ? latest.label : this.data.statusText
     })
   },
 
@@ -223,7 +244,18 @@ Page({
       trace: presentTrace(r.trace),
       runId: r.run_id,
       applied: false,
-      safetyLevel: r.safety_level || 'normal'
+      safetyLevel: r.safety_level || 'normal',
+      // Only `actions[]` may render a confirm card. The reply text is never
+      // scanned for executable intent (spec §8.5).
+      actions: (r.actions || []).map(action => ({
+        proposalId: action.proposal_id,
+        actionKey: action.action_key,
+        title: action.title,
+        riskLevel: action.risk_level,
+        summary: action.summary,
+        expiresAt: action.expires_at,
+        state: 'pending'
+      }))
     })
     const provider = this.name(done && done.provider || r.provider)
     this._streamTask = null
@@ -302,6 +334,62 @@ Page({
     const url = e.currentTarget.dataset.url
     if (!url) return
     wx.setClipboardData({ data: url, success: () => wx.showToast({ title: '教学链接已复制' }) })
+  },
+
+  // ----------------------------------------------------------------------- //
+  // Action proposals (spec §8.4/§8.5)
+  // ----------------------------------------------------------------------- //
+
+  _patchAction(proposalId, patch) {
+    const messages = this.data.messages.map(message => {
+      if (!message.actions || !message.actions.length) return message
+      return Object.assign({}, message, {
+        actions: message.actions.map(action =>
+          action.proposalId === proposalId ? Object.assign({}, action, patch) : action)
+      })
+    })
+    this.setData({ messages })
+  },
+
+  async confirmAction(e) {
+    const proposalId = e.currentTarget.dataset.proposal
+    if (!proposalId) return
+    this._patchAction(proposalId, { state: 'executing' })
+    try {
+      const result = await api.post(`/agent/actions/${proposalId}/confirm`, {
+        version: 1,
+        confirmation: true
+      })
+      this._patchAction(proposalId, { state: 'executed', result: result && result.result || null })
+      wx.showToast({ title: '已执行' })
+    } catch (error) {
+      // Expired / rejected / payload-mismatch are terminal states the user must
+      // see, not an infinite spinner (spec §8.8).
+      const terminal = error && [
+        'ACTION_PROPOSAL_EXPIRED',
+        'ACTION_PROPOSAL_NOT_PENDING',
+        'ACTION_PAYLOAD_HASH_MISMATCH',
+        'ACTION_EXECUTION_FAILED'
+      ].indexOf(error.code) >= 0
+      this._patchAction(proposalId, {
+        state: terminal ? 'expired' : 'failed',
+        error: error && error.message ? error.message : '执行失败'
+      })
+      wx.showToast({ title: (error && error.message) || '执行失败', icon: 'none' })
+    }
+  },
+
+  async rejectAction(e) {
+    const proposalId = e.currentTarget.dataset.proposal
+    if (!proposalId) return
+    try {
+      await api.post(`/agent/actions/${proposalId}/reject`, { version: 1 })
+      this._patchAction(proposalId, { state: 'rejected' })
+      wx.showToast({ title: '已拒绝' })
+    } catch (error) {
+      this._patchAction(proposalId, { state: 'expired' })
+      wx.showToast({ title: (error && error.message) || '已失效', icon: 'none' })
+    }
   },
 
   copyKnowledge(e) {

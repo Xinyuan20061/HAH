@@ -38,11 +38,32 @@ from app.models import (
     MotionEvidenceFrame,
     MotionStageTask,
 )
+from app.schemas.worker import (
+    MOTION_WORKER_RESULT_SCHEMA_VERSION,
+    MOTION_WORKER_RESULT_V2_SCHEMA_VERSION,
+    MotionResultSchemaError,
+)
 
 logger = logging.getLogger("healthmate.motion.stage_tasks")
 
 STAGE_VISION_REVIEW = "vision_review"
 STAGE_FEEDBACK = "feedback_generation"
+
+# Re-exported for the callers and tests that address the V2 adapter by its
+# canonical name (spec §7.3).
+from app.services.motion.evidence_v2 import (  # noqa: E402
+    MotionEvidenceBundle,
+    evidence_from_worker_v2,
+)
+
+__all__ = [
+    "STAGE_VISION_REVIEW",
+    "STAGE_FEEDBACK",
+    "MotionEvidenceBundle",
+    "evidence_from_worker_v2",
+    "enqueue_postprocessing_stages",
+    "process_pending_stages",
+]
 
 STATUS_QUEUED = "queued"
 STATUS_PROCESSING = "processing"
@@ -352,6 +373,26 @@ def _load_receipt(db: Session, run: MotionAnalysisRun) -> dict:
 
 
 def _evidence_from_receipt(receipt: dict) -> dict:
+    """Translate a worker receipt into internal evidence (spec §7.3).
+
+    A ``motion-worker-v2`` receipt is parsed by the frozen V2 contract and mapped
+    through the single V2 adapter; the V1 ``recognition``/``pose``/``score`` keys
+    do not exist in a V2 receipt, so reading them (and returning an empty bundle)
+    is exactly the defect this replaces.
+
+    A legacy receipt without ``schema_version`` keeps the V1 hand-written shape
+    for the migration window; an unrecognised version raises instead of silently
+    degrading, because a dropped schema version means dropped evidence.
+    """
+    version = receipt.get("schema_version")
+    if version == MOTION_WORKER_RESULT_V2_SCHEMA_VERSION:
+        from app.services.motion.evidence_v2 import evidence_from_worker_v2
+
+        return evidence_from_worker_v2(receipt).to_apply_post_review()
+    if version is not None and version != MOTION_WORKER_RESULT_SCHEMA_VERSION:
+        raise MotionResultSchemaError(
+            "不支持的回执 schema 版本", field_path="schema_version"
+        )
     recognition = receipt.get("recognition")
     if not isinstance(recognition, dict):
         recognition = {}

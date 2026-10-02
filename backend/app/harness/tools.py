@@ -46,8 +46,77 @@ def _action_catalog(context: ToolContext, arguments: dict):
     return list_actions()
 
 
-def _proposal_only(context: ToolContext, arguments: dict):
-    return {"proposal": arguments, "status": "awaiting_user_confirmation"}
+def _propose_action(action_key: str):
+    """Build a ToolHandler that persists a durable proposal (spec §8.3).
+
+    The handler never performs a write. It validates the action-specific
+    arguments, stores the proposal for this user/run and returns
+    ``approval_required`` with the public ``proposal_id`` so the client can
+    confirm, reject or let it expire.
+    """
+
+    def _handler(context: ToolContext, arguments: dict):
+        from app.services.agent.action_proposals import (
+            MODEL_FORBIDDEN_ACTIONS,
+            ActionProposalRequest,
+            propose_action,
+        )
+        from app.services.agent.actions import ACTION_REGISTRY
+
+        spec = ACTION_REGISTRY.get(action_key)
+        if spec is None:
+            raise ValueError(f"未注册的 Action: {action_key}")
+        source = str(context.state.get("action_source") or "agent")
+        if source not in spec.allowed_sources:
+            raise ValueError(
+                f"{action_key} 只允许 source={list(spec.allowed_sources)} 发起"
+            )
+        if source == "agent" and action_key in MODEL_FORBIDDEN_ACTIONS:
+            raise ValueError(f"{action_key} 必须由用户本人发起")
+
+        try:
+            request = ActionProposalRequest.model_validate(
+                {
+                    "action_key": action_key,
+                    "arguments": arguments.get("arguments")
+                    if isinstance(arguments.get("arguments"), dict)
+                    else arguments,
+                    "user_visible_reason": str(
+                        arguments.get("user_visible_reason") or ""
+                    ),
+                }
+            )
+        except Exception as exc:  # noqa: BLE001 - pydantic detail is not user text
+            raise ValueError(
+                f"{action_key} 的申请格式不合法: {type(exc).__name__}"
+            ) from None
+
+        proposal, reason = propose_action(
+            context.db,
+            user_id=getattr(context.user, "id", 0),
+            action_key=action_key,
+            arguments=request.arguments,
+            title=spec.title,
+            risk_level=spec.risk_level,
+            requires_confirmation=spec.requires_confirmation,
+            run_id=context.state.get("run_id"),
+            user_visible_reason=request.user_visible_reason,
+        )
+        if proposal is None and reason == "no_confirmation":
+            # No confirmation required: the caller executes it directly.
+            raise ValueError(f"{action_key} 不需要确认，不应经提案通道调用")
+        assert proposal is not None
+        return {
+            "approval_required": True,
+            "proposal_id": proposal.proposal_id,
+            "action_key": action_key,
+            "title": spec.title,
+            "risk_level": spec.risk_level,
+            "requires_confirmation": True,
+            "expires_at": proposal.expires_at.isoformat() + "Z",
+        }
+
+    return _handler
 
 
 def _motion_analysis_read(context: ToolContext, arguments: dict):
@@ -181,12 +250,15 @@ def get_tool_registry() -> ToolRegistry:
                 name=action["key"],
                 title=action["title"],
                 description=action["description"],
-                handler=_proposal_only,
+                handler=_propose_action(action["key"]),
                 kind="action",
                 risk_level=action["risk_level"],
                 requires_confirmation=action["requires_confirmation"],
                 proposal_only=True,
-                input_schema={"proposal": "object"},
+                input_schema={
+                    "arguments": "object（按 Action 专属 schema 校验）",
+                    "user_visible_reason": "string 最多300字",
+                },
             )
         )
     return registry

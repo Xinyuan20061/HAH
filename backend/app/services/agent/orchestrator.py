@@ -13,7 +13,14 @@ from app.models import (
     HealthPlanItem,
 )
 from app.services.ai.gateway import get_local_provider, get_provider
+from app.schemas.errors import ApiException
 from app.services.agent.actions import execute_action
+from app.services.agent.action_proposals import proposal_view
+from app.services.agent.run_stages import (
+    RunRecorder,
+    TurnBudget,
+    worker_stage,
+)
 from app.services.agent.specialists import (
     SPECIALIST_VERSION,
     build_coordinator_system,
@@ -29,8 +36,12 @@ from app.services.safety import (
 )
 from app.services.evaluation import record_metric
 from app.services.training_adjustment import apply_plan_guardrails
-from app.harness.contracts import ToolContext
-from app.harness.collaboration import MULTI_AGENT_VERSION, MultiAgentKernel
+from app.harness.contracts import ToolContext, ToolObservation
+from app.harness.collaboration import (
+    MULTI_AGENT_VERSION,
+    MultiAgentKernel,
+    deterministic_route,
+)
 from app.harness.kernel import HARNESS_VERSION
 from app.harness.personas import get_persona
 from app.harness.tools import get_tool_registry
@@ -209,19 +220,52 @@ async def respond(
     message: str,
     agent_id: str = "steward",
     channel: str = "text",
+    *,
+    run: HealthAgentRun | None = None,
 ):
+    """Answer one user turn with a durable, inspectable run.
+
+    The run row is created (and committed) before any provider call, so a failed
+    or cancelled turn is recoverable instead of invisible. Every stage transition
+    is persisted; ``trace`` reports the real model-call count against the budget.
+    """
     started = time.perf_counter()
     persona = get_persona(agent_id)
     decision = evaluate_message(message)
     intent = detect_intent(message)
     specialist = "safety" if decision.action != "allow" else route_specialist(intent, message)
     registry = get_tool_registry()
+
+    if run is None:
+        run = HealthAgentRun(
+            user_id=user.id,
+            intent=intent,
+            user_message=message,
+            context_json="{}",
+            result_json="{}",
+            provider="pending",
+            status="routing",
+        )
+        db.add(run)
+        db.commit()
+        db.refresh(run)
+
+    recorder = RunRecorder(db, run)
+    budget = TurnBudget(0 if decision.action != "allow" else 5)
+
     tool_context = ToolContext(db=db, user=user, agent_id=persona.id, channel=channel)
-    context = {}
-    harness_observations = []
+    tool_context.state["run_id"] = run.id
+    tool_context.state["action_source"] = "agent"
+    tool_context.state["budget"] = budget
+    context: dict = {}
+    harness_observations: list[ToolObservation] = []
     harness_stop_reason = "safety"
     collaboration_trace = None
+    actions: list[dict] = []
+    run_error_code: str | None = None
+
     if decision.action != "allow":
+        recorder.start_stage("safety", provider="safety-rule")
         audit_decision(db, user.id, message, decision)
         result = {
             "reply": decision.message + "\n\n" + MEDICAL_DISCLAIMER,
@@ -241,13 +285,21 @@ async def respond(
                 "collaboration_version": MULTI_AGENT_VERSION,
                 "multi_agent": None,
                 "tool_calls": [],
+                "model_calls": 0,
+                "elapsed_ms": 0,
+                "budget": budget.trace(),
             },
             "agent": persona.public_dict(),
+            "actions": [],
         }
         provider = "safety-rule"
+        recorder.finish_stage(
+            "safety",
+            trace={"rule": decision.category, "level": decision.level},
+        )
     else:
-        provider_obj = None
-        harness_stop_reason = "provider-fallback"
+        provider = "rules-fallback"
+        recorder.start_stage("router", provider="rules")
         context_observation = registry.execute(
             "health.context.read", tool_context, {}, step=0
         )
@@ -260,14 +312,27 @@ async def respond(
         harness_observations.extend([context_observation, knowledge_observation])
         context = (
             context_observation.output
-            if context_observation.status == "ok" and isinstance(context_observation.output, dict)
+            if context_observation.status == "ok"
+            and isinstance(context_observation.output, dict)
             else {}
         )
         knowledge_sources = (
             knowledge_observation.output
-            if knowledge_observation.status == "ok" and isinstance(knowledge_observation.output, list)
+            if knowledge_observation.status == "ok"
+            and isinstance(knowledge_observation.output, list)
             else []
         )
+        deterministic = deterministic_route(intent, message)
+        recorder.finish_stage(
+            "router",
+            provider="rules" if deterministic else "",
+            trace={
+                "deterministic_worker": deterministic,
+                "specialist_fallback": specialist,
+                "model_call_skipped": bool(deterministic),
+            },
+        )
+
         system = (
             build_coordinator_system(user, context, "multi_agent_coordinator")
             + "\n"
@@ -276,22 +341,24 @@ async def respond(
             + "\n权威知识片段由程序检索并标为K1、K2等；只有片段确实支持结论时才可在回答中标注[K1]，不得伪造引用。"
             + "\n不得生成、猜测或输出任何网址；教学链接只能由程序从已审核资源库附加。"
         )
-        memory = ""
         recent_runs = db.scalars(
             select(HealthAgentRun)
-            .where(HealthAgentRun.user_id == user.id)
+            .where(
+                HealthAgentRun.user_id == user.id,
+                HealthAgentRun.id != run.id,
+            )
             .order_by(HealthAgentRun.created_at.desc(), HealthAgentRun.id.desc())
             .limit(3)
         ).all()
         memory = build_conversation_memory(
             [
                 {
-                    "intent": run.intent,
-                    "provider": run.provider,
-                    "user_message": run.user_message,
-                    "result_json": run.result_json,
+                    "intent": item.intent,
+                    "provider": item.provider,
+                    "user_message": item.user_message,
+                    "result_json": item.result_json,
                 }
-                for run in recent_runs
+                for item in recent_runs
             ]
         )
         # Health facts and knowledge enter the model through registered tool
@@ -305,12 +372,17 @@ async def respond(
             + '最终结果使用：{"reply":"简洁回答","facts_used":[...],"plan":null}。'
             + '若意图是制定本周计划，plan 改为 {"title":"","items":[{"date_offset":0,"category":"exercise|diet|sleep|habit|recovery","title":"","description":"","target":{"duration_min":30}}]}。'
             + "date_offset 只能为0到6；最多10项。"
+            + "需要写入计划、目标或记录时，只能调用已注册的 Action 工具提出申请并等待用户确认。"
             + (
                 f"回答控制在{persona.max_reply_sentences}个短句内；只有生成计划时可以使用结构化列表。"
                 if persona.max_reply_sentences
                 else ""
             )
         )
+
+        provider_obj = None
+        harness_stop_reason = "provider-fallback"
+        loop_result = None
         try:
             provider_obj = get_provider(user)
             loop_result = await MultiAgentKernel(registry).run(
@@ -321,6 +393,8 @@ async def respond(
                 task_prompt=prompt,
                 fallback_worker=specialist,
                 observations=harness_observations,
+                budget=budget,
+                deterministic_worker=deterministic,
             )
             harness_observations = loop_result.observations
             harness_stop_reason = loop_result.stop_reason
@@ -328,10 +402,8 @@ async def respond(
             specialist = loop_result.route.primary_worker
             data = loop_result.result or {}
             provider = loop_result.provider
-        except Exception:
-            # Cloud unavailable: the local engine takes over basic intents;
-            # plan generation stays on rules (the 0.5B local model cannot be
-            # trusted to emit a valid weekly-plan JSON contract).
+        except Exception as exc:  # noqa: BLE001 - degrade, never lose the run
+            run_error_code = type(exc).__name__
             data = {}
             provider = "rules-fallback"
             if intent != "plan":
@@ -340,8 +412,11 @@ async def respond(
                 # knowledge snippet). Plan intent stays on rules.
                 try:
                     local = await get_local_provider()
-                    if local is not None:
-                        r_local = await local.chat(system + "\n" + persona.system_prompt, message)
+                    if local is not None and budget.allow():
+                        r_local = await local.chat(
+                            system + "\n" + persona.system_prompt, message
+                        )
+                        budget.charge()
                         if r_local.text.strip():
                             data = {
                                 "reply": r_local.text,
@@ -352,6 +427,33 @@ async def respond(
                 except Exception:
                     data = {}
                     provider = "rules-fallback"
+
+        if loop_result is not None:
+            for report in loop_result.reports:
+                recorder.finish_stage(
+                    worker_stage(report.worker_id),
+                    status=(
+                        "completed" if report.status == "ok" else
+                        "skipped" if report.status == "skipped" else
+                        "failed"
+                    ),
+                    provider=report.provider,
+                    error_code=(
+                        None if report.status in {"ok", "skipped"} else report.stop_reason
+                    ),
+                    trace=report.trace_dict(),
+                )
+        recorder.finish_stage(
+            "decision",
+            provider=provider,
+            status="completed" if data.get("reply") else "failed",
+            error_code=None if data.get("reply") else (run_error_code or "NO_REPLY"),
+            trace={
+                "stop_reason": harness_stop_reason,
+                "model_calls": budget.used,
+            },
+        )
+
         if (
             not isinstance(data.get("reply"), str)
             or not data["reply"].strip()
@@ -442,10 +544,17 @@ async def respond(
         data["facts_used"] = facts_used
         data.setdefault("safety_level", "normal")
         data["disclaimer"] = MEDICAL_DISCLAIMER
+
+        actions = serialize_run_actions(db, run.id, user.id)
+        elapsed_ms = int((time.perf_counter() - started) * 1000)
         data["trace"] = {
             "specialist_version": SPECIALIST_VERSION,
             "specialist": specialist,
-            "routing": "Coordinator 意图路由",
+            "routing": (
+                "确定性单领域预路由（未调用路由模型）"
+                if collaboration_trace and collaboration_trace["route"]["provider"] == "rules"
+                else "Coordinator 意图路由"
+            ),
             "provider": provider,
             "adjustment_mode": adjustment.get("mode"),
             "adjustment_reasons": [
@@ -465,21 +574,22 @@ async def respond(
             "stop_reason": harness_stop_reason,
             "multi_agent": collaboration_trace,
             "tool_calls": [item.trace_dict() for item in harness_observations],
+            "model_calls": budget.used,
+            "elapsed_ms": elapsed_ms,
+            "budget": budget.trace(),
+            "stages": recorder.stage_views(),
         }
         data["agent"] = persona.public_dict()
+        data["actions"] = actions
         result = data
+
     elapsed = (time.perf_counter() - started) * 1000
-    run = HealthAgentRun(
-        user_id=user.id,
-        intent=intent,
-        user_message=message,
-        context_json=json.dumps(context, ensure_ascii=False, default=str),
-        result_json=json.dumps(result, ensure_ascii=False, default=str),
-        provider=provider,
-        status="completed",
-    )
+    run.intent = intent
+    run.context_json = json.dumps(context, ensure_ascii=False, default=str)
+    run.result_json = json.dumps(result, ensure_ascii=False, default=str)
+    run.provider = provider
+    run.status = "completed"
     db.add(run)
-    db.flush()
     record_metric(
         db,
         user.id,
@@ -488,11 +598,185 @@ async def respond(
         "ms",
         "health_agent",
         True,
-        {"intent": intent, "provider": provider, "agent_id": persona.id, "channel": channel},
+        {
+            "intent": intent,
+            "provider": provider,
+            "agent_id": persona.id,
+            "channel": channel,
+            "model_calls": budget.used,
+        },
     )
     db.commit()
     db.refresh(run)
     return {"run_id": run.id, "intent": intent, "provider": provider, **result}
+
+
+def serialize_run_actions(db: Session, run_id: int, user_id: int) -> list[dict]:
+    """Proposals raised during this run, shaped for the client confirm card."""
+    from app.models import AgentActionProposal
+
+    rows = db.scalars(
+        select(AgentActionProposal)
+        .where(
+            AgentActionProposal.run_id == run_id,
+            AgentActionProposal.user_id == user_id,
+            AgentActionProposal.status == "pending",
+        )
+        .order_by(AgentActionProposal.id)
+    ).all()
+    out = []
+    for row in rows:
+        view = proposal_view(row)
+        view.pop("status", None)
+        view.pop("version", None)
+        out.append(view)
+    return out
+
+
+# --------------------------------------------------------------------------- #
+# Run lifecycle: read / cancel / retry (spec §8.8)
+# --------------------------------------------------------------------------- #
+
+# Statuses from which a run can be retried; a completed turn is never re-run.
+RETRYABLE_STATUSES = frozenset({"failed", "cancelled", "running", "routing"})
+# Statuses where a cancel changes anything. A terminal run stays terminal.
+CANCELLABLE_STATUSES = frozenset({"created", "routing", "working", "deciding"})
+
+
+def get_run_view(db: Session, user_id: int, run_id: int) -> dict | None:
+    """One owned run with its durable stage ledger (spec §8.8)."""
+    from app.models import HealthAgentRunStage
+
+    run = db.get(HealthAgentRun, run_id)
+    if run is None or run.user_id != user_id:
+        return None
+    try:
+        result = json.loads(run.result_json or "{}")
+    except (TypeError, ValueError):
+        result = {}
+    stages = db.scalars(
+        select(HealthAgentRunStage)
+        .where(HealthAgentRunStage.run_id == run.id)
+        .order_by(HealthAgentRunStage.id)
+    ).all()
+    return {
+        "run_id": run.id,
+        "status": run.status,
+        "intent": run.intent,
+        "provider": run.provider,
+        "created_at": utc_iso(run.created_at),
+        "updated_at": utc_iso(run.updated_at),
+        "stages": [
+            {
+                "stage_key": row.stage_key,
+                "status": row.status,
+                "attempt": row.attempt,
+                "provider": row.provider,
+                "started_at": utc_iso(row.started_at),
+                "finished_at": utc_iso(row.finished_at),
+                "error_code": row.error_code,
+            }
+            for row in stages
+        ],
+        "reply": result.get("reply"),
+        "actions": result.get("actions") or [],
+        # ``resumable`` tells the client whether offering a retry is honest.
+        "resumable": run.status in RETRYABLE_STATUSES,
+        "cancellable": run.status in CANCELLABLE_STATUSES,
+    }
+
+
+def cancel_run(db: Session, user_id: int, run_id: int) -> dict | None:
+    """Stop a run's not-yet-started stages.
+
+    An already-issued provider request cannot be recalled, so this only prevents
+    the *remaining* stages from running; the response says so explicitly instead
+    of implying the model call was withdrawn (spec §8.8).
+    """
+    from app.models import HealthAgentRunStage
+
+    run = db.get(HealthAgentRun, run_id)
+    if run is None or run.user_id != user_id:
+        return None
+    already_terminal = run.status in {"completed", "failed", "cancelled", "expired"}
+    if not already_terminal:
+        run.status = "cancelled"
+        db.add(run)
+    rows = db.scalars(
+        select(HealthAgentRunStage).where(
+            HealthAgentRunStage.run_id == run.id,
+            HealthAgentRunStage.status.in_(("queued", "running")),
+        )
+    ).all()
+    for row in rows:
+        row.status = "cancelled"
+        row.finished_at = utc_now()
+        db.add(row)
+    db.commit()
+    return {
+        "run_id": run.id,
+        "status": run.status,
+        "cancelled_stages": len(rows),
+        "note": (
+            "已停止未开始的后续阶段；已经发出的模型请求无法撤回，"
+            "其费用仍会结算。"
+        ),
+    }
+
+
+def retry_run(db: Session, user, run_id: int):
+    """Re-run a failed/cancelled turn from the failed stage (spec §8.8).
+
+    Successful read-only tool results are reproducible, but a non-idempotent
+    write is never replayed automatically: proposals raised earlier stay as they
+    are and the user must confirm again.
+    """
+    from uuid import uuid4
+
+    from app.models import AgentActionProposal, HealthAgentRunStage
+
+    run = db.get(HealthAgentRun, run_id)
+    if run is None or run.user_id != user.id:
+        return None
+    if run.status not in RETRYABLE_STATUSES:
+        raise ApiException(
+            409,
+            "RUN_NOT_RETRYABLE",
+            "该运行已结束，无法重试",
+            details={"status": run.status},
+        )
+    agent_id = "steward"
+    try:
+        previous = json.loads(run.result_json or "{}")
+        agent_id = (previous.get("agent") or {}).get("id") or agent_id
+    except (TypeError, ValueError):
+        pass
+    # A new attempt gets its own stage rows; the previous attempt stays readable.
+    rows = db.scalars(
+        select(HealthAgentRunStage).where(
+            HealthAgentRunStage.run_id == run.id,
+            HealthAgentRunStage.status.in_(("queued", "running")),
+        )
+    ).all()
+    for row in rows:
+        row.status = "cancelled"
+        row.finished_at = utc_now()
+        db.add(row)
+    # Expired proposals must not be reviveable by a retry.
+    proposals = db.scalars(
+        select(AgentActionProposal).where(
+            AgentActionProposal.run_id == run.id,
+            AgentActionProposal.status == "pending",
+            AgentActionProposal.expires_at < utc_now(),
+        )
+    ).all()
+    for proposal in proposals:
+        proposal.status = "expired"
+        db.add(proposal)
+    run.status = "routing"
+    db.add(run)
+    db.commit()
+    return agent_id, str(uuid4())
 
 
 def _perform_apply_plan(db: Session, user, run: HealthAgentRun, plan_data: dict):
@@ -551,9 +835,26 @@ def _perform_apply_plan(db: Session, user, run: HealthAgentRun, plan_data: dict)
 
 
 def apply_plan(db: Session, user, run_id: int, confirmed: bool = True):
+    """Apply a suggested plan through the unified Action proposal protocol.
+
+    A user tapping "确认并加入本周计划" is an explicit confirmation, so the
+    proposal is created and confirmed in one request — but it still travels the
+    durable propose -> confirm path, which is what makes the write auditable,
+    hash-protected and impossible to double-execute (spec §8.4).
+    """
+    from app.models import AgentActionProposal
+    from app.services.agent.action_proposals import (
+        confirm_proposal,
+        propose_action,
+    )
+
     run = db.get(HealthAgentRun, run_id)
     if not run or run.user_id != user.id:
         return None
+    # Confirming commits the session, which expires every ORM instance loaded
+    # above: only plain scalars may cross that boundary.
+    owner_id = user.id
+    run_pk = run.id
     try:
         data = json.loads(run.result_json or "{}")
     except Exception:
@@ -563,28 +864,56 @@ def apply_plan(db: Session, user, run_id: int, confirmed: bool = True):
         return {"already_applied": False, "plan": None}
     existing = db.scalar(
         select(HealthPlan).where(
-            HealthPlan.user_id == user.id, HealthPlan.source_run_id == run.id
+            HealthPlan.user_id == owner_id, HealthPlan.source_run_id == run_pk
         )
     )
     if existing:
         return {"already_applied": True, "plan": serialize_plan(db, existing)}
-    action = execute_action(
-        db,
-        user.id,
-        "plan.apply",
-        lambda: _perform_apply_plan(db, user, run, plan_data),
-        confirmed=confirmed,
-        source="user",
-        run_id=run.id,
-        input_data={
-            "run_id": run.id,
-            "title": plan_data["title"],
-            "item_count": len(plan_data["items"]),
-        },
+
+    # Reuse the pending proposal for this run when one already exists, so a
+    # repeated tap confirms the same proposal instead of stacking new ones.
+    proposal = db.scalar(
+        select(AgentActionProposal)
+        .where(
+            AgentActionProposal.run_id == run_pk,
+            AgentActionProposal.user_id == owner_id,
+            AgentActionProposal.action_key == "plan.apply",
+            AgentActionProposal.status.in_(("pending", "executed")),
+        )
+        .order_by(AgentActionProposal.id.desc())
     )
-    if not action["executed"]:
-        return {"already_applied": False, "plan": None, "action": action}
-    return {**action["result"], "action_audit_id": action["audit_id"]}
+    if proposal is None:
+        proposal, _reason = propose_action(
+            db,
+            user_id=owner_id,
+            action_key="plan.apply",
+            arguments={"run_id": run_pk},
+            title="加入本周计划",
+            risk_level="low",
+            requires_confirmation=True,
+            run_id=run_pk,
+            user_visible_reason="用户在对话中确认加入本周计划",
+        )
+    if proposal is None:
+        return {"already_applied": False, "plan": None}
+    proposal_id = proposal.proposal_id
+    # Execute through the SAME registered executor the confirm endpoint uses, so
+    # there is exactly one implementation of "apply this plan".
+    from app.services.agent.action_executors import get_executor
+
+    outcome = confirm_proposal(
+        db,
+        owner_id,
+        proposal_id,
+        confirmation=confirmed,
+        executor=get_executor("plan.apply"),
+    )
+    result = outcome.get("result") or {}
+    return {
+        **result,
+        "action_audit_id": outcome.get("audit_id"),
+        "proposal_id": proposal_id,
+    }
 
 
 def serialize_plan(db: Session, plan: HealthPlan):

@@ -31,6 +31,8 @@ Page({
     jobStatus: '', exerciseType: 'auto', exerciseIndex: 0,
     exerciseOptions: ['自动识别', '深蹲', '俯卧撑', '弓步蹲', '腿外展', '直臂侧平举', '手臂 V/W'],
     analysisId: null, taskKey: null,
+    parentAnalysisId: null,
+    previousResultAvailable: false,
     consentDeepseek: true, localOnly: false,
     traceInfo: null, traceLoaded: false,
     worker: { enabled: false, online: false }, motionProfile: null,
@@ -314,21 +316,71 @@ Page({
   },
   // POST /media/motion-analyses/{id}/reanalyze：新幂等键 + 父子关系。
   async reanalyze() {
-    const id = this.data.analysisId
-    if (!id) return
+    const parentId = this.data.analysisId
+    if (!parentId) return
     const asset = this.data.result
-    const idem = this.buildIdem(asset || { media_id: id }, this.data.exerciseType, 'r' + Date.now())
-    try {
-      await api.post(`/media/motion-analyses/${id}/reanalyze`, {
-        cloud_review_mode: this.data.consentDeepseek ? 'redacted_frames' : 'off',
-        consent_version: CONSENT_VERSION,
-        response_schema: RESPONSE_SCHEMA
-      }, { 'Idempotency-Key': idem })
-      this.setData({ vm: null, timelineFrames: [], activeFrame: null })
-      await this.continueAnalysis(id, asset)
-    } catch (e) {
-      if (!this._unloaded) this.setData({ jobStatus: e.message || '重新分析未完成，可稍后重试' })
+    const idem = this.buildIdem(asset || { media_id: parentId }, this.data.exerciseType, 'r' + Date.now())
+    const body = {
+      cloud_review_mode: this.data.consentDeepseek ? 'redacted_frames' : 'off',
+      reason: 'user_label_correction'
     }
+    // The corrected catalogue id must travel with the request: it becomes the
+    // child run's requested_type (spec §7.4). Free text is never sent here.
+    const hint = this.data.exerciseType
+    if (hint && hint !== 'auto') body.exercise_hint = hint
+    try {
+      const child = await api.post(`/media/motion-analyses/${parentId}/reanalyze`, body, { 'Idempotency-Key': idem })
+      const childId = child && child.analysis_id
+      if (!childId) throw new Error('重新分析未返回新任务')
+      // Switch to the child immediately and drop the parent view model so the
+      // two runs' evidence never mix (spec §7.4).
+      this.setData({
+        parentAnalysisId: parentId,
+        analysisId: childId,
+        vm: null,
+        timelineFrames: [],
+        activeFrame: null,
+        taskKey: null,
+        traceInfo: null,
+        traceLoaded: false,
+        jobStatus: '正在按确认动作重新分析',
+        previousResultAvailable: true
+      })
+      pending.remember('motion', childId, asset)
+      await this.continueAnalysis(childId, asset)
+    } catch (e) {
+      if (this._unloaded) return
+      // A rejected hint is a user-correctable error, not a retry loop.
+      const rejectedHint = e && (e.code === 'UNKNOWN_CATALOG_ID' || e.statusCode === 422)
+      if (rejectedHint) {
+        this.setData({
+          jobStatus: '',
+          showCorrect: true
+        })
+        wx.showModal({
+          title: '无法按这个标签重分析',
+          content: '该动作不在受支持的目录中，请重新选择，或在页面上直接查看画面讲解。',
+          showCancel: false
+        })
+        return
+      }
+      this.setData({ jobStatus: e.message || '重新分析未完成，可稍后重试' })
+    }
+  },
+  /** Look at the parent run again without merging its evidence into the child. */
+  async viewPrevious() {
+    const parentId = this.data.parentAnalysisId
+    if (!parentId) return
+    this.setData({
+      analysisId: parentId,
+      vm: null,
+      timelineFrames: [],
+      activeFrame: null,
+      traceInfo: null,
+      traceLoaded: false,
+      jobStatus: '正在读取上一次结果'
+    })
+    await this.continueAnalysis(parentId, this.data.result)
   },
   // 反馈：kind ∈ useful / wrong_frame / unhelpful_advice；关联当前选中帧（R13）。
   async sendFeedback(e) {

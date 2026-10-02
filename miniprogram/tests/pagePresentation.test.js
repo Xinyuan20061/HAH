@@ -41,7 +41,8 @@ test('home and profile expose proactive health reminders', () => {
 // 因此在这里锁住"模板必须引用它们"，避免再次脱节。
 test('food scan keeps the four-step flow rendered and driven by step', () => {
   const scan = page('scan')
-  for (const label of ['识别', '校正', '确认', '入库']) {
+  // Spec §6.5: the fourth step reads 已保存; "入库" implied a food warehouse.
+  for (const label of ['识别', '校正', '确认', '已保存']) {
     assert.ok(scan.includes(label), `识餐流程缺少步骤文案：${label}`)
   }
   assert.match(scan, /class="flow"/)

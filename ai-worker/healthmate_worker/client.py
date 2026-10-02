@@ -83,20 +83,31 @@ class CloudAPI:
     def _error_from_response(self, response: httpx.Response, path: str) -> CloudAPIError:
         """Extract safe diagnostic fields from a non-2xx body.
 
-        The body itself is never stored on the exception, so a malformed or
-        secret-bearing payload cannot leak into worker logs.
+        The server answers with the unified envelope
+        ``{"error": {code, message, retryable, request_id, details}}`` (spec
+        §5.2); the flat legacy layout is still accepted during the migration
+        window. The body itself is never stored on the exception, so a malformed
+        or secret-bearing payload cannot leak into worker logs.
         """
         code = field_path = request_id = None
+        retryable = None
         try:
             payload = response.json()
         except ValueError:
             payload = None
         if isinstance(payload, dict):
-            if isinstance(payload.get("code"), str):
-                code = payload["code"]
-            if isinstance(payload.get("request_id"), str):
-                request_id = payload["request_id"]
-            details = payload.get("details")
+            envelope = payload.get("error")
+            if isinstance(envelope, dict):
+                source = envelope
+            else:
+                source = payload
+            if isinstance(source.get("code"), str):
+                code = source["code"]
+            if isinstance(source.get("request_id"), str):
+                request_id = source["request_id"]
+            if isinstance(source.get("retryable"), bool):
+                retryable = source["retryable"]
+            details = source.get("details")
             if isinstance(details, dict) and isinstance(details.get("field_path"), str):
                 field_path = details["field_path"]
         return CloudAPIError(
@@ -105,6 +116,7 @@ class CloudAPI:
             code=code,
             field_path=field_path,
             request_id=request_id,
+            retryable=retryable,
         )
 
     def _post(self, path: str, data: dict):

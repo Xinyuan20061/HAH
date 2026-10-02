@@ -58,7 +58,8 @@ def test_finalized_ai_diet_can_be_deleted_without_foreign_key_error(api, food_re
         f"/api/v1/vision/food-analysis/{analysis_id}/finalize", json={"confirmed": True}
     ).json()
     assert (
-        api.delete(f"/api/v1/diet/records/{finalized['record_id']}").status_code == 200
+        api.delete(f"/api/v1/diet/records/{finalized['record']['id']}").status_code
+        == 200
     )
     assert (
         api.post(
@@ -205,7 +206,7 @@ def test_food_requires_explicit_confirmation(api, food_result):
         f"/api/v1/vision/food-analysis/{value['analysis_id']}/finalize", json={}
     )
     assert response.status_code == 200 and response.json()["ok"] is False
-    assert api.get("/api/v1/diet/records").json() == []
+    assert api.get("/api/v1/diet/records").json()["items"] == []
 
 
 def test_utc_boundary_accepts_offset_and_serializes_z():

@@ -9,8 +9,10 @@ from sqlalchemy import (
     DateTime,
     Date,
     ForeignKey,
+    Index,
     Text,
     Boolean,
+    CheckConstraint,
     UniqueConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -98,6 +100,15 @@ class HealthGoalSetting(Base, TimestampMixin):
 
 class DietRecord(Base, TimestampMixin):
     __tablename__ = "diet_records"
+    __table_args__ = (
+        CheckConstraint(
+            "meal_type IN ('breakfast','lunch','dinner','snack','other')",
+            name="ck_diet_records_meal_type",
+        ),
+        Index(
+            "ix_diet_records_user_recorded_id", "user_id", "recorded_at", "id"
+        ),
+    )
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     name: Mapped[str] = mapped_column(String(120))
@@ -116,6 +127,8 @@ class DietRecord(Base, TimestampMixin):
         Integer, nullable=True, index=True
     )
     items_json: Mapped[str] = mapped_column(Text, default="[]")
+    # Optimistic concurrency counter (spec §5.4). Existing rows are 1.
+    version: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
 
     @property
     def items(self) -> list[dict]:
@@ -941,3 +954,97 @@ class MotionUserFeedback(Base):
     corrected_label: Mapped[str | None] = mapped_column(String(120), nullable=True)
     comment: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, index=True)
+
+
+class HealthAgentRunStage(Base, TimestampMixin):
+    """Durable per-stage ledger for one agent run (spec §8.2/§8.8).
+
+    The run row is created *before* the first provider call, so a crashed or
+    cancelled turn leaves an inspectable ``failed``/``cancelled`` record instead
+    of no record at all. ``stage_key`` is ``router`` / ``worker:<id>`` /
+    ``decision`` / ``action``; ``trace_json`` holds desensitized tool names,
+    statuses and timings — never private reasoning.
+    """
+
+    __tablename__ = "health_agent_run_stages"
+    __table_args__ = (
+        UniqueConstraint(
+            "run_id", "stage_key", "attempt", name="uq_agent_run_stage_attempt"
+        ),
+    )
+    id: Mapped[int] = mapped_column(primary_key=True)
+    run_id: Mapped[int] = mapped_column(
+        ForeignKey("health_agent_runs.id"), index=True
+    )
+    stage_key: Mapped[str] = mapped_column(String(80))
+    status: Mapped[str] = mapped_column(String(30), default="queued", index=True)
+    attempt: Mapped[int] = mapped_column(Integer, default=1)
+    provider: Mapped[str] = mapped_column(String(60), default="")
+    started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    error_code: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    trace_json: Mapped[str] = mapped_column(Text, default="{}")
+
+
+class AgentActionProposal(Base, TimestampMixin):
+    """A persisted, confirmable write proposal (spec §8.2/§8.3/§8.4).
+
+    The model may only *propose*: the registry validates the action-specific
+    arguments, hashes the canonical payload and writes this row. Execution
+    happens only through ``POST /agent/actions/{proposal_id}/confirm`` which
+    re-verifies the hash, so a mutated payload can never be executed.
+    """
+
+    __tablename__ = "agent_action_proposals"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    # Random public id; never an enumerable autoincrement.
+    proposal_id: Mapped[str] = mapped_column(String(64), unique=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    run_id: Mapped[int | None] = mapped_column(
+        ForeignKey("health_agent_runs.id"), nullable=True, index=True
+    )
+    action_key: Mapped[str] = mapped_column(String(80), index=True)
+    risk_level: Mapped[str] = mapped_column(String(20), default="low")
+    status: Mapped[str] = mapped_column(String(30), default="pending", index=True)
+    payload_json: Mapped[str] = mapped_column(Text, default="{}")
+    payload_hash: Mapped[str] = mapped_column(String(64))
+    display_json: Mapped[str] = mapped_column(Text, default="{}")
+    expires_at: Mapped[datetime] = mapped_column(DateTime)
+    confirmed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    executed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    audit_id: Mapped[int | None] = mapped_column(
+        ForeignKey("agent_action_audits.id"), nullable=True
+    )
+    version: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
+
+
+class MediaDeletionTask(Base, TimestampMixin):
+    """Server-verifiable media deletion ledger (spec §10.1/§10.2).
+
+    A client receipt is supporting evidence only: ``verified`` requires the
+    server to observe the object missing or to hold a platform success receipt.
+    Only a hash of the storage key is kept, so the ledger can reconcile an
+    orphaned object after account deletion without retaining a usable reference.
+
+    ``user_id`` is deliberately NOT a foreign key: the ledger must outlive the
+    account row it refers to (that is the "minimal audit reference" the spec
+    requires), and an FK would make account deletion fail.
+    """
+
+    __tablename__ = "media_deletion_tasks"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    task_id: Mapped[str] = mapped_column(String(64), unique=True)
+    user_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    media_asset_id: Mapped[int | None] = mapped_column(
+        Integer, nullable=True, index=True
+    )
+    storage_backend: Mapped[str] = mapped_column(String(30), default="")
+    storage_key_hash: Mapped[str] = mapped_column(String(64), default="")
+    status: Mapped[str] = mapped_column(String(30), default="pending", index=True)
+    provider_receipt_json: Mapped[str] = mapped_column(Text, default="{}")
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    next_attempt_at: Mapped[datetime | None] = mapped_column(
+        DateTime, nullable=True, index=True
+    )
+    error_code: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    verified_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

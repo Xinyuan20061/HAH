@@ -93,6 +93,19 @@ def api(migrated_engine, monkeypatch):
 
 
 @pytest.fixture
+def db(migrated_engine):
+    """Direct session on the migrated test database.
+
+    Rolls back after the test: the ``api`` fixture writes through its own
+    connection, and leaving an open SQLite read transaction would both lock the
+    file and hide rows committed by the API.
+    """
+    with Session(migrated_engine) as session:
+        yield session
+        session.rollback()
+
+
+@pytest.fixture
 def food_result():
     return {
         "dish_name": "测试餐食",

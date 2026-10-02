@@ -78,7 +78,11 @@ def make_preview_uploader(api, job_id: int) -> Callable[[list[dict]], dict]:
         resp = api.request_preview_upload_urls(
             job_id, frame_ids=frame_ids, asset_prefix=asset_prefix
         )
-        by_frame = {u["frame_id"]: u for u in (resp.get("uploads") or [])}
+        # ``uploads`` is the frozen response field (spec §7.2); ``urls`` is the
+        # one-release compatibility alias for a backend that has not rolled
+        # forward yet. Reading only one of them silently disabled the byte chain.
+        entries = resp.get("uploads") or resp.get("urls") or []
+        by_frame = {u["frame_id"]: u for u in entries}
         out: dict[str, str] = {}
         for item in items:
             desc = by_frame.get(item["frame_id"])
@@ -772,10 +776,37 @@ def analyze_motion_unified(
         "recognition_candidates": candidates,
         "frames": rows[: int(settings.motion_evidence_pool_max_frames)],
         "measurements": measurements,
+        # Declared provenance for the post-processing adapter and the audit trace
+        # (spec §7.1/§7.3): which models actually produced this evidence.
+        "model_versions": _motion_model_versions(),
         "external_provider_calls": external_calls,
         "cloud_review_mode": cloud_review_mode,
         "source": "local",
     }
+
+
+def _motion_model_versions() -> dict[str, str]:
+    """Versioned provenance, never an accuracy or capability claim."""
+    versions = {"motion_pipeline": PIPELINE_VERSION}
+    try:
+        import mediapipe as mp
+
+        versions["pose"] = f"mediapipe-{mp.__version__}"
+    except Exception:  # noqa: BLE001 - an unloaded engine is simply absent
+        pass
+    try:
+        import cv2
+
+        versions["video"] = f"opencv-{cv2.__version__}"
+    except Exception:  # noqa: BLE001
+        pass
+    kinetics = get_kinetics400()
+    if kinetics is not None:
+        label = getattr(kinetics, "model_version", None) or getattr(
+            kinetics, "version", None
+        )
+        versions["kinetics400"] = str(label or "slowfast-r50-kinetics400")
+    return versions
 
 
 def _b64(image_b64: str) -> bytes:

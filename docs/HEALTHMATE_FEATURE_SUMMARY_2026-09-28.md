@@ -1,3 +1,5 @@
+HISTORICAL: 本文是特定轮次的交付/验证快照，其中引用的迁移 head 是当时的事实，不是当前 head。当前 head 以 `alembic heads` 命令结果为准。
+
 # HealthMate 功能汇总与能力分析报告
 
 > 版本：2026-09-28（阶段 0/1/2 完成后）

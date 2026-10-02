@@ -43,7 +43,18 @@ def test_agent_stream_waits_for_validated_result_and_keeps_structured_payload(ap
     assert events[-1]["provider"] == "deepseek-system"
     assert events[-1]["result"]["run_id"]
     assert events[-1]["result"]["trace"]["specialist"]
-    assert "reply" not in events[-1]["result"]
+    # Real pipeline stages are reported, not a fabricated token stream: the meta
+    # event carries the request/run linkage the client shows in the trace view.
+    stages = [event for event in events if event["type"] == "stage"]
+    assert stages, "阶段事件缺失"
+    assert {item["stage"] for item in stages} >= {"router", "decision"}
+    assert all(item["label"] for item in stages)
+    assert events[0]["run_id"] == events[-1]["result"]["run_id"]
+    # The reviewed answer is delivered as one complete event before any display
+    # animation; the done event still carries the full structured result.
+    answers = [event for event in events if event["type"] == "answer"]
+    assert len(answers) == 1 and "二十分钟快走" in answers[0]["reply"]
+    assert events[-1]["result"]["reply"] == answers[0]["reply"]
     reply = "".join(event["content"] for event in events if event["type"] == "delta")
-    assert "二十分钟快走" in reply
+    assert reply == answers[0]["reply"]
     assert len([event for event in events if event["type"] == "delta"]) > 3

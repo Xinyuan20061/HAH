@@ -32,9 +32,12 @@
 .chart-active image{width:24rpx;height:24rpx;flex:none;opacity:.7}
 .overview-divider{height:1rpx;margin:20rpx 0;background:#eeeee6}
 .meal-head{display:flex;align-items:center;justify-content:space-between;gap:16rpx;color:#111613;font-size:21rpx;font-weight:760}
-.meal-head text:last-child{color:#5f665f;font-size:15rpx;font-weight:500}
+.meal-head-more{display:flex;align-items:center;gap:4rpx;color:#506336;font-size:16rpx;font-weight:600}
+.meal-head-more image{width:24rpx;height:24rpx;flex:none;opacity:.7}
 .meal-rows{margin-top:12rpx}
-.meal-row{display:grid;grid-template-columns:92rpx minmax(0,1fr) 84rpx;align-items:center;gap:12rpx;min-height:44rpx}
+.meal-row{display:grid;grid-template-columns:92rpx minmax(0,1fr) 84rpx;align-items:center;gap:12rpx;min-height:44rpx;padding:8rpx 0;border-radius:12rpx}
+.meal-row-hover{opacity:.7}
+.meal-empty{margin-top:16rpx;color:#5f665f;font-size:16rpx;line-height:1.5}
 .meal-label{display:flex;align-items:center;gap:8rpx;color:#5f665f;font-size:17rpx}
 .meal-track{height:10rpx;overflow:hidden;border-radius:999rpx;background:#f7f7f2}
 .meal-fill{height:100%;border-radius:999rpx;transform-origin:left;transition:width .55s cubic-bezier(.2,.8,.2,1);animation:mealRowIn .48s cubic-bezier(.2,.8,.2,1) both}

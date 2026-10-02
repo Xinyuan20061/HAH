@@ -1,3 +1,5 @@
+HISTORICAL: 本文是 2026-09 审计轮的修复记录，保留当时的迁移号（如 0016_food_item_evidence）作为历史事实，不作为当前 head 或已上线证明。当前 head 以 `alembic heads` 命令结果为准。
+
 # HealthMate 审计与修复记录
 
 ## 初始问题清单（2026-09-18，修复前）

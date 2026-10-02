@@ -109,7 +109,7 @@ def test_unknown_schema_version_is_rejected_with_path(migrated_engine, api):
     result["schema_version"] = "motion-worker-result-v999"
     resp = _post(api, job_id, result)
     assert resp.status_code == 422
-    body = resp.json()
+    body = resp.json()["error"]
     assert body["code"] == "MOTION_RESULT_SCHEMA_INVALID"
     assert body["retryable"] is False
     assert body["details"]["field_path"] == "schema_version"
@@ -152,7 +152,7 @@ def test_invalid_receipts_return_structured_422_with_field_path(
     mutate(result)
     resp = _post(api, job_id, result)
     assert resp.status_code == 422, resp.text
-    body = resp.json()
+    body = resp.json()["error"]
     assert body["code"] == "MOTION_RESULT_SCHEMA_INVALID"
     assert body["retryable"] is False
     assert body["request_id"]
@@ -181,7 +181,7 @@ def test_invalid_receipts_return_structured_422(migrated_engine, api, mutate):
     mutate(result)
     resp = _post(api, job_id, result)
     assert resp.status_code == 422, resp.text
-    body = resp.json()
+    body = resp.json()["error"]
     assert body["code"] == "MOTION_RESULT_SCHEMA_INVALID"
     assert body["retryable"] is False
     assert body["request_id"]

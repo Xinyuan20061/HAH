@@ -49,7 +49,7 @@
 .detail-toggle .ui-chevron,.goal-entry .ui-chevron{transition:transform .24s cubic-bezier(.2,.8,.2,1)}
 .detail-toggle .ui-chevron.open,.goal-entry .ui-chevron.open{transform:rotate(90deg)}
 
-/* ── 统一动作分析结果页（规格 4.1/4.3/4.4） ── */
+/* 鈹€鈹€ 缁熶竴鍔ㄤ綔鍒嗘瀽缁撴灉椤碉紙瑙勬牸 4.1/4.3/4.4锛?鈹€鈹€ */
 .privacy-note{font-size:19rpx;line-height:1.6;color:#5f665f;background:#f7f7f2;border-radius:16rpx;padding:16rpx;margin:8rpx 0 20rpx}
 .consent-row{display:flex;align-items:center;justify-content:space-between;background:#fff;border:1rpx solid #e9efd9;border-radius:18rpx;padding:16rpx 20rpx;margin-bottom:20rpx}
 .consent-text{display:flex;flex-direction:column;gap:4rpx}
@@ -77,13 +77,13 @@
 .confidence-line{font-size:21rpx;color:#5f665f;margin-top:12rpx}
 .trace-box{margin-top:12rpx;padding:16rpx;background:#f7f7f2;border-radius:14rpx;font-size:19rpx;line-height:1.6;color:#5f665f}
 
-/* ── V2 时间轴结果页（§4.1/§4.2） ── */
+/* 鈹€鈹€ V2 鏃堕棿杞寸粨鏋滈〉锛埪?.1/搂4.2锛?鈹€鈹€ */
 .timeline-block{margin:8rpx 0 24rpx}
 .frame-hero-img{width:100%;height:420rpx;border-radius:22rpx;background:#111613;display:block;margin-bottom:16rpx}
 .frame-hero-placeholder{width:100%;height:200rpx;border-radius:22rpx;background:#f7f7f2;color:#5f665f;font-size:21rpx;display:flex;align-items:center;justify-content:center;margin-bottom:16rpx}
 .frame-thumb-placeholder{width:228rpx;height:150rpx;border-radius:16rpx;background:#f7f7f2}
 .frame-detail-head{margin-bottom:0}
-.replay-btn{flex:none;font-size:20rpx;font-weight:700;color:#506336;background:#e9efd9;padding:10rpx 20rpx;border-radius:99rpx}
+.replay-btn{flex:none;font-size:20rpx;font-weight:700;color:#506336;background:#e9efd9;padding:12rpx 20rpx;border-radius:99rpx}
 .frame-phase{font-size:18rpx;color:#5f665f;margin-top:4rpx;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .frame-explanation b{font-size:23rpx}
 .frame-explanation text{font-size:23rpx;color:#111613}
@@ -98,3 +98,9 @@
 .correct-input{background:#f7f7f2;border-radius:16rpx;padding:20rpx;font-size:24rpx;margin-top:12rpx}
 .correct-actions{display:flex;gap:12rpx;margin-top:20rpx;justify-content:flex-end}
 .fb-btn.primary{background:#c4e267;color:#111613}
+
+/* Parent/child evidence separation: the child result is never mixed with the
+   previous run, and the strip says so explicitly (spec 7.4). */
+.previous-strip{display:flex;align-items:center;justify-content:space-between;gap:16rpx;margin:24rpx 0;padding:20rpx 24rpx;border-radius:20rpx;background:#f7f7f2}
+.previous-text{min-width:0;flex:1;color:#5f665f;font-size:20rpx;line-height:1.55}
+.previous-action{flex:none;padding:12rpx 20rpx;border-radius:999rpx;background:#e9efd9;color:#506336;font-size:20rpx}

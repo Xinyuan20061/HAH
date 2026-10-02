@@ -38,14 +38,23 @@ class ReActKernel:
         system: str,
         task_prompt: str,
         observations: list[ToolObservation] | None = None,
+        budget=None,
     ) -> HarnessLoopResult:
         history = list(observations or [])
         used = {item.tool for item in history}
         last_text = ""
         provider_name = getattr(provider, "provider_name", "unknown")
         for step in range(1, self.max_steps + 1):
+            # The per-turn budget is global across router/workers/decision: a
+            # loop that has spent it must stop rather than keep calling out.
+            if budget is not None and not budget.allow():
+                return HarnessLoopResult(
+                    None, provider_name, history, "model_budget_exhausted", last_text
+                )
             prompt = self._prompt(persona, task_prompt, history)
             response = await provider.chat(system + "\n" + persona.system_prompt, prompt)
+            if budget is not None:
+                budget.charge()
             provider_name = response.provider
             last_text = response.text
             decision = _parse_decision(last_text)

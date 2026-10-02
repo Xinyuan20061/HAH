@@ -4,7 +4,7 @@ from uuid import uuid4
 from typing import Literal
 
 import httpx
-from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
+from fastapi import APIRouter, UploadFile, File, HTTPException, Depends, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import select, update
 from pydantic import BaseModel
@@ -13,7 +13,7 @@ from app.core.database import get_db
 from app.core.config import settings
 from app.core.media_security import validate_media_source_url, UnsafeMediaURL
 from app.core.url_security import resolve_ai_host
-from app.core.time import utc_now
+from app.core.time import utc_now, business_today
 from app.models import (
     FoodAnalysisSession,
     FoodAnalysisCorrection,
@@ -21,6 +21,7 @@ from app.models import (
     MediaAsset,
     AIJob,
 )
+from app.schemas.errors import ApiException
 from app.schemas.vision import FoodCorrectionIn, FoodFinalizeIn
 from app.services.vision.service import analyze_food_image, VisionNotConfigured
 from app.services.timeline import add_event
@@ -30,6 +31,11 @@ from app.services.ai_jobs import create_ai_job, public_job, requeue_expired_jobs
 from app.services.result_summary import generate_result_summary
 from app.services.storage import get_storage, StorageError
 from app.services.vision.cloud_food import analyze_food_cloud, CloudFoodError
+from app.services.vision.finalize import (
+    diet_record_snapshot,
+    finalize_food_analysis as finalize_food_analysis_service,
+    infer_meal_type,
+)
 
 router = APIRouter(prefix="/vision", tags=["vision"])
 
@@ -457,140 +463,19 @@ def correct_food_analysis(
 def finalize_food_analysis(
     analysis_id: int,
     body: FoodFinalizeIn,
+    request: Request,
     user=Depends(current_user),
     db: Session = Depends(get_db),
 ):
-    x = db.scalar(
-        select(FoodAnalysisSession)
-        .where(FoodAnalysisSession.id == analysis_id)
-        .with_for_update()
-    )
-    if not x or x.user_id != user.id:
-        raise HTTPException(404, "识餐记录不存在")
-    if x.status == "record_deleted":
-        raise HTTPException(409, "该识餐对应的记录已删除，请手动新增饮食记录")
-    if x.finalized_record_id:
-        record = db.get(DietRecord, x.finalized_record_id)
-        return {
-            "ok": True,
-            "already_finalized": True,
-            "record_id": record.id if record else x.finalized_record_id,
-        }
-    data = _loads(x.corrected_json) if x.corrected_json else _loads(x.initial_json)
-    payload = {
-        "analysis_id": x.id,
-        "dish_name": data.get("dish_name"),
-        "meal_type": body.meal_type,
-        "corrected": bool(x.corrected_json),
-    }
+    """Confirm a corrected food draft into a diet record (spec §6.4).
 
-    def perform():
-        changed = db.execute(
-            update(FoodAnalysisSession)
-            .where(
-                FoodAnalysisSession.id == x.id,
-                FoodAnalysisSession.status.in_(["analyzed", "corrected"]),
-            )
-            .values(status="finalizing"),
-            execution_options={"synchronize_session": False},
-        ).rowcount
-        if not changed:
-            db.refresh(x)
-            if x.finalized_record_id:
-                return {
-                    "record_id": x.finalized_record_id,
-                    "analysis_id": x.id,
-                    "already_finalized": True,
-                }
-            raise HTTPException(409, "识餐记录正在保存，请稍后查看")
-        record = DietRecord(
-            user_id=user.id,
-            name=str(data.get("dish_name") or "AI识别餐食")[:120],
-            meal_type=body.meal_type,
-            calories=float(data.get("calories") or 0),
-            protein=float(data.get("protein") or 0),
-            carbs=float(data.get("carbs") or 0),
-            fat=float(data.get("fat") or 0),
-            fiber=float(data.get("fiber") or 0),
-            portion=str(data.get("portion") or "")[:120],
-            cooking_method=str(data.get("cooking_method") or "")[:120],
-            weight_g=float(data.get("weight_g") or data.get("estimated_weight_g") or 0),
-            source="ai_vision_corrected" if x.corrected_json else "ai_vision",
-            vision_analysis_id=x.id,
-            items_json=json.dumps(data.get("items") or [], ensure_ascii=False),
-        )
-        db.add(record)
-        db.flush()
-        x.finalized_record_id = record.id
-        x.status = "finalized"
-        db.add(x)
-        add_event(
-            db,
-            user.id,
-            "diet",
-            {
-                "name": record.name,
-                "meal_type": record.meal_type,
-                "calories": record.calories,
-                "protein": record.protein,
-                "carbs": record.carbs,
-                "fat": record.fat,
-                "fiber": record.fiber,
-                "portion": record.portion,
-                "cooking_method": record.cooking_method,
-                "weight_g": record.weight_g,
-                "analysis_id": x.id,
-                "item_count": len(data.get("items") or []),
-            },
-            source=record.source,
-            ref_type="diet",
-            ref_id=record.id,
-            occurred_at=record.recorded_at,
-        )
-        add_event(
-            db,
-            user.id,
-            "food_analysis_finalized",
-            {
-                "analysis_id": x.id,
-                "record_id": record.id,
-                "corrected": bool(x.corrected_json),
-            },
-            source="user",
-            ref_type="food_analysis",
-            ref_id=x.id,
-        )
-        record_metric(
-            db,
-            user.id,
-            "food_finalized",
-            1,
-            "count",
-            "vision_feedback",
-            True,
-            {"corrected": bool(x.corrected_json)},
-        )
-        db.flush()
-        return {
-            "record_id": record.id,
-            "analysis_id": x.id,
-            "corrected": bool(x.corrected_json),
-        }
-
-    action = execute_action(
+    The heavy lifting lives in ``app.services.vision.finalize`` so the
+    ``diet.ai.finalize`` Action executor cannot drift from this endpoint.
+    """
+    return finalize_food_analysis_service(
         db,
-        user.id,
-        "diet.ai.finalize",
-        perform,
+        user_id=user.id,
+        analysis_id=analysis_id,
+        meal_type=body.meal_type,
         confirmed=body.confirmed,
-        source="user",
-        input_data=payload,
     )
-    if not action["executed"]:
-        return {"ok": False, **action}
-    return {
-        "ok": True,
-        "already_finalized": False,
-        "action_audit_id": action["audit_id"],
-        **action["result"],
-    }

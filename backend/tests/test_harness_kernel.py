@@ -19,7 +19,9 @@ def test_three_product_agents_share_one_harness_contract():
     assert agents["steward"]["capabilities"]["voice_output"] is False
 
 
-def test_registry_exposes_domain_reads_and_confirmation_gated_actions():
+def test_registry_exposes_domain_reads_and_confirmation_gated_actions(api, db):
+    from app.models import HealthAgentRun, User
+
     registry = get_tool_registry()
     tools = {item["name"]: item for item in registry.manifest("xiaojian")}
     assert "health.context.read" in tools
@@ -27,12 +29,43 @@ def test_registry_exposes_domain_reads_and_confirmation_gated_actions():
     assert tools["plan.apply"]["kind"] == "action"
     assert tools["plan.apply"]["requires_confirmation"] is True
 
+    run = HealthAgentRun(
+        user_id=api.user_id,
+        intent="plan",
+        user_message="计划",
+        result_json=json.dumps(
+            {
+                "plan": {
+                    "title": "t",
+                    "items": [
+                        {
+                            "date_offset": 0,
+                            "category": "exercise",
+                            "title": "a",
+                            "description": "b",
+                            "target": {},
+                        }
+                    ],
+                }
+            }
+        ),
+        provider="test",
+        status="completed",
+    )
+    db.add(run)
+    db.commit()
+    context = ToolContext(db=db, user=db.get(User, api.user_id), agent_id="xiaojian")
+    context.state["run_id"] = run.id
+    context.state["action_source"] = "agent"
     observation = registry.execute(
         "plan.apply",
-        ToolContext(db=None, user=None, agent_id="xiaojian"),
-        {"proposal": {"title": "test"}},
+        context,
+        {"arguments": {"run_id": run.id}},
     )
+    # The write is not executed: it becomes a durable proposal awaiting the user
+    # (spec §8.3).
     assert observation.status == "approval_required"
+    assert observation.output["proposal_id"].startswith("ap_")
 
     coach_registry = registry.scoped(WORKERS["coach"].tools)
     assert "health.resources.search" in coach_registry.names()

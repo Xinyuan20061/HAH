@@ -1,3 +1,5 @@
+HISTORICAL: 本文是 H4 多模态升级轮的开发提示词，其中的迁移号（如 `0016_food_and_keyframes`）是当时计划的编号，不是当前 head。当前 head 以 `alembic heads` 命令结果为准。
+
 # HealthMate 4.0 多模态升级 · Codex 开发提示词
 
 > 适用对象：Codex（或同等能力开发代理）。本提示词是完整开发规格，按模块执行，每个模块有独立验收。

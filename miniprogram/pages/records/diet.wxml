@@ -1,6 +1,104 @@
 <include src="/components/page-transition/first-paint.wxml"/>
 <page-transition/>
-<view class="page ui-page-content"><view class="title">饮食记录</view>
-<view class="card"><view class="label">吃了什么</view><input class="input" placeholder="例如：鸡胸肉沙拉" value="{{form.name}}" data-k="name" bindinput="inp"/><view class="label">这一餐</view><picker range="{{meals}}" bindchange="meal"><view class="input">{{meals[mealIndex]}}</view></picker><view class="grid"><view><view class="label">热量 kcal</view><input class="input" type="digit" value="{{form.calories}}" data-k="calories" bindinput="inp"/></view><view><view class="label">蛋白质 g</view><input class="input" type="digit" value="{{form.protein}}" data-k="protein" bindinput="inp"/></view><view><view class="label">碳水 g</view><input class="input" type="digit" value="{{form.carbs}}" data-k="carbs" bindinput="inp"/></view><view><view class="label">脂肪 g</view><input class="input" type="digit" value="{{form.fat}}" data-k="fat" bindinput="inp"/></view></view><button class="btn-primary tappable" bindtap="save" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">保存记录</button></view>
-<view class="section-title">常用模板</view><scroll-view scroll-x><view class="template-wrap"><block wx:for="{{templates}}" wx:key="name"><view class="template tappable" bindtap="fill" data-i="{{index}}" hover-class="tap-chip" hover-start-time="0" hover-stay-time="80"><view class="template-name">{{item.name}}</view><view class="muted">{{item.calories}} kcal · {{item.protein}}g 蛋白质</view></view></block></view></scroll-view>
-<view class="section-title">最近记录</view><block wx:for="{{records}}" wx:key="id"><view class="record card {{item.id===dragId?'dragging':''}} {{leavingId===item.id?'leaving':''}}" data-id="{{item.id}}" style="{{item.id===dragId?dragStyle:''}}" bindtouchstart="swipeDeleteStart" bindtouchmove="swipeDeleteMove" bindtouchend="swipeDeleteEnd" bindtouchcancel="swipeDeleteCancel"><view class="grow"><view class="row"><view class="record-name">{{item.name}}</view><view class="tag">{{item.meal_type}}</view></view><view class="muted record-meta">{{item.calories}} kcal · P {{item.protein}}g · C {{item.carbs}}g · F {{item.fat}}g</view></view><view class="delete tappable" bindtap="remove" data-id="{{item.id}}" hover-class="tap" hover-start-time="0" hover-stay-time="80">删除</view></view></block><view wx:if="{{!records.length}}" class="card empty">还没有饮食记录。</view></view>
+<view class="page ui-page-content diet-page">
+  <view class="title">饮食明细</view>
+  <view class="subtitle intro">按日期和餐次回看、修改或删除记录。<view class="back-link tappable" bindtap="back" hover-class="tap-chip" hover-start-time="0" hover-stay-time="80">返回记录</view></view>
+
+  <view class="filters card">
+    <view class="filter-row">
+      <view class="day-nav tappable" bindtap="shift" data-days="-1" hover-class="tap-chip" hover-start-time="0" hover-stay-time="80">前一天</view>
+      <picker mode="date" value="{{date}}" bindchange="dateChange">
+        <view class="day-pick tappable" hover-class="tap-chip" hover-start-time="0" hover-stay-time="80">{{dateLabel}}</view>
+      </picker>
+      <view class="day-nav tappable" bindtap="shift" data-days="1" hover-class="tap-chip" hover-start-time="0" hover-stay-time="80">后一天</view>
+    </view>
+    <picker range="{{filterLabels}}" value="{{filterIndex}}" bindchange="filterChange">
+      <view class="meal-pick tappable" hover-class="tap-chip" hover-start-time="0" hover-stay-time="80">餐次：{{filterLabels[filterIndex]}}<image src="/assets/icons/chevron.png" mode="aspectFit"/></view>
+    </picker>
+  </view>
+
+  <view wx:if="{{loading}}" class="sk-overview shimmer"></view>
+
+  <view wx:elif="{{error}}" class="state-card state-card-error">
+    <view class="grow"><view class="state-title">饮食明细没有加载出来</view><view class="state-desc">{{error}}</view></view>
+    <button class="retry tappable" bindtap="retry" hover-class="tap-btn">重试</button>
+  </view>
+
+  <block wx:else>
+    <view wx:if="{{!records.length}}" class="state-card state-card-empty">
+      <view class="grow"><view class="state-title">没有记录</view><view class="state-desc">{{emptyHint}}</view></view>
+      <button class="retry tappable" bindtap="scan" hover-class="tap-btn">拍照识餐</button>
+    </view>
+
+    <block wx:for="{{records}}" wx:key="id">
+      <view class="record card {{item.id===dragId?'dragging':''}} {{leavingId===item.id?'leaving':''}}" data-id="{{item.id}}" style="{{item.id===dragId?dragStyle:''}}" bindtouchstart="swipeDeleteStart" bindtouchmove="swipeDeleteMove" bindtouchend="swipeDeleteEnd" bindtouchcancel="swipeDeleteCancel">
+        <view class="record-head tappable" bindtap="open" data-id="{{item.id}}" hover-class="tap" hover-start-time="0" hover-stay-time="80">
+          <view class="grow">
+            <view class="record-name">{{item.name}}</view>
+            <view class="record-meta muted">{{item.meal_label}} · {{item.calories}} kcal</view>
+          </view>
+          <view class="record-kcal">{{item.calories}}<text>kcal</text></view>
+        </view>
+
+        <view wx:if="{{activeId===item.id}}" class="record-body">
+          <view class="record-macros muted">{{item.macroText}}</view>
+          <view wx:if="{{item.portion}}" class="record-macros muted">份量：{{item.portion}}</view>
+          <view class="provenance">{{item.provenance}}</view>
+          <view wx:if="{{item.items.length}}" class="item-list">
+            <view class="item-row" wx:for="{{item.items}}" wx:for-item="food" wx:key="name">
+              <text class="item-name">{{food.name}}</text>
+              <text class="item-value">{{food.calories}} kcal</text>
+            </view>
+          </view>
+          <view class="record-actions">
+            <view class="record-action tappable" bindtap="edit" data-id="{{item.id}}" hover-class="tap-chip" hover-start-time="0" hover-stay-time="80">编辑</view>
+            <view class="record-action danger tappable" bindtap="remove" data-id="{{item.id}}" hover-class="tap-chip" hover-start-time="0" hover-stay-time="80">删除</view>
+          </view>
+        </view>
+      </view>
+    </block>
+
+    <view wx:if="{{hasMore}}" class="more tappable" bindtap="loadMore" hover-class="tap-chip" hover-start-time="0" hover-stay-time="80">{{loadingMore ? '加载中…' : '加载更多'}}</view>
+    <view class="list-foot muted">共 {{records.length}} 条 · 左滑可直接删除</view>
+  </block>
+
+  <view wx:if="{{editing}}" class="mask" bindtap="closeEditor" hover-class="tap" hover-start-time="0" hover-stay-time="80"></view>
+  <view wx:if="{{editing}}" class="edit-panel">
+    <view class="edit-title">编辑记录</view>
+    <view wx:if="{{conflict}}" class="conflict">
+      <view class="conflict-text">{{conflict}}</view>
+      <view class="conflict-actions">
+        <view class="record-action tappable" bindtap="load" hover-class="tap-chip" hover-start-time="0" hover-stay-time="80">刷新</view>
+        <view class="record-action tappable" bindtap="closeEditor" hover-class="tap-chip" hover-start-time="0" hover-stay-time="80">稍后再说</view>
+      </view>
+    </view>
+
+    <view class="label">食物名称</view>
+    <input class="input" value="{{editor.name}}" data-field="name" bindinput="editorInput"/>
+    <view class="label">餐次</view>
+    <picker range="{{mealLabels}}" value="{{editor.meal_index}}" bindchange="editorMeal">
+      <view class="input">{{mealLabels[editor.meal_index]}}</view>
+    </picker>
+    <view class="grid">
+      <view><view class="label">热量 kcal</view><input class="input" type="digit" value="{{editor.calories}}" data-field="calories" bindinput="editorInput"/></view>
+      <view><view class="label">蛋白质 g</view><input class="input" type="digit" value="{{editor.protein}}" data-field="protein" bindinput="editorInput"/></view>
+      <view><view class="label">碳水 g</view><input class="input" type="digit" value="{{editor.carbs}}" data-field="carbs" bindinput="editorInput"/></view>
+      <view><view class="label">脂肪 g</view><input class="input" type="digit" value="{{editor.fat}}" data-field="fat" bindinput="editorInput"/></view>
+    </view>
+    <view class="label">份量</view>
+    <input class="input" value="{{editor.portion}}" data-field="portion" bindinput="editorInput"/>
+
+    <view wx:if="{{editor.items.length}}" class="edit-items">
+      <view class="label">原始食材项（修改后自动重新汇总）</view>
+      <view class="edit-item" wx:for="{{editor.items}}" wx:for-item="food" wx:key="name" wx:for-index="idx">
+        <input class="input item-name-input" value="{{food.name}}" data-index="{{idx}}" data-field="name" bindinput="editorItem"/>
+        <input class="input item-kcal-input" type="digit" value="{{food.calories}}" data-index="{{idx}}" data-field="calories" bindinput="editorItem"/>
+      </view>
+    </view>
+
+    <view class="edit-actions">
+      <button class="btn-soft tappable" bindtap="closeEditor" hover-class="tap-btn">取消</button>
+      <button class="btn-primary tappable" bindtap="save" loading="{{saving}}" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">保存修改</button>
+    </view>
+  </view>
+</view>

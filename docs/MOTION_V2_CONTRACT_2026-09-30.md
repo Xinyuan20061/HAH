@@ -1,3 +1,5 @@
+HISTORICAL: 本文是特定轮次的交付/验证快照，其中引用的迁移 head 是当时的事实，不是当前 head。当前 head 以 `alembic heads` 命令结果为准。
+
 # HealthMate 动作分析 V2：冻结契约（2026-09-30）
 
 > 依据《HEALTHMATE_MOTION_V2_REBUILD_SPEC_2026-09-30.md》§7.2/§8/§10 编制。本文件是 V2 重建各工作包（B/E/A/C/D/F/G）共同遵守的唯一接口依据；与任何代码现状冲突时，以本文件与规格 §14 为准。契约冻结后改动须经评审。

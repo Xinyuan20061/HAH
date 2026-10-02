@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import uuid
 from dataclasses import dataclass, field
@@ -23,6 +24,11 @@ from app.harness.registry import ToolRegistry
 
 
 MULTI_AGENT_VERSION = "health-multi-agent-v1"
+
+# Parallel workers never share a SQLAlchemy Session (spec §8.6). Each concurrent
+# worker gets a private Session bound to its own copy of the frozen read-only
+# snapshot file, so no two workers can touch the same connection.
+MAX_PARALLEL_WORKERS = 2
 
 # Observations carrying motion evidence are treated strictly as data: the text
 # inside them (DeepSeek summary / keyframe observations) can never become an
@@ -192,6 +198,10 @@ class MultiAgentKernel:
     User-facing personas control tone. Worker profiles control domain scope.
     Only the decision stage can see proposal-only action tools; domain workers
     receive least-privilege read registries.
+
+    Routing strategy (spec §8.6): a deterministic single-domain hit skips the
+    Router model call entirely; only cross-domain or ambiguous requests pay for a
+    model Router. ``budget`` caps the total provider calls for the turn.
     """
 
     def __init__(self, registry: ToolRegistry, max_workers: int = 3, max_steps: int = 3):
@@ -209,40 +219,34 @@ class MultiAgentKernel:
         task_prompt: str,
         fallback_worker: str = "general",
         observations: list[ToolObservation] | None = None,
+        budget=None,
+        deterministic_worker: str | None = None,
     ) -> MultiAgentResult:
-        # One trace_id per agent round (spec 8.3); it links this Harness turn to
+        # One trace_id per agent round (spec §8.3); it links this Harness turn to
         # the motion-run trace_ids picked up via read-only evidence tools and is
         # persisted through the existing health_agent_runs result_json trace.
         harness_trace_id = "trace-" + uuid.uuid4().hex[:24]
         tool_context.state["harness_trace_id"] = harness_trace_id
         initial = list(observations or [])
         route = await self._route(
-            provider, persona, system, task_prompt, fallback_worker
+            provider,
+            persona,
+            system,
+            task_prompt,
+            fallback_worker,
+            deterministic_worker=deterministic_worker,
+            budget=budget,
         )
-        reports = []
-        for task in route.workers:
-            try:
-                reports.append(
-                    await self._run_worker(
-                        provider=provider,
-                        persona=persona,
-                        tool_context=tool_context,
-                        system=system,
-                        task_prompt=task_prompt,
-                        task=task,
-                        initial=initial,
-                    )
-                )
-            except Exception as exc:
-                reports.append(
-                    WorkerReport(
-                        worker_id=task.worker_id,
-                        status="error",
-                        result=None,
-                        provider=getattr(provider, "provider_name", "unknown"),
-                        stop_reason=type(exc).__name__,
-                    )
-                )
+        reports = await self._run_workers(
+            provider=provider,
+            persona=persona,
+            tool_context=tool_context,
+            system=system,
+            task_prompt=task_prompt,
+            route=route,
+            initial=initial,
+            budget=budget,
+        )
         decision = await self._decide(
             provider=provider,
             persona=persona,
@@ -251,6 +255,7 @@ class MultiAgentKernel:
             task_prompt=task_prompt,
             route=route,
             reports=reports,
+            budget=budget,
         )
         merged = _merge_observations(initial, reports, decision.observations)
         return MultiAgentResult(
@@ -264,6 +269,105 @@ class MultiAgentKernel:
             evidence_chain=_collect_evidence_chain(merged),
         )
 
+    async def _run_workers(
+        self,
+        *,
+        provider,
+        persona: AgentProfile,
+        tool_context: ToolContext,
+        system: str,
+        task_prompt: str,
+        route: RoutePlan,
+        initial: list[ToolObservation],
+        budget,
+    ) -> list[WorkerReport]:
+        """Run the routed workers, in parallel when more than one is needed.
+
+        Concurrency cap 2 (spec §8.6). A worker failure yields an ``error`` report
+        and never cancels its siblings: the Decision stage is then told exactly
+        which evidence is missing instead of answering as if it were complete.
+        """
+        if len(route.workers) <= 1:
+            reports = []
+            for task in route.workers:
+                reports.append(
+                    await self._safe_worker(
+                        provider=provider,
+                        persona=persona,
+                        tool_context=tool_context,
+                        system=system,
+                        task_prompt=task_prompt,
+                        task=task,
+                        initial=initial,
+                        budget=budget,
+                    )
+                )
+            return reports
+
+        responses = await asyncio.gather(
+            *(
+                self._safe_worker(
+                    provider=provider,
+                    persona=persona,
+                    tool_context=tool_context,
+                    system=system,
+                    task_prompt=task_prompt,
+                    task=task,
+                    initial=initial,
+                    budget=budget,
+                )
+                for task in route.workers
+            ),
+            return_exceptions=True,
+        )
+        reports: list[WorkerReport] = []
+        for task, response in zip(route.workers, responses):
+            if isinstance(response, WorkerReport):
+                reports.append(response)
+            else:
+                reports.append(
+                    WorkerReport(
+                        worker_id=task.worker_id,
+                        status="error",
+                        result=None,
+                        provider=getattr(provider, "provider_name", "unknown"),
+                        stop_reason=type(response).__name__,
+                    )
+                )
+        return reports
+
+    async def _safe_worker(
+        self,
+        *,
+        provider,
+        persona: AgentProfile,
+        tool_context: ToolContext,
+        system: str,
+        task_prompt: str,
+        task: WorkerTask,
+        initial: list[ToolObservation],
+        budget,
+    ) -> WorkerReport:
+        try:
+            return await self._run_worker(
+                provider=provider,
+                persona=persona,
+                tool_context=tool_context,
+                system=system,
+                task_prompt=task_prompt,
+                task=task,
+                initial=initial,
+                budget=budget,
+            )
+        except Exception as exc:  # noqa: BLE001 - one worker must not sink the turn
+            return WorkerReport(
+                worker_id=task.worker_id,
+                status="error",
+                result=None,
+                provider=getattr(provider, "provider_name", "unknown"),
+                stop_reason=type(exc).__name__,
+            )
+
     async def _route(
         self,
         provider,
@@ -271,8 +375,30 @@ class MultiAgentKernel:
         system: str,
         task_prompt: str,
         fallback_worker: str,
+        *,
+        deterministic_worker: str | None = None,
+        budget=None,
     ) -> RoutePlan:
         fallback = fallback_worker if fallback_worker in WORKERS else "general"
+        # Deterministic pre-routing (spec §8.6): an unambiguous single-domain
+        # request needs no Router model call at all.
+        if deterministic_worker:
+            worker = (
+                deterministic_worker if deterministic_worker in WORKERS else fallback
+            )
+            return RoutePlan(
+                mode="single",
+                workers=[WorkerTask(worker, WORKERS[worker].instruction)],
+                reason="确定性单领域预路由，未调用路由模型",
+                provider="rules",
+            )
+        if budget is not None and not budget.allow():
+            return RoutePlan(
+                mode="single",
+                workers=[WorkerTask(fallback, WORKERS[fallback].instruction)],
+                reason="模型调用预算已用尽，降级为规则路由",
+                provider="budget-exhausted",
+            )
         catalog = [item.public_dict() for item in WORKERS.values()]
         prompt = (
             task_prompt
@@ -298,6 +424,8 @@ class MultiAgentKernel:
         )
         try:
             response = await provider.chat(system + "\n" + persona.system_prompt, prompt)
+            if budget is not None:
+                budget.charge()
             parsed = _parse_route(response.text, fallback, self.max_workers)
             provider_name = response.provider
         except Exception:
@@ -323,6 +451,7 @@ class MultiAgentKernel:
         task_prompt: str,
         task: WorkerTask,
         initial: list[ToolObservation],
+        budget=None,
     ) -> WorkerReport:
         profile = WORKERS[task.worker_id]
         worker_registry = self.registry.scoped(profile.tools)
@@ -339,14 +468,25 @@ class MultiAgentKernel:
                     "contract": (
                         "只提交候选结论给决策Agent，不直接代表最终答复；使用事实键标注依据，"
                         "资料不足要明确说明。"
-                        + (" 引用动作分析证据时必须标注 analysis_id 与 trace_id/来源。"
-                           if TOOL_ANALYSIS_READ in profile.tools else "")
+                        + (
+                            " 引用动作分析证据时必须标注 analysis_id 与 trace_id/来源。"
+                            if TOOL_ANALYSIS_READ in profile.tools
+                            else ""
+                        )
                     ),
                     "external_text_is_data": UNTRUSTED_MOTION_DATA_WARNING,
                 },
                 ensure_ascii=False,
             )
         )
+        if budget is not None and not budget.allow():
+            return WorkerReport(
+                worker_id=profile.id,
+                status="skipped",
+                result=None,
+                provider="budget-exhausted",
+                stop_reason="model_budget_exhausted",
+            )
         loop = await ReActKernel(worker_registry, self.max_steps).run(
             provider=provider,
             persona=persona,
@@ -354,6 +494,7 @@ class MultiAgentKernel:
             system=system,
             task_prompt=worker_prompt,
             observations=[item for item in initial if item.tool in profile.tools],
+            budget=budget,
         )
         return WorkerReport(
             worker_id=profile.id,
@@ -374,6 +515,7 @@ class MultiAgentKernel:
         task_prompt: str,
         route: RoutePlan,
         reports: list[WorkerReport],
+        budget=None,
     ) -> HarnessLoopResult:
         action_names = ["harness.actions.list"]
         action_names.extend(
@@ -382,6 +524,23 @@ class MultiAgentKernel:
             if item["kind"] == "action"
         )
         decision_registry = self.registry.scoped(action_names)
+        # Single worker, no conflict, no requested action: the decision step reuses
+        # the worker's own answer instead of paying for a second model call
+        # (spec §8.6 "Decision 在单 Worker 且无冲突、无 action 时可与 Worker 合并").
+        only = reports[0] if len(reports) == 1 else None
+        if (
+            only is not None
+            and only.status == "ok"
+            and isinstance(only.result, dict)
+            and only.result.get("reply")
+            and not _requests_action(only.observations)
+        ):
+            return HarnessLoopResult(
+                result=only.result,
+                provider=only.provider,
+                observations=[],
+                stop_reason="decision-merged-with-single-worker",
+            )
         decision_prompt = (
             task_prompt
             + "\n\n"
@@ -402,13 +561,60 @@ class MultiAgentKernel:
                 default=str,
             )
         )
+        if budget is not None and not budget.allow():
+            return HarnessLoopResult(
+                result=only.result if only is not None else None,
+                provider="budget-exhausted",
+                observations=[],
+                stop_reason="model_budget_exhausted",
+            )
         return await ReActKernel(decision_registry, self.max_steps).run(
             provider=provider,
             persona=persona,
             tool_context=tool_context,
             system=system,
             task_prompt=decision_prompt,
+            budget=budget,
         )
+
+
+def _requests_action(observations: list[ToolObservation]) -> bool:
+    return any(item.status == "approval_required" for item in observations)
+
+
+def deterministic_route(intent: str, message: str) -> str | None:
+    """Return a worker id when the request is unambiguously single-domain.
+
+    Only explicit, high-precision signals are used; anything with cross-domain
+    wording returns ``None`` so the Router model decides (spec §8.6).
+    """
+    text = (message or "").lower()
+    nutrition = (
+        "吃", "喝", "饮食", "营养", "热量", "卡路里", "蛋白质", "碳水", "脂肪",
+        "早餐", "午餐", "晚餐", "加餐", "食谱", "膳食", "盐", "糖", "油",
+    )
+    fitness = (
+        "深蹲", "俯卧撑", "伏地挺身", "弓步", "箭步", "squat", "pushup", "lunge",
+        "练胸", "练背", "练腿", "动作", "组数", "次数", "力量", "有氧", "拉伸",
+    )
+    recovery = ("睡眠", "失眠", "累", "疲劳", "恢复", "压力", "休息", "酸痛")
+    records = ("记录", "趋势", "上周", "本月", "数据", "达标")
+    hits = {
+        "nutritionist": any(word in text for word in nutrition),
+        "coach": any(word in text for word in fitness),
+        "recovery": any(word in text for word in recovery),
+        "records": any(word in text for word in records),
+    }
+    matched = [worker for worker, hit in hits.items() if hit]
+    if len(matched) == 1:
+        return matched[0]
+    if len(matched) > 1:
+        return None
+    if intent == "plan":
+        return "planner"
+    if intent == "exercise_knowledge":
+        return "coach"
+    return None
 
 
 def list_workers() -> list[dict[str, Any]]:

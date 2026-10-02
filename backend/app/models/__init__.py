@@ -46,4 +46,7 @@ from .models import (
     MotionEvidenceFrame,
     MotionStageTask,
     MotionUserFeedback,
+    HealthAgentRunStage,
+    AgentActionProposal,
+    MediaDeletionTask,
 )

@@ -28,9 +28,11 @@ from app.models import (
     MotionAnalysisFeedback,
     MotionAnalysisRun,
     MotionEvidenceFrame,
+    MotionUserFeedback,
     User,
 )
 from app.services.storage import get_storage
+from app.schemas.errors import ApiException
 from app.services.ai_jobs import (
     create_ai_job,
     public_job,
@@ -345,7 +347,12 @@ async def upload_media(
 def create_motion_job(
     body: MotionIn, user=Depends(current_user), db: Session = Depends(get_db)
 ):
-    """Deprecated: use POST /media/motion-analyses (one unified task)."""
+    """弃用：请使用 POST /media/motion-analyses（统一任务）。
+
+    **弃用**：本端点保留一个完整的小程序发布周期（计划移除日期 2026-12-31）。
+    移除前先确认线上旧客户端调用量为 0；调用计数见 `GET /system/metrics` 的
+    `deprecated_endpoint_calls`。
+    """
     asset = None
     if body.media_id:
         asset = db.get(MediaAsset, body.media_id)
@@ -375,6 +382,12 @@ def create_motion_job(
 async def get_motion_job(
     job_id: int, user=Depends(current_user), db: Session = Depends(get_db)
 ):
+    """弃用：请使用 GET /media/motion-analyses/{analysis_id}。
+
+    **弃用**：本端点保留一个完整的小程序发布周期（计划移除日期 2026-12-31）。
+    移除前先确认线上旧客户端调用量为 0；调用计数见 `GET /system/metrics` 的
+    `deprecated_endpoint_calls`。
+    """
     requeue_expired_jobs(db)
     job = db.get(AIJob, job_id)
     if not job or job.user_id != user.id or job.job_type != "motion_pose":
@@ -397,6 +410,12 @@ async def get_motion_job(
 def create_kinetics_job(
     body: KineticsIn, user=Depends(current_user), db: Session = Depends(get_db)
 ):
+    """弃用：Kinetics 只作为候选证据，不单独构成结论。
+
+    **弃用**：本端点保留一个完整的小程序发布周期（计划移除日期 2026-12-31）。
+    移除前先确认线上旧客户端调用量为 0；调用计数见 `GET /system/metrics` 的
+    `deprecated_endpoint_calls`。
+    """
     asset = None
     if body.media_id:
         asset = db.get(MediaAsset, body.media_id)
@@ -426,6 +445,12 @@ def create_kinetics_job(
 async def get_kinetics_job(
     job_id: int, user=Depends(current_user), db: Session = Depends(get_db)
 ):
+    """弃用：请使用 GET /media/motion-analyses/{analysis_id}。
+
+    **弃用**：本端点保留一个完整的小程序发布周期（计划移除日期 2026-12-31）。
+    移除前先确认线上旧客户端调用量为 0；调用计数见 `GET /system/metrics` 的
+    `deprecated_endpoint_calls`。
+    """
     requeue_expired_jobs(db)
     job = db.get(AIJob, job_id)
     if not job or job.user_id != user.id or job.job_type != "kinetics400":
@@ -437,6 +462,12 @@ async def get_kinetics_job(
 def analyze_motion_compat(
     body: MotionIn, user=Depends(current_user), db: Session = Depends(get_db)
 ):
+    """弃用兼容入口：转交统一 motion-analyses 任务。
+
+    **弃用**：本端点保留一个完整的小程序发布周期（计划移除日期 2026-12-31）。
+    移除前先确认线上旧客户端调用量为 0；调用计数见 `GET /system/metrics` 的
+    `deprecated_endpoint_calls`。
+    """
     return create_motion_job(body, user, db)
 
 
@@ -478,6 +509,8 @@ class ReanalyzeIn(BaseModel):
     """
 
     cloud_review_mode: str | None = Field(default=None, max_length=20)
+    # A *catalogue id* (validated server-side), never free text: it becomes the
+    # child run's requested_type (spec §7.4).
     exercise_hint: str | None = Field(default=None, max_length=60)
     reason: str = Field(default="user_request", max_length=60)
 
@@ -692,6 +725,7 @@ def _spawn_child_run(
     user,
     run: MotionAnalysisRun,
     cloud_mode: str | None,
+    exercise_hint: str | None = None,
 ) -> MotionAnalysisRun:
     """Create a child run that reuses the media asset + side-effect-free stages.
 
@@ -699,7 +733,14 @@ def _spawn_child_run(
     review mode never reuses the parent task's fingerprint or cloud mode. The
     actual stage reuse (re-running only the affected stages) is performed by the
     E-package stage queue (compare-and-set by run_id/stage/version).
+
+    ``exercise_hint`` is the user's corrected label (spec §7.4). It must be a
+    validated catalogue id, because it becomes the child's ``requested_type``;
+    free text must never be written into the request model.
     """
+    requested = run.requested_type
+    if exercise_hint:
+        requested = _validated_catalog_id(exercise_hint)
     asset = db.get(MediaAsset, run.media_asset_id)
     mode = cloud_mode or run.cloud_review_mode or "redacted_frames"
     consent = mode != "off"
@@ -707,7 +748,7 @@ def _spawn_child_run(
         db,
         user_id=user.id,
         asset=asset,
-        requested_exercise=run.requested_type,
+        requested_exercise=requested,
         consent_deepseek_frames=consent,
         pipeline_version=run.pipeline_version,
         idempotency_key=f"reanalyze:{run.id}:{uuid4().hex}",
@@ -718,7 +759,54 @@ def _spawn_child_run(
         child.effective_pipeline_version = V2_PIPELINE_VERSION
         child.result_version = 1
         db.commit()
+    _record_feedback(
+        db,
+        user_id=user.id,
+        run_id=run.id,
+        kind="wrong_label",
+        corrected_label=requested,
+        comment="reanalyze",
+    )
     return child
+
+
+def _record_feedback(
+    db: Session,
+    *,
+    user_id: int,
+    run_id: int,
+    kind: str,
+    corrected_label: str | None = None,
+    comment: str | None = None,
+) -> None:
+    """Append to the independent feedback ledger (never rewrite the run result)."""
+    db.add(
+        MotionUserFeedback(
+            run_id=run_id,
+            user_id=user_id,
+            kind=kind,
+            corrected_label=(corrected_label or None),
+            comment=(comment or None)[:500] if comment else None,
+        )
+    )
+    db.commit()
+
+
+def _validated_catalog_id(raw: str) -> str:
+    """Validate a user-supplied exercise hint against the frozen catalogue."""
+    candidate = (raw or "").strip()
+    if (
+        not candidate
+        or candidate == "user_confirmed"
+        or not re.fullmatch(r"[a-z][a-z0-9_]{0,40}", candidate)
+        or catalog.get_action(candidate) is None
+    ):
+        raise ApiException(
+            422,
+            "UNKNOWN_CATALOG_ID",
+            "动作类别不在当前目录中，请重新选择或在页面内说明",
+        )
+    return candidate
 
 
 @router.post("/motion-analyses/{analysis_id}/retry")
@@ -734,7 +822,13 @@ def retry_motion_analysis(
     if isinstance(run, JSONResponse):
         return run
     if run.status == "failed":
-        child = _spawn_child_run(db, user=user, run=run, cloud_mode=body.cloud_review_mode)
+        child = _spawn_child_run(
+            db,
+            user=user,
+            run=run,
+            cloud_mode=body.cloud_review_mode,
+            exercise_hint=body.exercise_hint,
+        )
         return {"analysis_id": child.id, "parent_run_id": run.id, "status": child.status}
     return _motion_error(
         request, 409, "RETRY_NOT_ALLOWED",
@@ -764,7 +858,13 @@ def reanalyze_motion_analysis(
             request, 409, "REANALYZE_IN_PROGRESS",
             "任务仍在进行中，请等待完成后再重新分析",
         )
-    child = _spawn_child_run(db, user=user, run=run, cloud_mode=body.cloud_review_mode)
+    child = _spawn_child_run(
+        db,
+        user=user,
+        run=run,
+        cloud_mode=body.cloud_review_mode,
+        exercise_hint=body.exercise_hint,
+    )
     return {
         "analysis_id": child.id,
         "parent_run_id": run.id,
@@ -798,32 +898,25 @@ def confirm_motion_label(
             return _motion_error(request, 422, "INVALID_LABEL_ID", "动作类别 ID 不合法")
         if catalog.get_action(canonical) is None:
             return _motion_error(request, 422, "UNKNOWN_CATALOG_ID", "动作类别不在当前目录中")
-    feedback = db.scalar(
-        select(MotionAnalysisFeedback).where(MotionAnalysisFeedback.run_id == run.id)
+    # The correction is stored as an INDEPENDENT feedback row (spec §7.4). The
+    # computed result snapshot is never rewritten: ``source=user_selected`` can
+    # therefore never be mistaken for a model recognition success or a score.
+    row = feedback_store.record_feedback(
+        db,
+        run=run,
+        user_id=user.id,
+        kind="wrong_label" if canonical else "unhelpful_advice",
+        corrected_label=canonical or novel or None,
+        comment=(body.correction_reason or "user_label_correction")[:500],
     )
-    result = feedback.result if feedback else {}
-    # Source is user_selected: it never auto-upgrades to a model recognition
-    # success or a reliable score.
-    result["user_confirmation"] = {
-        "source": "user_selected",
-        "canonical_id": canonical or None,
-        "novel_label_zh": novel or None,
-        "correction_reason": body.correction_reason,
-        "recorded_at": utc_now().isoformat() + "Z",
-    }
-    if feedback is None:
-        feedback = MotionAnalysisFeedback(
-            run_id=run.id, user_id=user.id, result_json=json.dumps(result, ensure_ascii=False)
-        )
-        db.add(feedback)
-    else:
-        feedback.result_json = json.dumps(result, ensure_ascii=False)
     db.commit()
     return {
         "ok": True,
         "analysis_id": run.id,
+        "feedback_id": row.id,
         "canonical_id": canonical or None,
         "novel_label_zh": novel or None,
+        "source": "user_selected",
         "score_fabricated": False,
     }
 
@@ -1157,7 +1250,7 @@ def preview_upload_urls(
         raise HTTPException(404, "未找到关联动作分析任务")
     storage = build_media_storage(db)
     expiry_ts = int(time.time()) + 300
-    urls = []
+    uploads = []
     for frame_id in body.frame_ids:
         asset_id = f"{body.asset_prefix}_{frame_id}"
         upload_url = storage.mint_upload_url(
@@ -1167,7 +1260,7 @@ def preview_upload_urls(
             asset_prefix=body.asset_prefix,
             expiry_ts=expiry_ts,
         )
-        urls.append(
+        uploads.append(
             {
                 "frame_id": frame_id,
                 "asset_id": asset_id,
@@ -1175,4 +1268,7 @@ def preview_upload_urls(
                 "expires_at": expiry_ts,
             }
         )
-    return {"urls": urls}
+    # ``uploads`` is the frozen field (spec §7.2). ``urls`` is a one-release
+    # compatibility alias for workers built against the old response; it is
+    # removed after a full mini-program/worker release cycle with usage at zero.
+    return {"uploads": uploads, "urls": uploads}

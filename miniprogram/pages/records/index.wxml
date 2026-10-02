@@ -32,14 +32,15 @@
     <view class="chart-active"><text>{{activeSummary}}</text><image src="/assets/icons/chevron.png" mode="aspectFit"/></view>
 
     <view class="overview-divider"></view>
-    <view class="meal-head"><text>今日餐次</text></view>
+    <view class="meal-head"><text>今日餐次</text><view class="meal-head-more tappable" bindtap="diet" data-meal="" hover-class="tap-chip" hover-start-time="0" hover-stay-time="80">查看明细<image src="/assets/icons/chevron.png" mode="aspectFit"/></view></view>
     <view class="meal-rows">
-      <view class="meal-row" wx:for="{{meals}}" wx:key="key">
+      <view class="meal-row tappable" wx:for="{{meals}}" wx:key="key" bindtap="diet" data-meal="{{item.key}}" hover-class="meal-row-hover" hover-start-time="0" hover-stay-time="80">
         <view class="meal-label"><text class="legend-dot" style="background:{{item.color}}"></text>{{item.label}}</view>
         <view class="meal-track"><view class="meal-fill" style="{{item.rowStyle}}"></view></view>
         <view class="meal-value">{{item.value}}<text>kcal</text></view>
       </view>
     </view>
+    <view wx:if="{{!hasRecords}}" class="meal-empty">今天还没有饮食记录，拍摄一餐或手动添加后这里会显示明细。</view>
 
     <view class="overview-foot">
       <view class="threshold-mini">

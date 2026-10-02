@@ -54,7 +54,14 @@ class FoodCorrectionIn(BaseModel):
 
 
 class FoodFinalizeIn(BaseModel):
-    meal_type: str = Field(
-        default="other", pattern="^(breakfast|lunch|dinner|snack|other)$"
+    """Finalize request (spec §6.4).
+
+    ``meal_type`` is an explicit user choice from the scan page picker. ``None``
+    means the client did not pick one, and only then may the server infer it from
+    the business clock — an inference never overwrites a stated choice.
+    """
+
+    meal_type: str | None = Field(
+        default=None, pattern="^(breakfast|lunch|dinner|snack|other)$"
     )
     confirmed: bool = False

@@ -21,7 +21,9 @@ test('high-frequency pages avoid redundant helper prose', () => {
 
 test('concise UI retains critical safety boundaries', () => {
   assert.match(page('plan'), /不适时请暂停训练/)
-  assert.match(page('scan'), /热量为估算值/)
+  // Spec §6.5: the scan page must keep calling the numbers an estimate draft
+  // that is only written after confirmation.
+  assert.match(page('scan'), /热量为估算草稿/)
   assert.match(page('insights'), /不把缺失数据当成异常/)
   assert.match(page('profile'), /不替代医生诊断/)
 })
