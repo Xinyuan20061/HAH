@@ -323,6 +323,10 @@ class V2EvidenceFrame(BaseModel):
     timestamp_ms: int = Field(ge=0)
     preview_asset_id: str | None = Field(default=None, max_length=128)
     preview_sha256: str | None = Field(default=None, max_length=64)
+    # Cloud-review preview references (worker emits these in redacted_frames /
+    # skeleton modes; declared so the strict V2 contract accepts them).
+    cloud_preview_sha256: str | None = Field(default=None, max_length=64)
+    cloud_preview_mode: str | None = Field(default=None, max_length=30)
     preview_bytes: int | None = Field(default=None, ge=0)
     preview_dimensions: dict | None = None
     subject_id: str | None = Field(default=None, max_length=80)
