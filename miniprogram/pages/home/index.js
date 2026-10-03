@@ -229,6 +229,10 @@ Page({
     if (this.data.response && this.data.response.reply) this.speak(this.data.response.reply)
   },
 
+  goState() {
+    wx.navigateTo({ url: '/pages/state/index' })
+  },
+
   async runResponseAction() {
     const response = this.data.response
     const action = response && response.action

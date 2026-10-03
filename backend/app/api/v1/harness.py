@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import current_user
 from app.core.config import settings
 from app.core.database import get_db
+from app.schemas.errors import ApiException
 from app.harness import (
     HARNESS_VERSION,
     MULTI_AGENT_VERSION,
@@ -18,6 +19,7 @@ from app.harness import (
     list_personas,
     list_workers,
 )
+from app.harness.plugins import PluginError, list_plugins, set_plugin_enabled
 from app.harness import voice as voice_gateway
 from app.harness.voice import (
     VoiceGatewayError,
@@ -48,8 +50,17 @@ class VoiceVerifyOnceRequest(BaseModel):
     acknowledge_quota: bool = False
 
 
+class PluginEnableRequest(BaseModel):
+    data_scope: list[str] = Field(default_factory=list, max_length=20)
+
+
+def _plugin_error(exc: PluginError):
+    status = 404 if exc.code == "PLUGIN_NOT_FOUND" else 422
+    raise ApiException(status, exc.code, exc.message)
+
+
 @router.get("/manifest")
-def manifest(user=Depends(current_user)):
+def manifest(user=Depends(current_user), db: Session = Depends(get_db)):
     return {
         "version": HARNESS_VERSION,
         "architecture": "router-workers-decision",
@@ -57,6 +68,7 @@ def manifest(user=Depends(current_user)):
         "agents": list_personas(),
         "workers": list_workers(),
         "tools": get_tool_registry().manifest(),
+        "plugins": list_plugins(db, user.id, include_internal=True),
         "policies": {
             "private_reasoning_exposed": False,
             "write_actions_require_confirmation": True,
@@ -66,6 +78,37 @@ def manifest(user=Depends(current_user)):
         },
         "voice_configured": voice_gateway.voice_configured(user),
     }
+
+
+@router.get("/plugins")
+def plugins(user=Depends(current_user), db: Session = Depends(get_db)):
+    """User-facing capability catalog; technical tool names remain metadata."""
+    return {
+        "plugins": list_plugins(db, user.id),
+        "principle": "能力只读取本人授权数据；行动必须经过用户确认；能力可随时暂停和撤销。",
+    }
+
+
+@router.post("/plugins/{plugin_id}/enable")
+def enable_plugin(plugin_id: str, body: PluginEnableRequest, user=Depends(current_user), db: Session = Depends(get_db)):
+    try:
+        result = set_plugin_enabled(db, user.id, plugin_id, enabled=True, data_scope=body.data_scope or None)
+        db.commit()
+        return {"ok": True, "plugin": result}
+    except PluginError as exc:
+        db.rollback()
+        _plugin_error(exc)
+
+
+@router.post("/plugins/{plugin_id}/disable")
+def disable_plugin(plugin_id: str, user=Depends(current_user), db: Session = Depends(get_db)):
+    try:
+        result = set_plugin_enabled(db, user.id, plugin_id, enabled=False)
+        db.commit()
+        return {"ok": True, "plugin": result}
+    except PluginError as exc:
+        db.rollback()
+        _plugin_error(exc)
 
 
 @router.get("/voice/status")

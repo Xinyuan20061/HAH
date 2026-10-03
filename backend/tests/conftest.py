@@ -44,13 +44,17 @@ def migrated_engine(tmp_path_factory):
 def api(migrated_engine, monkeypatch):
     with migrated_engine.begin() as connection:
         for table in reversed(Base.metadata.sorted_tables):
-            # The exercise-effect ontology is immutable migration seed data, not
-            # per-test/user state. Keep it just as a deployed database would.
+            # Immutable migration seed data, not per-test/user state. Keep it just
+            # as a deployed database would.
+            # ``food_references`` belongs here too: it is the audited nutrition
+            # table shipped with the application, and wiping it silently broke every
+            # dependent calculation (deterministic totals fell back to zero).
             if table.name in {
                 "fitness_relations",
                 "fitness_concepts",
                 "dataset_registry",
                 "model_registry",
+                "food_references",
             }:
                 continue
             connection.execute(table.delete())

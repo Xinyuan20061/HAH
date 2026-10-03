@@ -32,6 +32,7 @@ from app.services.health import (
     today_summary,
     trend_7d,
 )
+from app.services.health_state.invalidation import SOURCE_CHECKIN, record_changed
 from app.services.timeline import add_event
 
 router = APIRouter(prefix="/health", tags=["health"])
@@ -99,7 +100,15 @@ def save_checkin(
         user.profile.weight_kg = body.weight_kg
         db.add(user.profile)
         db.commit()
-    return {"ok": True, "date": d, "streak": streak_summary(db, user.id)}
+    # Capability plan §4.5: sleep/weight features derive from check-ins, so an
+    # edited check-in must drop the stale feature rows immediately.
+    invalidated = record_changed(db, user.id, SOURCE_CHECKIN)
+    return {
+        "ok": True,
+        "date": d,
+        "streak": streak_summary(db, user.id),
+        "state_invalidated": invalidated.get("affected", []),
+    }
 
 
 @router.get("/trends/7d")

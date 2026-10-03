@@ -41,6 +41,7 @@ from app.harness.collaboration import (
     MULTI_AGENT_VERSION,
     MultiAgentKernel,
     deterministic_route,
+    matched_domains,
 )
 from app.harness.kernel import HARNESS_VERSION
 from app.harness.personas import get_persona
@@ -251,7 +252,17 @@ async def respond(
         db.refresh(run)
 
     recorder = RunRecorder(db, run)
-    budget = TurnBudget(0 if decision.action != "allow" else 5)
+    # Capability plan §13.5: a single-domain turn gets the simple-task budget of 2;
+    # only a turn that really spans several domains gets 5. Domain breadth comes from
+    # the same deterministic keyword evidence the router uses, so the budget cannot
+    # drift away from the routing decision.
+    _domains = matched_domains(
+        str(getattr(decision, "intent", "") or ""), message
+    )
+    budget = TurnBudget.for_task(
+        blocked=decision.action != "allow",
+        worker_count=max(1, len(_domains)),
+    )
 
     tool_context = ToolContext(db=db, user=user, agent_id=persona.id, channel=channel)
     tool_context.state["run_id"] = run.id

@@ -15,6 +15,7 @@ from app.models import (
     AIWorkerNode,
     MediaAsset,
     MotionAnalysisFeedback,
+    MotionAnalysisRun,
     MotionEvidenceFrame,
 )
 
@@ -93,9 +94,16 @@ def requeue_expired_jobs(db: Session) -> int:
     clear = dict(
         worker_id="", lease_token="", lease_expires_at=None, claim_request_id=None
     )
+    # R12 event-chain fix: jobs whose lease is exhausted become permanently
+    # failed; the linked run must reach the same terminal state or the
+    # miniprogram polls a queued/processing run forever.
+    _TERMINAL_RUN = ("completed", "partial", "failed", "cancelled")
+    exhausted_ids = db.execute(
+        select(AIJob.id).where(*condition, AIJob.attempts >= settings.worker_max_attempts)
+    ).scalars().all()
     exhausted = db.execute(
         update(AIJob)
-        .where(*condition, AIJob.attempts >= settings.worker_max_attempts)
+        .where(AIJob.id.in_(exhausted_ids))
         .values(
             **clear,
             status="failed",
@@ -105,6 +113,20 @@ def requeue_expired_jobs(db: Session) -> int:
         ),
         execution_options={"synchronize_session": False},
     ).rowcount
+    if exhausted_ids:
+        db.execute(
+            update(MotionAnalysisRun)
+            .where(
+                MotionAnalysisRun.ai_job_id.in_(exhausted_ids),
+                MotionAnalysisRun.status.notin_(_TERMINAL_RUN),
+            )
+            .values(
+                status="failed",
+                error_code="lease_exhausted",
+                finished_at=now,
+            ),
+            execution_options={"synchronize_session": False},
+        )
     queued = db.execute(
         update(AIJob)
         .where(*condition, AIJob.attempts < settings.worker_max_attempts)

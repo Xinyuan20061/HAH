@@ -15,6 +15,29 @@ from app.harness.motion_evidence import (
     read_timeline,
 )
 from app.harness.registry import ToolRegistry
+from app.harness.outcome_tools import (
+    TOOL_EXPERIMENT_RESULT,
+    TOOL_NEXT_ACTION_RANK,
+    TOOL_OUTCOMES_HISTORY,
+    TOOL_PREFERENCES_READ,
+    outcome_tools,
+)
+from app.harness.planning_tools import (
+    TOOL_CAPABILITIES_READ,
+    TOOL_DECISION_CONTRACT,
+    TOOL_NBA,
+    TOOL_PLAN_SIMULATE,
+    planning_tools,
+)
+from app.harness.state_tools import (
+    TOOL_CONSTRAINTS_READ,
+    TOOL_OUTCOMES_COMPARE,
+    TOOL_SIGNALS_READ,
+    TOOL_STATE_HISTORY,
+    TOOL_STATE_READ,
+    state_tools,
+)
+from app.harness.policy_tools import policy_tools
 from app.services.agent.actions import list_actions
 from app.services.agent.tools import read_context
 from app.services.exercise_resources import recommend_resources
@@ -243,6 +266,16 @@ def get_tool_registry() -> ToolRegistry:
                 input_schema={"exercise_type": "string 可选"},
             ),
         ]
+        # Health-state tools (capability plan §4.4): the single read path for
+        # versioned state, constraints, signals and observed outcomes.
+        + state_tools()
+        # Planning/decision tools (capability plan §7.4/§8.2): read-only simulation
+        # and the deterministic Decision Contract.
+        + planning_tools()
+        # Outcome-learning tools (capability plan §9.5): memory, outcome history,
+        # micro-experiment results and Bayesian re-ranking of safe options.
+        + outcome_tools()
+        + policy_tools()
     )
     for action in list_actions():
         registry.register(

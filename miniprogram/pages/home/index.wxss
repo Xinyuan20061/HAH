@@ -11,6 +11,12 @@
 .week-core {width:24rpx;height:24rpx;box-sizing:border-box;border:2rpx solid rgba(255,255,255,.42);border-radius:50%;background:rgba(255,255,255,.14);}
 .week-day.done {color:#fff;font-weight:700;}
 .week-day.done .week-core {border-color:#c4e267;background:#c4e267;box-shadow:0 0 0 4rpx rgba(196,226,103,.18);}
+/* 「状态与下一步」入口：次要入口，不抢英雄区与语音区的主视线 */
+.state-entry {display:flex;align-items:center;justify-content:space-between;margin-top:24rpx;padding:24rpx;border-radius:22rpx;background:#fff;border:1rpx solid #eeeee6;}
+.state-entry-text {min-width:0;}
+.state-entry-title {font-size:28rpx;font-weight:700;color:#111613;}
+.state-entry-sub {margin-top:8rpx;font-size:21rpx;color:#5f665f;}
+.state-entry-arrow {flex:none;margin-left:16rpx;font-size:28rpx;color:#506336;}
 .companion-switch {display:flex;gap:16rpx;margin-top:24rpx;}
 .companion-choice {display:flex;align-items:center;gap:12rpx;flex:1;padding:12rpx 16rpx;box-sizing:border-box;border-radius:20rpx;background:#fff;box-shadow:0 8rpx 26rpx rgba(17,22,19,.035);}
 .companion-choice.selected {background:#e9efd9;}

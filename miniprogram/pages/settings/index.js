@@ -75,5 +75,7 @@ Page({
   editProfile() { wx.navigateTo({ url: '/pages/profile/edit' }) },
   goals() { wx.navigateTo({ url: '/pages/goals/index' }) },
   privacy() { wx.navigateTo({ url: '/pages/settings/privacy/index' }) },
-  evaluation() { wx.navigateTo({ url: '/pages/evaluation/index' }) }
+  evaluation() { wx.navigateTo({ url: '/pages/evaluation/index' }) },
+  capabilities() { wx.navigateTo({ url: '/pages/settings/capabilities/index' }) },
+  dietRecords() { wx.navigateTo({ url: '/pages/records/diet' }) }
 })

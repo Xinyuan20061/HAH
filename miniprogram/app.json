@@ -18,9 +18,11 @@
     "pages/checkin/index",
     "pages/trends/index",
     "pages/settings/index",
+    "pages/settings/capabilities/index",
     "pages/settings/ai/index",
     "pages/evaluation/index",
-    "pages/settings/privacy/index"
+    "pages/settings/privacy/index",
+    "pages/state/index"
   ],
   "window": {
     "navigationBarTitleText": "HealthMate",

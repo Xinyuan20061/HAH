@@ -378,6 +378,109 @@ class FoodAnalysisCorrection(Base, TimestampMixin):
     changed_fields_json: Mapped[str] = mapped_column(Text, default="[]")
 
 
+class FoodReference(Base, TimestampMixin):
+    """One audited entry of the local nutrition table (capability plan §6.4).
+
+    Final nutrient values are computed from this table, never taken from a vision
+    model's free-text numbers. ``reviewed_at``/``source_note`` exist so an
+    unreviewed row is visibly unreviewed rather than looking authoritative.
+    """
+
+    __tablename__ = "food_references"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    food_key: Mapped[str] = mapped_column(String(80), unique=True, index=True)
+    name_zh: Mapped[str] = mapped_column(String(120))
+    food_group: Mapped[str] = mapped_column(String(40), default="other", index=True)
+    calories_per_100g: Mapped[float] = mapped_column(Float, default=0)
+    protein_per_100g: Mapped[float] = mapped_column(Float, default=0)
+    carbs_per_100g: Mapped[float] = mapped_column(Float, default=0)
+    fat_per_100g: Mapped[float] = mapped_column(Float, default=0)
+    fiber_per_100g: Mapped[float] = mapped_column(Float, default=0)
+    density_g_per_ml: Mapped[float | None] = mapped_column(Float, nullable=True)
+    aliases_json: Mapped[str] = mapped_column(Text, default="[]")
+    cooking_adjustments_json: Mapped[str] = mapped_column(Text, default="{}")
+    source_id: Mapped[str] = mapped_column(String(80), default="")
+    source_note: Mapped[str] = mapped_column(String(300), default="")
+    reviewed_at: Mapped[datetime | None] = mapped_column(Date, nullable=True)
+    active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+
+    @property
+    def aliases(self) -> list[str]:
+        try:
+            value = json.loads(self.aliases_json or "[]")
+            return [str(item) for item in value] if isinstance(value, list) else []
+        except (TypeError, ValueError):
+            return []
+
+    @property
+    def cooking_adjustments(self) -> dict:
+        try:
+            value = json.loads(self.cooking_adjustments_json or "{}")
+            return value if isinstance(value, dict) else {}
+        except (TypeError, ValueError):
+            return {}
+
+
+class FoodClarificationQuestion(Base, TimestampMixin):
+    """One question asked to shrink an estimate range (capability plan §6.3).
+
+    ``expected_range_reduction`` is what makes question selection auditable: the
+    system asks the question predicted to shrink the calorie interval the most,
+    capped at two questions, instead of interrogating the user.
+    """
+
+    __tablename__ = "food_analysis_questions"
+    __table_args__ = (
+        UniqueConstraint(
+            "analysis_id", "question_id", name="uq_food_analysis_question"
+        ),
+    )
+    id: Mapped[int] = mapped_column(primary_key=True)
+    analysis_id: Mapped[int] = mapped_column(
+        ForeignKey("food_analysis_sessions.id"), index=True
+    )
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    question_id: Mapped[str] = mapped_column(String(60))
+    kind: Mapped[str] = mapped_column(String(40))
+    prompt: Mapped[str] = mapped_column(String(300))
+    options_json: Mapped[str] = mapped_column(Text, default="[]")
+    expected_range_reduction: Mapped[float] = mapped_column(Float, default=0)
+    answer_option_key: Mapped[str] = mapped_column(String(60), default="")
+    answered_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    rank: Mapped[int] = mapped_column(Integer, default=1)
+
+    @property
+    def options(self) -> list[dict]:
+        try:
+            value = json.loads(self.options_json or "[]")
+            return value if isinstance(value, list) else []
+        except (TypeError, ValueError):
+            return []
+
+
+class UserFoodPrior(Base, TimestampMixin):
+    """Personal portion prior (capability plan §6.5).
+
+    Only affects the *initial suggestion* after at least three user confirmations,
+    never skips this meal's confirmation, and can be viewed and cleared by the user.
+    """
+
+    __tablename__ = "user_food_priors"
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id", "food_key", "context_key", name="uq_user_food_prior"
+        ),
+    )
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    food_key: Mapped[str] = mapped_column(String(80))
+    context_key: Mapped[str] = mapped_column(String(60), default="default")
+    median_mass_g: Mapped[float] = mapped_column(Float, default=0)
+    sample_count: Mapped[int] = mapped_column(Integer, default=0)
+    dispersion: Mapped[float] = mapped_column(Float, default=0)
+    last_confirmed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
 class AgentActionAudit(Base, TimestampMixin):
     __tablename__ = "agent_action_audits"
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -956,6 +1059,41 @@ class MotionUserFeedback(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, index=True)
 
 
+class MotionGoldEvaluation(Base):
+    """Gold-tier result for one motion run (capability plan §5.11 / §12).
+
+    ``tier`` is persisted rather than inferred at read time, so a capability that
+    failed its acceptance gate can never be presented as Gold merely because the
+    code shipped. ``gate_json`` records which gate conditions passed, so the
+    Silver downgrade is explainable.
+    """
+
+    __tablename__ = "motion_gold_evaluations"
+    __table_args__ = (
+        UniqueConstraint(
+            "run_id", "exercise_id", "evaluator_version", name="uq_motion_gold_eval"
+        ),
+    )
+    id: Mapped[int] = mapped_column(primary_key=True)
+    run_id: Mapped[int] = mapped_column(
+        ForeignKey("motion_analysis_runs.id"), index=True
+    )
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    exercise_id: Mapped[str] = mapped_column(String(40), default="", index=True)
+    evaluator_version: Mapped[str] = mapped_column(String(40), default="")
+    tier: Mapped[str] = mapped_column(String(16), default="unknown")
+    available: Mapped[bool] = mapped_column(Boolean, default=False)
+    reason_unavailable: Mapped[str] = mapped_column(String(120), default="")
+    reps: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    hold_seconds: Mapped[float | None] = mapped_column(Float, nullable=True)
+    view_bucket: Mapped[str] = mapped_column(String(30), default="")
+    segments_json: Mapped[str] = mapped_column(Text, default="[]")
+    findings_json: Mapped[str] = mapped_column(Text, default="[]")
+    measurements_json: Mapped[str] = mapped_column(Text, default="{}")
+    gate_json: Mapped[str] = mapped_column(Text, default="{}")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, index=True)
+
+
 class HealthAgentRunStage(Base, TimestampMixin):
     """Durable per-stage ledger for one agent run (spec §8.2/§8.8).
 
@@ -1048,3 +1186,406 @@ class MediaDeletionTask(Base, TimestampMixin):
     )
     error_code: Mapped[str | None] = mapped_column(String(80), nullable=True)
     verified_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class HealthStateFeature(Base, TimestampMixin):
+    """One derived health-state value, versioned and reproducible.
+
+    Capability plan §4.2/§4.5. A derived fact is only useful if you can tell
+    *how* it was produced and *what* it was produced from, so every row stores:
+
+    * ``feature_key`` + ``feature_version`` — the definition that produced it, so
+      two versions are never silently compared;
+    * ``input_hash`` — a digest of the inputs it was computed from, which makes
+      "the underlying records changed, recompute" a cheap equality check and
+      makes a snapshot reproducible;
+    * ``evidence_json`` — the concrete source references, never private reasoning;
+    * ``observed_days`` / ``window_days`` — missing days are counted, not treated
+      as zero (plan §4.3).
+
+    ``UNIQUE(user_id, feature_key, window_days, feature_version)`` keeps exactly one
+    live value per definition, so a recompute replaces rather than accumulates.
+    """
+
+    __tablename__ = "health_state_features"
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id",
+            "feature_key",
+            "window_days",
+            "feature_version",
+            name="uq_health_state_feature",
+        ),
+    )
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    feature_key: Mapped[str] = mapped_column(String(80), index=True)
+    feature_version: Mapped[str] = mapped_column(String(20), default="1.0.0")
+    window_days: Mapped[int] = mapped_column(Integer, default=7)
+    value_numeric: Mapped[float | None] = mapped_column(Float, nullable=True)
+    value_text: Mapped[str] = mapped_column(String(120), default="")
+    unit: Mapped[str] = mapped_column(String(20), default="")
+    evidence_type: Mapped[str] = mapped_column(String(20), default="observed")
+    confidence_level: Mapped[str] = mapped_column(String(20), default="unavailable")
+    observed_days: Mapped[int] = mapped_column(Integer, default=0)
+    input_hash: Mapped[str] = mapped_column(String(64), default="", index=True)
+    evidence_json: Mapped[str] = mapped_column(Text, default="[]")
+    limitations_json: Mapped[str] = mapped_column(Text, default="[]")
+    valid_from: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+    valid_until: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class HealthStateSnapshot(Base, TimestampMixin):
+    """A frozen, versioned view of one user's health state (capability plan §4.2).
+
+    ``snapshot_hash`` covers the ordered feature values, so the same inputs
+    produce the same hash and a changed hash means a genuinely different state.
+    """
+
+    __tablename__ = "health_state_snapshots"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    state_version: Mapped[str] = mapped_column(String(20), default="1.0.0")
+    as_of: Mapped[datetime] = mapped_column(DateTime, default=utc_now, index=True)
+    window_days: Mapped[int] = mapped_column(Integer, default=7)
+    snapshot_hash: Mapped[str] = mapped_column(String(64), default="", index=True)
+    values_json: Mapped[str] = mapped_column(Text, default="{}")
+    constraints_json: Mapped[str] = mapped_column(Text, default="[]")
+    missingness_json: Mapped[str] = mapped_column(Text, default="{}")
+    active_actions_json: Mapped[str] = mapped_column(Text, default="[]")
+
+
+class ActionPolicyStat(Base, TimestampMixin):
+    """Explainable per-user policy statistics (capability plan §9.4).
+
+    A Beta posterior over how often the user accepts / completes / values an action
+    family. This is deliberately *not* reinforcement learning and never touches
+    model weights: it only reorders which already-safe option is offered first, and
+    a high-risk suggestion is never explored.
+
+    ``UNIQUE(user_id, action_family, variant)`` keeps exactly one posterior per
+    option; the raw counts are kept alongside ``alpha``/``beta`` so the posterior can
+    be re-derived and shown to the user.
+    """
+
+    __tablename__ = "action_policy_stats"
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id", "action_family", "variant", name="uq_action_policy_stat"
+        ),
+    )
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    action_family: Mapped[str] = mapped_column(String(80), index=True)
+    variant: Mapped[str] = mapped_column(String(40), default="default")
+    offered: Mapped[int] = mapped_column(Integer, default=0)
+    accepted: Mapped[int] = mapped_column(Integer, default=0)
+    completed: Mapped[int] = mapped_column(Integer, default=0)
+    helpful: Mapped[int] = mapped_column(Integer, default=0)
+    inaccurate: Mapped[int] = mapped_column(Integer, default=0)
+    alpha: Mapped[float] = mapped_column(Float, default=1.0)
+    beta: Mapped[float] = mapped_column(Float, default=1.0)
+
+
+class ActionOutcome(Base):
+    """One observed outcome of an executed action or experiment (plan §9.2/§9.5).
+
+    Recording the *result* is what turns "the conversation ended" into "the system
+    knows what happened next". ``conclusion`` distinguishes a real change from
+    ``insufficient_data``, which is never counted as a positive signal.
+    """
+
+    __tablename__ = "action_outcomes"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    action_key: Mapped[str] = mapped_column(String(80), index=True)
+    # proposal / experiment / goal_adjustment / diet_finalize
+    source: Mapped[str] = mapped_column(String(40), default="proposal", index=True)
+    source_id: Mapped[str] = mapped_column(String(80), default="")
+    decision_id: Mapped[str | None] = mapped_column(
+        String(64), nullable=True, index=True
+    )
+    variant: Mapped[str] = mapped_column(String(40), default="default")
+    result: Mapped[str] = mapped_column(String(40), default="unknown", index=True)
+    conclusion: Mapped[str] = mapped_column(String(40), default="insufficient_data")
+    user_feedback: Mapped[str] = mapped_column(String(20), default="")
+    observed_json: Mapped[str] = mapped_column(Text, default="{}")
+    observed_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+
+
+class UserPreferenceMemory(Base, TimestampMixin):
+    """Structured long-term preference memory (capability plan §8.5).
+
+    Replaces "the last 3 conversation summaries" as the primary memory. A value is
+    only stored when the user stated it explicitly or repeatedly chose it, so
+    conversational text never silently becomes a long-term fact.
+
+    ``UNIQUE(user_id, key)`` keeps one current value per preference; clearing it
+    removes the row so it can no longer influence ranking.
+    """
+
+    __tablename__ = "user_preference_memory"
+    __table_args__ = (
+        UniqueConstraint("user_id", "key", name="uq_user_preference_memory"),
+    )
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    key: Mapped[str] = mapped_column(String(80), index=True)
+    value: Mapped[str] = mapped_column(String(200), default="")
+    source: Mapped[str] = mapped_column(String(30), default="explicit")
+    evidence_count: Mapped[int] = mapped_column(Integer, default=1)
+    confidence_level: Mapped[str] = mapped_column(String(20), default="high")
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    last_confirmed_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+
+
+class PolicyTemplate(Base, TimestampMixin):
+    """审核后的可验证策略模板（policy-learning spec §12）。"""
+
+    __tablename__ = "policy_templates"
+    __table_args__ = (
+        UniqueConstraint("template_id", "template_version", name="uq_policy_template_version"),
+    )
+    id: Mapped[int] = mapped_column(primary_key=True)
+    template_id: Mapped[str] = mapped_column(String(80), index=True)
+    template_version: Mapped[str] = mapped_column(String(40))
+    status: Mapped[str] = mapped_column(String(20), default="approved", index=True)
+    protocol_json: Mapped[str] = mapped_column(Text, default="{}")
+    source_ids_json: Mapped[str] = mapped_column(Text, default="[]")
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    template_hash: Mapped[str] = mapped_column(String(64), default="")
+
+
+class PersonalStrategyUnit(Base, TimestampMixin):
+    """冻结后的个人策略协议；创建它不等于启动行动。"""
+
+    __tablename__ = "personal_strategy_units"
+    __table_args__ = (
+        Index("ix_personal_strategy_units_user_created", "user_id", "created_at", "id"),
+    )
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    template_id: Mapped[str] = mapped_column(String(80), index=True)
+    template_version: Mapped[str] = mapped_column(String(40))
+    strategy_id: Mapped[str] = mapped_column(String(100), index=True)
+    protocol_version: Mapped[str] = mapped_column(String(40))
+    metric_version: Mapped[str] = mapped_column(String(40))
+    context_schema_version: Mapped[str] = mapped_column(String(40))
+    context_key: Mapped[str] = mapped_column(String(64), index=True)
+    protocol_json: Mapped[str] = mapped_column(Text, default="{}")
+    context_json: Mapped[str] = mapped_column(Text, default="{}")
+    state_snapshot_hash: Mapped[str] = mapped_column(String(64), default="")
+    protocol_hash: Mapped[str] = mapped_column(String(64), index=True)
+    baseline_refs_json: Mapped[str] = mapped_column(Text, default="[]")
+    status: Mapped[str] = mapped_column(String(20), default="compiled", index=True)
+
+
+class PolicyEpisode(Base, TimestampMixin):
+    """一次用户确认的行动-观察周期。"""
+
+    __tablename__ = "policy_episodes"
+    __table_args__ = (
+        Index("ix_policy_episodes_user_status", "user_id", "status"),
+        UniqueConstraint("legacy_experiment_id", name="uq_policy_episode_legacy_experiment"),
+    )
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    unit_id: Mapped[str] = mapped_column(ForeignKey("personal_strategy_units.id"), index=True)
+    legacy_experiment_id: Mapped[int | None] = mapped_column(nullable=True)
+    decision_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    learning_epoch: Mapped[str] = mapped_column(String(128), default="")
+    status: Mapped[str] = mapped_column(String(24), default="active", index=True)
+    start_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+    end_at: Mapped[datetime] = mapped_column(DateTime)
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    review_revision: Mapped[int] = mapped_column(Integer, default=0)
+    effective_adjudication_revision: Mapped[int | None] = mapped_column(nullable=True)
+    protocol_snapshot_json: Mapped[str] = mapped_column(Text, default="{}")
+    execution_json: Mapped[str] = mapped_column(Text, default="[]")
+    context_key: Mapped[str] = mapped_column(String(64), index=True)
+    stop_reason: Mapped[str | None] = mapped_column(String(120), nullable=True)
+
+
+class PolicyExecutionOpportunity(Base):
+    __tablename__ = "policy_execution_opportunities"
+    __table_args__ = (
+        UniqueConstraint("episode_id", "slot", name="uq_policy_opportunity_slot"),
+        Index("ix_policy_opportunity_user", "user_id"),
+    )
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    episode_id: Mapped[str] = mapped_column(ForeignKey("policy_episodes.id"), index=True)
+    scheduled_at: Mapped[datetime] = mapped_column(DateTime, index=True)
+    slot: Mapped[int] = mapped_column(Integer)
+    frozen_action_json: Mapped[str] = mapped_column(Text, default="{}")
+    current_report_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+
+class PolicyReport(Base):
+    __tablename__ = "policy_reports"
+    __table_args__ = (
+        UniqueConstraint("user_id", "client_report_id", name="uq_policy_report_client_id"),
+        UniqueConstraint("opportunity_id", "revision", name="uq_policy_report_opportunity_revision"),
+        Index("ix_policy_reports_episode", "episode_id"),
+    )
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    client_report_id: Mapped[str] = mapped_column(String(96))
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    episode_id: Mapped[str] = mapped_column(ForeignKey("policy_episodes.id"), index=True)
+    opportunity_id: Mapped[str] = mapped_column(ForeignKey("policy_execution_opportunities.id"), index=True)
+    revision: Mapped[int] = mapped_column(Integer, default=1)
+    execution: Mapped[str] = mapped_column(String(32), default="unknown")
+    burden: Mapped[float | None] = mapped_column(Float, nullable=True)
+    confounders_json: Mapped[str] = mapped_column(Text, default="[]")
+    received_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+    source_version: Mapped[int] = mapped_column(Integer, default=1)
+    payload_hash: Mapped[str] = mapped_column(String(64), default="")
+
+
+class PolicyObservationRef(Base):
+    __tablename__ = "policy_observation_refs"
+    __table_args__ = (
+        UniqueConstraint("episode_id", "endpoint", "slot", name="uq_policy_observation_slot"),
+        Index("ix_policy_observation_source", "user_id", "source_type", "source_id"),
+    )
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    episode_id: Mapped[str] = mapped_column(ForeignKey("policy_episodes.id"), index=True)
+    endpoint: Mapped[str] = mapped_column(String(24))
+    slot: Mapped[int] = mapped_column(Integer)
+    source_type: Mapped[str] = mapped_column(String(48))
+    source_id: Mapped[str] = mapped_column(String(96))
+    source_revision: Mapped[int] = mapped_column(Integer)
+    value_json: Mapped[str] = mapped_column(Text, default="null")
+    observed_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+    metric_version: Mapped[str] = mapped_column(String(40))
+    confirmed: Mapped[bool] = mapped_column(Boolean, default=True)
+    valid: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+
+
+class PolicyAdjudication(Base):
+    __tablename__ = "policy_adjudications"
+    __table_args__ = (
+        UniqueConstraint("episode_id", "revision", name="uq_policy_adjudication_revision"),
+        Index("ix_policy_adjudication_user", "user_id"),
+    )
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    episode_id: Mapped[str] = mapped_column(ForeignKey("policy_episodes.id"), index=True)
+    revision: Mapped[int] = mapped_column(Integer)
+    learning_epoch: Mapped[str] = mapped_column(String(128), default="")
+    execution_label: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    support_label: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    availability_label: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    conclusion: Mapped[str] = mapped_column(String(48))
+    reasons_json: Mapped[str] = mapped_column(Text, default="[]")
+    evidence_refs_json: Mapped[str] = mapped_column(Text, default="[]")
+    source_hash: Mapped[str] = mapped_column(String(64), default="")
+    algorithm_version: Mapped[str] = mapped_column(String(40))
+    gate_version: Mapped[str] = mapped_column(String(40))
+    valid: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    stale: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+
+
+class PersonalPolicyBelief(Base, TimestampMixin):
+    __tablename__ = "personal_policy_beliefs"
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id", "strategy_id", "protocol_version", "metric_version",
+            "context_key", "endpoint", "learning_epoch", name="uq_personal_policy_belief_key"
+        ),
+    )
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    strategy_id: Mapped[str] = mapped_column(String(100), index=True)
+    protocol_version: Mapped[str] = mapped_column(String(40))
+    metric_version: Mapped[str] = mapped_column(String(40))
+    context_key: Mapped[str] = mapped_column(String(64), index=True)
+    endpoint: Mapped[str] = mapped_column(String(24))
+    learning_epoch: Mapped[str] = mapped_column(String(128), default="")
+    alpha: Mapped[float] = mapped_column(Float, default=1.0)
+    beta: Mapped[float] = mapped_column(Float, default=1.0)
+    positive_count: Mapped[int] = mapped_column(Integer, default=0)
+    negative_count: Mapped[int] = mapped_column(Integer, default=0)
+    generation: Mapped[int] = mapped_column(Integer, default=0)
+    valid_until: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class PolicyDecision(Base):
+    __tablename__ = "policy_decisions"
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    state_hash: Mapped[str] = mapped_column(String(64), default="")
+    belief_generation: Mapped[int] = mapped_column(Integer, default=0)
+    candidate_json: Mapped[str] = mapped_column(Text, default="[]")
+    selected_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    policy_mode: Mapped[str] = mapped_column(String(40), default="deterministic_heuristic")
+    propensity_json: Mapped[str] = mapped_column(Text, default="{}")
+    config_hash: Mapped[str] = mapped_column(String(64), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, index=True)
+
+
+class PolicyOutbox(Base):
+    __tablename__ = "policy_outbox"
+    __table_args__ = (
+        UniqueConstraint("user_id", "event_type", "ref_id", "revision", name="uq_policy_outbox_event"),
+        Index("ix_policy_outbox_status_retry", "status", "next_retry_at"),
+    )
+    event_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    event_type: Mapped[str] = mapped_column(String(64))
+    ref_id: Mapped[str] = mapped_column(String(64))
+    revision: Mapped[int] = mapped_column(Integer, default=1)
+    payload: Mapped[str] = mapped_column(Text, default="{}")
+    status: Mapped[str] = mapped_column(String(20), default="pending", index=True)
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    next_retry_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+
+
+class PolicyActiveSlot(Base):
+    __tablename__ = "policy_active_slots"
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), primary_key=True)
+    episode_kind: Mapped[str] = mapped_column(String(40), default="policy")
+    episode_id: Mapped[str] = mapped_column(String(64))
+    version: Mapped[int] = mapped_column(Integer, default=1)
+
+
+class PolicyDomainGeneration(Base):
+    __tablename__ = "policy_domain_generations"
+    __table_args__ = (UniqueConstraint("user_id", "domain", name="uq_policy_domain_generation"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    domain: Mapped[str] = mapped_column(String(64))
+    source_generation: Mapped[int] = mapped_column(Integer, default=0)
+    processed_generation: Mapped[int] = mapped_column(Integer, default=0)
+
+
+class PolicyLearningControl(Base):
+    __tablename__ = "policy_learning_controls"
+    __table_args__ = (UniqueConstraint("user_id", "scope_key", name="uq_policy_learning_control"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    scope_key: Mapped[str] = mapped_column(String(160))
+    epoch_counter: Mapped[int] = mapped_column(Integer, default=0)
+    learning_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    reset_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class HarnessPluginInstallation(Base, TimestampMixin):
+    """User consent/configuration for a reviewed Harness capability."""
+
+    __tablename__ = "harness_plugin_installations"
+    __table_args__ = (
+        UniqueConstraint("user_id", "plugin_id", name="uq_harness_plugin_installation"),
+        Index("ix_harness_plugin_installations_user", "user_id"),
+    )
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    plugin_id: Mapped[str] = mapped_column(String(80))
+    plugin_version: Mapped[str] = mapped_column(String(40))
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    config_json: Mapped[str] = mapped_column(Text, default="{}")
+    enabled_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    disabled_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

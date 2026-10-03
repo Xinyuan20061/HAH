@@ -46,6 +46,11 @@ from app.schemas.records import (
     MEAL_TYPES,
 )
 from app.services.evaluation import record_metric
+from app.services.health_state.invalidation import (
+    SOURCE_DIET,
+    SOURCE_EXERCISE,
+    record_changed,
+)
 from app.services.timeline import add_event
 
 router = APIRouter(tags=["records"])
@@ -132,7 +137,12 @@ def add_diet(body: DietIn, user=Depends(current_user), db: Session = Depends(get
     )
     db.commit()
     db.refresh(record)
-    return _view(record)
+    # Capability plan §4.5: the persisted features derived from diet records are now
+    # stale and are removed before anything reads them again.
+    invalidated = record_changed(db, user.id, SOURCE_DIET)
+    view = _view(record)
+    view.state_invalidated = list(invalidated.get("affected", []))
+    return view
 
 
 @router.get("/diet/records", response_model=DietRecordPage)
@@ -300,7 +310,10 @@ def patch_diet(
     )
     db.commit()
     db.refresh(record)
-    return _view(record)
+    invalidated = record_changed(db, user.id, SOURCE_DIET)
+    view = _view(record)
+    view.state_invalidated = list(invalidated.get("affected", []))
+    return view
 
 
 @router.delete("/diet/records/{record_id}")
@@ -354,7 +367,13 @@ def delete_diet(
     )
     db.delete(record)
     db.commit()
-    return {"ok": True, "record_id": record_id, "audit_id": audit.id}
+    invalidated = record_changed(db, user.id, SOURCE_DIET)
+    return {
+        "ok": True,
+        "record_id": record_id,
+        "audit_id": audit.id,
+        "state_invalidated": invalidated.get("affected", []),
+    }
 
 
 @router.post("/exercise/records", response_model=ExerciseOut)
@@ -375,6 +394,7 @@ def add_exercise(
     )
     db.commit()
     db.refresh(x)
+    record_changed(db, user.id, SOURCE_EXERCISE)
     return x
 
 
@@ -405,6 +425,7 @@ def delete_exercise(
         )
         db.delete(x)
         db.commit()
+        record_changed(db, user.id, SOURCE_EXERCISE)
     else:
         raise ApiException(404, "EXERCISE_RECORD_NOT_FOUND", "运动记录不存在")
     return {"ok": True}

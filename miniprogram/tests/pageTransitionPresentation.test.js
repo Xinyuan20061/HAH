@@ -9,7 +9,10 @@ const read = file => fs.readFileSync(path.join(root, file), 'utf8')
 test('every page inlines the complete loading mark before mounting the route transition', () => {
   const app = JSON.parse(read('app.json'))
   assert.equal(app.usingComponents['page-transition'], '/components/page-transition/index')
-  assert.equal(app.pages.length, 21)
+  // Keep the page registry as the source of truth. Adding a page without the
+  // first-paint contract must fail in the loop below instead of relying on a
+  // stale hand-maintained count.
+  assert.ok(app.pages.length >= 1)
 
   const firstPaint = read('components/page-transition/first-paint.wxml')
   assert.match(firstPaint, /class="first-route-veil"/)

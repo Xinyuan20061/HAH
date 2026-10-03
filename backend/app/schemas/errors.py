@@ -58,6 +58,9 @@ DETAIL_WHITELIST: frozenset[str] = frozenset(
         "unsupported_schema_version",
         "supported_schema_versions",
         "required_confirmation",
+        # A machine-readable list of accepted values for an enum-like field. Used
+        # when rejecting an unknown preference key so a client can self-correct.
+        "allowed_values",
     }
 )
 

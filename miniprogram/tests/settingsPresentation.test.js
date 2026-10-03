@@ -12,12 +12,13 @@ test('settings hub centralizes services preferences and account routes', () => {
   const script = read('pages/settings/index.js')
 
   assert.ok(app.pages.includes('pages/settings/index'))
-  for (const label of ['文字模型', '语音服务', '默认陪伴', '自动播放回答', '健康目标', '身体档案', '隐私与数据', '运行评测']) {
+  for (const label of ['文字模型', '语音服务', '默认陪伴', '自动播放回答', '饮食记录', '健康能力', '健康目标', '身体档案', '隐私与数据', '运行评测']) {
     assert.match(view, new RegExp(label))
   }
   assert.match(script, /healthmate_agent_id/)
   assert.match(script, /healthmate_voice_autoplay/)
   assert.match(script, /\/pages\/settings\/ai\/index\?section=voice/)
+  assert.match(script, /dietRecords\(\)\s*\{\s*wx\.navigateTo\(\{ url: '\/pages\/records\/diet' \}\)/)
 })
 
 test('AI settings exposes text and voice providers in one configuration surface', () => {

@@ -1,0 +1,10 @@
+[
+  {"id":"missing_execution","kind":"gate","expected":"insufficient_data"},
+  {"id":"insufficient_exposure","kind":"gate","expected":"insufficient_exposure"},
+  {"id":"supports_target","kind":"outcome","expected":"supports_observed_target"},
+  {"id":"target_not_supported","kind":"outcome","expected":"target_not_supported"},
+  {"id":"ambiguous_target","kind":"outcome","expected":"ambiguous"},
+  {"id":"confounded","kind":"outcome","expected":"incomparable"},
+  {"id":"stopped","kind":"outcome","expected":"stopped"},
+  {"id":"hard_constraint","kind":"ranking","expected":"safe"}
+]

@@ -42,7 +42,7 @@ TYPED_CONFIRMATION_REQUIRED: dict[str, str] = {
 
 # Actions the model may never propose (spec §8.4).
 MODEL_FORBIDDEN_ACTIONS: frozenset[str] = frozenset(
-    {"experiment.start", "experiment.finish", "experiment.cancel"}
+    {"experiment.start", "experiment.finish", "experiment.cancel", "policy.episode.start", "policy.episode.finish", "policy.episode.stop", "policy.memory.reset"}
 )
 
 
@@ -62,6 +62,22 @@ class PlanApplyArgs(ActionArguments):
 
 class GoalAdjustmentApplyArgs(ActionArguments):
     adjustment_id: int = Field(ge=1)
+
+
+class PlanReplanApplyArgs(ActionArguments):
+    """Replan confirmation.
+
+    The diff itself is recomputed from the live plan at confirm time rather than
+    accepted from the caller: a client-supplied diff would let an edited payload
+    rewrite arbitrary plan items, which is exactly what the payload hash exists to
+    prevent. ``reason`` is recorded for the audit trail.
+    """
+
+    plan_id: int = Field(ge=1)
+    goal: str = Field(default="fitness", max_length=20)
+    days_per_week: int = Field(default=3, ge=1, le=7)
+    minutes_per_session: int = Field(default=30, ge=10, le=120)
+    reason: str = Field(default="state_change", max_length=120)
 
 
 class DietFinalizeArgs(ActionArguments):
@@ -89,8 +105,31 @@ class PrivacyDeleteArgs(ActionArguments):
     reason: str = Field(default="user_request", max_length=120)
 
 
+class PolicyEpisodeStartArgs(ActionArguments):
+    strategy_unit_id: str = Field(min_length=1, max_length=64)
+    protocol_hash: str = Field(min_length=64, max_length=64)
+    version: int = Field(default=1, ge=1)
+    decision_id: str | None = Field(default=None, max_length=64)
+
+
+class PolicyEpisodeFinishArgs(ActionArguments):
+    episode_id: str = Field(min_length=1, max_length=64)
+    episode_version: int = Field(ge=1)
+
+
+class PolicyEpisodeStopArgs(PolicyEpisodeFinishArgs):
+    reason_code: str = Field(min_length=1, max_length=120)
+
+
+class PolicyMemoryResetArgs(ActionArguments):
+    strategy_id: str | None = Field(default=None, max_length=100)
+    scope: str = Field(default="strategy", pattern="^(strategy|all)$")
+    version: int = Field(default=1, ge=1)
+
+
 ARGUMENT_SCHEMAS: dict[str, type[ActionArguments]] = {
     "plan.apply": PlanApplyArgs,
+    "plan.replan.apply": PlanReplanApplyArgs,
     "goal.adjustment.apply": GoalAdjustmentApplyArgs,
     "diet.ai.finalize": DietFinalizeArgs,
     "experiment.start": ExperimentStartArgs,
@@ -98,6 +137,10 @@ ARGUMENT_SCHEMAS: dict[str, type[ActionArguments]] = {
     "experiment.cancel": ExperimentIdArgs,
     "privacy.export": PrivacyExportArgs,
     "privacy.account.delete": PrivacyDeleteArgs,
+    "policy.episode.start": PolicyEpisodeStartArgs,
+    "policy.episode.finish": PolicyEpisodeFinishArgs,
+    "policy.episode.stop": PolicyEpisodeStopArgs,
+    "policy.memory.reset": PolicyMemoryResetArgs,
 }
 
 
@@ -206,6 +249,13 @@ def propose_action(
     # (a separate session) even if the caller's turn later fails or is cancelled.
     db.commit()
     db.refresh(proposal)
+    # `active_actions` is part of the snapshot contract: it is what stops a second
+    # proposal for the same action from being offered. A new pending proposal changes
+    # that set, so the snapshot must be refreshed or the Decision Contract would keep
+    # offering the action it already has pending (plan §4.5/§8.4).
+    from app.services.health_state.invalidation import active_actions_changed
+
+    active_actions_changed(db, proposal.user_id)
     return proposal, ""
 
 
@@ -432,6 +482,13 @@ def confirm_proposal(
     proposal.audit_id = audit.id
     db.add_all([audit, proposal])
     db.commit()
+    _record_outcome(db, proposal, result)
+    # The action is no longer pending, so `active_actions` changed. Refresh before
+    # returning so the next Decision Contract sees the new state rather than the
+    # proposal it just executed.
+    from app.services.health_state.invalidation import active_actions_changed
+
+    active_actions_changed(db, proposal.user_id)
     return {
         "proposal_id": proposal.proposal_id,
         "status": "executed",
@@ -439,6 +496,36 @@ def confirm_proposal(
         "audit_id": audit.id,
         "result": result,
     }
+
+
+def _record_outcome(db: Session, proposal: AgentActionProposal, result) -> None:
+    """Feed the observed result into the policy statistics (plan §9.2).
+
+    Recording is best-effort: a failed outcome write must never turn a successful
+    action into an error for the user, and the safety-relevant audit row is already
+    committed above.
+    """
+    try:
+        from app.services.agent.outcome import record_outcome
+
+        record_outcome(
+            db,
+            user_id=proposal.user_id,
+            action_key=proposal.action_key,
+            result="completed",
+            source="proposal",
+            # Keyed by the proposal so an executor that already recorded a more
+            # specific verdict for the same event is not double-counted.
+            source_id=f"proposal:{proposal.proposal_id}",
+            variant="default",
+            conclusion="changed",
+            observed={
+                "audit_id": proposal.audit_id,
+                "result_keys": sorted(result) if isinstance(result, dict) else [],
+            },
+        )
+    except Exception:  # noqa: BLE001 - never fail a confirmed user action here
+        db.rollback()
 
 
 def proposal_result(db: Session, proposal: AgentActionProposal) -> dict:

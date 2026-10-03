@@ -1,0 +1,23 @@
+<include src="/components/page-transition/first-paint.wxml"/>
+<page-transition/>
+<view class="page capability-page ui-page-content">
+  <view class="capability-head">
+    <view class="eyebrow">YOUR HEALTH CAPABILITIES</view>
+    <view class="page-title">健康能力</view>
+    <view class="intro">选择你希望 HealthMate 帮你持续关注的事情。每项能力都只使用你授权的数据，也可以随时暂停。</view>
+  </view>
+
+  <view wx:if="{{loading}}" class="state-card"><view class="state-spinner"></view><view class="state-title">正在读取健康能力</view></view>
+  <view wx:elif="{{error}}" class="state-card state-card-error"><view class="grow"><view class="state-title">能力列表没有加载出来</view><view class="state-desc">{{error}}</view></view><button class="retry-btn tappable" bindtap="retry" hover-class="tap-btn">重试</button></view>
+  <view wx:else>
+    <view wx:for="{{plugins}}" wx:key="plugin_id" class="capability-card {{item.enabled?'enabled':'paused'}}">
+      <view class="capability-top"><view class="capability-mark">{{item.enabled?'✓':'·'}}</view><view class="grow"><view class="capability-title">{{item.title}}</view><view class="capability-summary">{{item.summary}}</view></view><button class="capability-toggle tappable" data-plugin="{{item}}" bindtap="toggle" loading="{{busy===item.plugin_id}}" hover-class="tap-btn">{{item.enabled?'暂停':'开启'}}</button></view>
+      <view class="capability-value">{{item.user_value}}</view>
+      <view class="capability-section"><view class="label">需要使用</view><view class="chips"><text wx:for="{{item.data_needed}}" wx:key="*this" class="chip">{{item}}</text></view></view>
+      <view class="privacy-note">{{item.privacy_summary}}</view>
+      <view wx:if="{{item.enabled}}" class="enabled-note">已开启 · 新的行动仍需你确认</view>
+      <view wx:else class="paused-note">已暂停 · 历史记录不会被删除</view>
+    </view>
+    <view class="bottom-note">能力输出是一般健康参考，不替代医生诊断。数据不足时，HealthMate 会明确告诉你“还不知道”。</view>
+  </view>
+</view>

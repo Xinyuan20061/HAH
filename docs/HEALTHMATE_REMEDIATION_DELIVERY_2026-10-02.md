@@ -1,7 +1,7 @@
 # HealthMate 全链路整改交付报告（对照 2026-10-02 规格）
 
 > 规格：`docs/HEALTHMATE_FULL_REMEDIATION_DEVELOPMENT_SPEC_2026-10-02.md`
-> 迁移基线：`0026_product_closure_and_agent_actions`（`alembic heads` 命令结果，禁止手写）
+> 迁移基线：以 `alembic heads` 命令结果为准（本文不手写修订号，避免过期引用）
 > 原则：本文只写已经执行并通过的证据；未执行、未达标、需要真实数据或真机才能完成的部分，单独在 §4 如实列出，不并入"已完成"。
 
 ---

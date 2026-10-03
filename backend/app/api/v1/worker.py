@@ -812,6 +812,24 @@ def fail(job_id: int, body: WorkerFailIn, db: Session = Depends(get_db)):
     else:
         job.status = "failed"
         job.finished_at = utc_now()
+        # Event-chain fix (R12): a permanently-failed job must advance the
+        # linked MotionAnalysisRun to a terminal state. Previously the failure
+        # was never propagated to the run, so the miniprogram kept polling
+        # GET /motion-analyses/{id} on a run that stayed queued/processing and
+        # "正在处理…" never resolved (job 67 / run 13 incident).
+        run = db.scalar(
+            select(MotionAnalysisRun).where(MotionAnalysisRun.ai_job_id == job.id)
+        )
+        if run is not None and run.status not in {
+            "completed",
+            "partial",
+            "failed",
+            "cancelled",
+        }:
+            run.status = "failed"
+            run.error_code = body.error_code
+            if run.finished_at is None:
+                run.finished_at = utc_now()
         metric_name = (
             "motion_processing_ms"
             if job.job_type == "motion_pose"

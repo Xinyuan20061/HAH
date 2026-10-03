@@ -91,6 +91,10 @@ class DietOut(BaseModel):
     items: list[dict] = Field(default_factory=list, max_length=MAX_FOOD_ITEMS)
     recorded_at: UTCDateTime
     version: int = 1
+    # Capability plan §4.5: after a write, the state features derived from this record
+    # are invalidated and recomputed. Reporting which ones makes the propagation
+    # observable to the client instead of an invisible side effect. Empty on reads.
+    state_invalidated: list[str] = Field(default_factory=list)
 
 
 class DietRecordPatch(BaseModel):

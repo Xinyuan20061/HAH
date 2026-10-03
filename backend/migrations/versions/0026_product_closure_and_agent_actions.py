@@ -40,15 +40,17 @@ def upgrade():
     # --- alembic_version.version_num is VARCHAR(32) by default; the 0026
     # revision id ("0026_product_closure_and_agent_actions", 38 chars) exceeds
     # that length, so widen the column before the final version write.
-    # MySQL DDL is non-transactional; the length guard keeps this idempotent.
-    av_cols = {c["name"]: c for c in insp.get_columns("alembic_version")}
-    if "version_num" in av_cols:
-        av_len = getattr(av_cols["version_num"]["type"], "length", 32) or 32
-        if av_len < 64:
-            op.execute(
-                "ALTER TABLE alembic_version MODIFY COLUMN version_num VARCHAR(64) NOT NULL"
-            )
-            insp = inspect(bind)
+    # MySQL only: SQLite has no fixed column length, so the ALTER is neither
+    # needed nor valid there. The length guard keeps the ALTER idempotent.
+    if bind.dialect.name == "mysql":
+        av_cols = {c["name"]: c for c in insp.get_columns("alembic_version")}
+        if "version_num" in av_cols:
+            av_len = getattr(av_cols["version_num"]["type"], "length", 32) or 32
+            if av_len < 64:
+                op.execute(
+                    "ALTER TABLE alembic_version MODIFY COLUMN version_num VARCHAR(64) NOT NULL"
+                )
+                insp = inspect(bind)
 
     table_names = set(insp.get_table_names())
     has_diet = "diet_records" in table_names

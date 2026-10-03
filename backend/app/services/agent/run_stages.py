@@ -148,17 +148,31 @@ class RunRecorder:
 
 
 class TurnBudget:
-    """Per-turn provider-call budget (spec §8.6).
+    """Per-turn provider-call budget (capability plan §13.5 / spec §8.6).
 
-    ``max_calls`` mirrors the published table: 0 for a safety short circuit, 2
-    for a single-domain question, 4-5 for cross-domain collaboration. Exceeding
-    it degrades safely rather than calling the provider again.
+    Published table: 0 for a safety short circuit, 2 for a single-domain question,
+    5 for cross-domain collaboration. Exceeding a cap degrades safely rather than
+    calling the provider again.
     """
+
+    SIMPLE_TASK_MAX_CALLS = 2
+    CROSS_DOMAIN_MAX_CALLS = 5
 
     def __init__(self, max_calls: int):
         self.max_calls = max(0, int(max_calls))
         self.started = time.perf_counter()
         self.used = 0
+
+    @classmethod
+    def for_task(cls, *, blocked: bool = False, worker_count: int = 1) -> "TurnBudget":
+        """Budget derived from the task's real breadth.
+
+        A single-domain turn gets the simple-task cap of 2; a turn that actually
+        fans out to more than one domain worker gets the cross-domain cap of 5.
+        """
+        if blocked:
+            return cls(0)
+        return cls(cls.SIMPLE_TASK_MAX_CALLS if worker_count <= 1 else cls.CROSS_DOMAIN_MAX_CALLS)
 
     def allow(self, *, needed: int = 1) -> bool:
         return self.used + needed <= self.max_calls
@@ -170,6 +184,12 @@ class TurnBudget:
         self.used += max(0, int(calls))
 
     @property
+    def scope(self) -> str:
+        if self.max_calls == 0:
+            return "blocked"
+        return "simple" if self.max_calls <= self.SIMPLE_TASK_MAX_CALLS else "cross_domain"
+
+    @property
     def elapsed_ms(self) -> int:
         return max(0, int((time.perf_counter() - self.started) * 1000))
 
@@ -177,5 +197,6 @@ class TurnBudget:
         return {
             "max_model_calls": self.max_calls,
             "used_model_calls": self.used,
+            "scope": self.scope,
             "elapsed_ms": self.elapsed_ms,
         }

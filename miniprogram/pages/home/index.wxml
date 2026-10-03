@@ -17,6 +17,11 @@
         <view class="week-strip">
           <view class="week-day {{item.done?'done':''}}" wx:for="{{streak.last7}}" wx:key="date"><view class="week-core"></view><text>{{item.label}}</text></view>
         </view>
+        <!-- 方案 §14 第 7 条「跨模态闭环」的入口：建议 → 状态 → 做过之后的变化 -->
+        <view class="state-entry tappable" bindtap="goState" hover-class="tap-card" hover-start-time="0" hover-stay-time="80">
+          <view class="state-entry-text"><view class="state-entry-title">状态与下一步</view><view class="state-entry-sub">建议、依据、上次做完的变化</view></view>
+          <view class="state-entry-arrow">→</view>
+        </view>
         <view class="companion-switch">
           <view class="companion-choice tappable {{item.id===activeCompanion.id?'selected':''}}" wx:for="{{companions}}" wx:key="id" data-id="{{item.id}}" bindtap="selectCompanion" hover-class="tap" hover-start-time="0" hover-stay-time="80">
             <image src="{{item.icon}}" mode="aspectFit"/><view><view class="choice-name">{{item.name}}</view><view class="choice-role">{{item.role}}</view></view>

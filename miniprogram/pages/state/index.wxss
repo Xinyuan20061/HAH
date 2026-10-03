@@ -1,0 +1,463 @@
+/* 状态与下一步 —— 只使用 §1 token 与 4rpx 间距刻度。
+   动画只用于"表达状态"（入场淡入、骨架屏），不做装饰。 */
+
+.state-page {
+  background: linear-gradient(180deg, #f7f7f2 0, #f7f7f2 340rpx);
+}
+
+.intro {
+  margin-top: 8rpx;
+  margin-bottom: 32rpx;
+}
+
+/* ---------- 骨架屏 ---------- */
+
+.sk-card {
+  padding: 32rpx;
+}
+
+.sk-line-lg {
+  height: 40rpx;
+  margin-bottom: 20rpx;
+}
+
+.sk-line-md {
+  height: 24rpx;
+  margin-bottom: 16rpx;
+}
+
+.sk-line-sm {
+  height: 24rpx;
+  width: 60%;
+}
+
+/* ---------- 区块 1：下一步 ---------- */
+
+.next-card {
+  /* 深色特性卡：保持近黑，卡内浅色文字原样保留 */
+  background: #111613;
+  border: 0;
+  animation: stateIn 360ms cubic-bezier(.2, .8, .2, 1);
+}
+
+.next-label {
+  font-size: 22rpx;
+  color: #c4e267;
+  letter-spacing: 2rpx;
+}
+
+.next-title {
+  margin-top: 12rpx;
+  font-size: 40rpx;
+  font-weight: 740;
+  color: #ffffff;
+  line-height: 1.4;
+}
+
+.next-reason {
+  margin-top: 16rpx;
+  font-size: 26rpx;
+  color: #e9efd9;
+  line-height: 1.7;
+}
+
+.next-cta {
+  margin-top: 32rpx;
+  /* 柠檬绿只作填充，压在其上的文字必须是 #111613 */
+  background: #c4e267;
+  color: #111613;
+  font-size: 30rpx;
+  font-weight: 720;
+  text-align: center;
+  padding: 24rpx;
+  border-radius: 999rpx;
+}
+
+.next-hint {
+  margin-top: 16rpx;
+  font-size: 22rpx;
+  color: #9aa88b;
+  text-align: center;
+}
+
+.alt-card {
+  padding: 32rpx;
+}
+
+.alt-title {
+  font-size: 26rpx;
+  font-weight: 700;
+  margin-bottom: 8rpx;
+}
+
+.alt-row {
+  padding: 24rpx 0;
+  border-top: 1rpx solid #eeeee6;
+}
+
+.alt-row:first-of-type {
+  border-top: 0;
+}
+
+.alt-name {
+  font-size: 28rpx;
+  font-weight: 680;
+}
+
+.alt-reason {
+  margin-top: 8rpx;
+  font-size: 23rpx;
+  color: #5f665f;
+  line-height: 1.6;
+}
+
+/* ---------- 证据与权重 ---------- */
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8rpx;
+  margin-top: 20rpx;
+}
+
+.chip {
+  font-size: 21rpx;
+  color: #111613;
+  background: #e9efd9;
+  border-radius: 999rpx;
+  padding: 8rpx 16rpx;
+}
+
+.why {
+  margin-top: 24rpx;
+  padding-top: 24rpx;
+  border-top: 1rpx solid #2f3a1e;
+}
+
+.why-title {
+  font-size: 24rpx;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.why-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12rpx 0;
+}
+
+.why-name {
+  font-size: 23rpx;
+  color: #e9efd9;
+}
+
+.why-value {
+  font-size: 23rpx;
+  color: #c4e267;
+  font-weight: 680;
+}
+
+.why-note {
+  margin-top: 12rpx;
+  font-size: 21rpx;
+  color: #9aa88b;
+  line-height: 1.6;
+}
+
+/* ---------- 区块 2：状态 ---------- */
+
+.state-list {
+  padding: 8rpx 32rpx;
+}
+
+.state-row {
+  padding: 24rpx 0;
+  border-top: 1rpx solid #eeeee6;
+}
+
+.state-row:first-child {
+  border-top: 0;
+}
+
+.state-row-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.state-row-name {
+  font-size: 27rpx;
+  font-weight: 680;
+}
+
+.state-row-value {
+  font-size: 30rpx;
+  font-weight: 740;
+  color: #506336;
+}
+
+.state-row-missing {
+  font-size: 25rpx;
+  color: #9b5b00;
+}
+
+.state-row-meta {
+  margin-top: 8rpx;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.meta-item {
+  font-size: 21rpx;
+  color: #5f665f;
+}
+
+.meta-dot {
+  font-size: 21rpx;
+  color: #5f665f;
+  margin: 0 8rpx;
+}
+
+.state-row-limit {
+  margin-top: 8rpx;
+}
+
+.limit-line {
+  display: block;
+  font-size: 21rpx;
+  color: #5f665f;
+  line-height: 1.6;
+}
+
+.miss-card,
+.cons-card {
+  padding: 32rpx;
+}
+
+.miss-title,
+.cons-title {
+  font-size: 26rpx;
+  font-weight: 700;
+  margin-bottom: 16rpx;
+}
+
+.miss-row {
+  font-size: 23rpx;
+  color: #5f665f;
+  line-height: 1.7;
+}
+
+.cons-row {
+  display: flex;
+  align-items: flex-start;
+  padding: 16rpx 0;
+  border-top: 1rpx solid #eeeee6;
+}
+
+.cons-row:first-of-type {
+  border-top: 0;
+}
+
+.cons-tag {
+  flex: none;
+  font-size: 20rpx;
+  border-radius: 999rpx;
+  padding: 4rpx 12rpx;
+  margin-right: 16rpx;
+}
+
+.cons-tag.hard {
+  /* 语义色不随换肤改变 */
+  background: #f3ded9;
+  color: #c0392b;
+}
+
+.cons-tag.soft {
+  background: #e9efd9;
+  color: #506336;
+}
+
+.cons-text {
+  flex: 1;
+  font-size: 23rpx;
+  color: #111613;
+  line-height: 1.6;
+}
+
+.cons-note,
+.mem-note,
+.policy-note {
+  margin-top: 16rpx;
+  font-size: 21rpx;
+  color: #5f665f;
+  line-height: 1.6;
+}
+
+.state-asof {
+  margin-top: 16rpx;
+  font-size: 21rpx;
+  color: #5f665f;
+  text-align: center;
+}
+
+/* ---------- 区块 3：做过之后 ---------- */
+
+.out-card,
+.policy-card,
+.mem-card {
+  padding: 32rpx;
+}
+
+.out-row {
+  padding: 24rpx 0;
+  border-top: 1rpx solid #eeeee6;
+}
+
+.out-row:first-child {
+  border-top: 0;
+}
+
+.out-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.out-action {
+  font-size: 26rpx;
+  font-weight: 680;
+}
+
+.out-conclusion {
+  font-size: 21rpx;
+  border-radius: 999rpx;
+  padding: 4rpx 12rpx;
+}
+
+.out-conclusion.ok {
+  background: #e9efd9;
+  color: #506336;
+}
+
+.out-conclusion.weak {
+  background: #f7f1e2;
+  color: #9b5b00;
+}
+
+.out-time {
+  margin-top: 8rpx;
+  font-size: 21rpx;
+  color: #5f665f;
+}
+
+.policy-title,
+.mem-title {
+  font-size: 26rpx;
+  font-weight: 700;
+  margin-bottom: 8rpx;
+}
+
+.policy-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  padding: 20rpx 0;
+  border-top: 1rpx solid #eeeee6;
+}
+
+.policy-row:first-of-type {
+  border-top: 0;
+}
+
+.policy-name {
+  flex: 1;
+  font-size: 24rpx;
+  font-weight: 660;
+}
+
+.policy-num {
+  font-size: 21rpx;
+  color: #5f665f;
+  margin-right: 16rpx;
+}
+
+.policy-flag {
+  font-size: 20rpx;
+  color: #506336;
+  background: #e9efd9;
+  border-radius: 999rpx;
+  padding: 4rpx 12rpx;
+}
+
+.mem-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  padding: 20rpx 0;
+  border-top: 1rpx solid #eeeee6;
+}
+
+.mem-row:first-of-type {
+  border-top: 0;
+}
+
+.mem-key {
+  font-size: 24rpx;
+  font-weight: 660;
+  margin-right: 16rpx;
+}
+
+.mem-value {
+  flex: 1;
+  font-size: 23rpx;
+  color: #5f665f;
+}
+
+.mem-steer {
+  font-size: 20rpx;
+  color: #506336;
+  background: #e9efd9;
+  border-radius: 999rpx;
+  padding: 4rpx 12rpx;
+}
+
+.out-note,
+.policy-foot {
+  margin-top: 24rpx;
+  font-size: 21rpx;
+  color: #5f665f;
+  line-height: 1.7;
+}
+
+/* ---------- 底部入口 ---------- */
+
+.foot-links {
+  display: flex;
+  gap: 16rpx;
+  margin-top: 32rpx;
+}
+
+.foot-link {
+  flex: 1;
+  text-align: center;
+  font-size: 24rpx;
+  color: #506336;
+  background: #ffffff;
+  border: 1rpx solid #eeeee6;
+  border-radius: 999rpx;
+  padding: 20rpx 8rpx;
+}
+
+/* 内容入场：挂载即播放，不改 JS。只用 opacity/transform。 */
+@keyframes stateIn {
+  from {
+    opacity: 0;
+    transform: translateY(12rpx);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

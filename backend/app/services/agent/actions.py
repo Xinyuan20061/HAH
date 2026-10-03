@@ -29,6 +29,13 @@ ACTION_REGISTRY = {
             True,
         ),
         ActionSpec(
+            "plan.replan.apply",
+            "应用重规划变更",
+            "把已确认的重规划写入计划：已完成项目冻结，未完成项目不判定为失败。",
+            "low",
+            True,
+        ),
+        ActionSpec(
             "goal.adjustment.apply",
             "应用动态目标",
             "把规则引擎计算出的目标建议写入目标设置。",
@@ -66,6 +73,10 @@ ACTION_REGISTRY = {
             True,
             ("user",),
         ),
+        ActionSpec("policy.episode.start", "开始个人策略验证", "按已确认协议开始一个可撤销的个人观察周期。", "low", True, ("user",)),
+        ActionSpec("policy.episode.finish", "复查个人策略周期", "结束周期并按证据门控生成可撤销裁决。", "low", True, ("user",)),
+        ActionSpec("policy.episode.stop", "停止个人策略周期", "停止当前周期，不删除已经存在的健康记录。", "low", True, ("user",)),
+        ActionSpec("policy.memory.reset", "清除个人策略记忆", "按用户指定范围清除策略后验的影响。", "medium", True, ("user",)),
         ActionSpec(
             "privacy.export",
             "导出个人数据",

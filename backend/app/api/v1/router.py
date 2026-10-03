@@ -20,6 +20,11 @@ from . import (
     fitness,
     knowledge,
     harness,
+    health_state,
+    agent_decision,
+    capabilities,
+    food,
+    policy,
 )
 
 api_router = APIRouter()
@@ -46,6 +51,18 @@ _routers = [
     fitness.router,
     knowledge.router,
     harness.router,
+    # Health state engine: ``state_router`` owns /health/state/*, ``router`` owns
+    # the sibling /health/signals and /health/outcomes paths (plan §4.4).
+    health_state.state_router,
+    health_state.router,
+    # Decision Contract / capability graph / plan solver (plan §7.4/§8.2).
+    agent_decision.router,
+    agent_decision.plan_router,
+    # Capability honesty surface + Gold tier status (plan §5.11/§13.6).
+    capabilities.router,
+    # Interactive Food 2.0: questions, deterministic calculation, priors (§6).
+    food.router,
+    policy.router,
     # The media package owns four routers; include each exactly once.
     media.router,
     media.admin_router,  # /admin/motion-analyses/{id}/diagnostics

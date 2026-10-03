@@ -1,0 +1,6 @@
+{
+  "usingComponents": {
+    "page-transition": "/components/page-transition/index"
+  },
+  "navigationBarTitleText": "状态与下一步"
+}

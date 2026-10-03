@@ -53,6 +53,11 @@ class ToolRegistry:
         spec = self._tools.get(name)
         if spec is None or context.agent_id not in spec.allowed_agents:
             return ToolObservation(name, "blocked", None, "工具未注册或当前智能体无权使用", step)
+        user_id = getattr(context.user, "id", None)
+        if isinstance(user_id, int):
+            from app.harness.plugins import is_tool_enabled
+            if not is_tool_enabled(context.db, user_id, name):
+                return ToolObservation(name, "blocked", None, "该健康能力已暂停，请在能力中心重新启用", step)
         try:
             output = spec.handler(context, arguments or {})
         except Exception as exc:

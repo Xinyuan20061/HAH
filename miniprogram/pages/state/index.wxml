@@ -1,0 +1,205 @@
+<include src="/components/page-transition/first-paint.wxml"/>
+<page-transition/>
+<view class="page state-page ui-page-content">
+  <view class="title">状态与下一步</view>
+  <view class="subtitle intro">先看建议，再看依据，最后看上次那样做之后发生了什么。</view>
+
+  <block wx:if="{{loading}}">
+    <view class="card sk-card">
+      <view class="skeleton-line sk-line-lg"></view>
+      <view class="skeleton-line sk-line-md"></view>
+      <view class="skeleton-line sk-line-sm"></view>
+    </view>
+    <view class="card sk-card">
+      <view class="skeleton-line sk-line-md"></view>
+      <view class="skeleton-line sk-line-sm"></view>
+    </view>
+  </block>
+
+  <block wx:else>
+    <!-- 区块 1：现在建议我做什么（Decision Contract / Next Best Action） -->
+    <view class="section-title">现在建议我做什么</view>
+
+    <view wx:if="{{errors.decision}}" class="state-card state-card-error">
+      <view class="state-title">建议暂时算不出来</view>
+      <view class="state-desc">{{errors.decision}}</view>
+    </view>
+
+    <block wx:elif="{{nextAction}}">
+      <view class="card next-card">
+        <view class="next-label">下一步</view>
+        <view class="next-title">{{nextAction.title}}</view>
+        <view class="next-reason">{{nextAction.reason}}</view>
+
+        <view wx:if="{{nextAction.evidence.length}}" class="chips">
+          <view class="chip" wx:for="{{nextAction.evidence}}" wx:key="*this">{{item}}</view>
+        </view>
+
+        <view wx:if="{{nextAction.breakdown.length}}" class="why">
+          <view class="why-title">为什么是这一条</view>
+          <view class="why-row" wx:for="{{nextAction.breakdown}}" wx:key="key">
+            <text class="why-name">{{item.label}}</text>
+            <text class="why-value">{{item.value}}</text>
+          </view>
+          <view class="why-note">权重明细由后端确定性计算，可复核；不是模型自由生成的排序。</view>
+        </view>
+
+        <view
+          class="next-cta tappable"
+          bindtap="confirmWithSteward"
+          hover-class="tap-btn"
+          hover-start-time="0"
+          hover-stay-time="80"
+        >去和小管家确认</view>
+        <view class="next-hint">写入计划必须由你确认后才会发生。</view>
+      </view>
+
+      <view wx:if="{{alternatives.length}}" class="card alt-card">
+        <view class="alt-title">其他候选（同一套权重排序）</view>
+        <view class="alt-row" wx:for="{{alternatives}}" wx:key="id">
+          <view class="alt-name">{{item.title}}</view>
+          <view class="alt-reason">{{item.reason}}</view>
+        </view>
+      </view>
+    </block>
+
+    <view wx:else class="card empty">
+      现在没有可自动提议的行动。先补齐记录，或者直接告诉小管家你想做什么。
+    </view>
+
+    <!-- 个人策略验证：只展示候选、证据状态和当前周期，不在此页写入。 -->
+    <view class="card policy-card" wx:if="{{policyDecision || policyEpisode || errors.policy}}">
+      <view class="policy-title">个人策略验证</view>
+      <view wx:if="{{errors.policy}}" class="state-desc">{{errors.policy}}</view>
+      <block wx:else>
+        <view wx:if="{{policyDecision.selected}}" class="policy-row">
+          <text class="policy-name">当前候选</text>
+          <text class="policy-num">{{policyDecision.selected}}</text>
+          <text class="policy-flag">{{policyDecision.personalised ? '已有个人证据' : '尚无足够个人证据'}}</text>
+        </view>
+        <view wx:else class="state-desc">暂时没有可直接验证的策略，先补齐能影响选择的记录。</view>
+        <view wx:if="{{policyEpisode}}" class="policy-row">
+          <text class="policy-name">进行中的周期</text>
+          <text class="policy-num">{{policyEpisode.completed}}/{{policyEpisode.total}} 次完成</text>
+          <text class="policy-flag">{{policyEpisode.status}}</text>
+        </view>
+        <view class="policy-note">{{policyDecision.explanation}}</view>
+      </block>
+    </view>
+
+    <!-- 区块 2：我现在处于什么状态（Health State） -->
+    <view class="section-title">我现在处于什么状态</view>
+
+    <view wx:if="{{errors.state}}" class="state-card state-card-error">
+      <view class="state-title">状态暂时读不到</view>
+      <view class="state-desc">{{errors.state}}</view>
+    </view>
+
+    <block wx:else>
+      <view wx:if="{{blocked}}" class="state-card state-card-error">
+        <view class="state-title">当前不适合自动排计划</view>
+        <view class="state-desc">下面列出了原因。先补齐记录或按约束调整，再谈加量。</view>
+      </view>
+
+      <view class="card state-list">
+        <view class="state-row" wx:for="{{stateRows}}" wx:key="key">
+          <view class="state-row-head">
+            <text class="state-row-name">{{item.title}}</text>
+            <!-- 缺失不显示 0：值为 null 时显示"数据不足" -->
+            <text wx:if="{{item.value === null}}" class="state-row-missing">数据不足</text>
+            <text wx:else class="state-row-value">{{item.value}}{{item.unit}}</text>
+          </view>
+          <view class="state-row-meta">
+            <text class="meta-item">{{item.evidence}}</text>
+            <text class="meta-dot">·</text>
+            <text class="meta-item">{{item.confidence}}</text>
+            <block wx:if="{{item.observedDays !== null}}">
+              <text class="meta-dot">·</text>
+              <text class="meta-item">{{item.observedDays}}/{{item.windowDays}} 天有记录</text>
+            </block>
+          </view>
+          <view wx:if="{{item.limitations.length}}" class="state-row-limit">
+            <text wx:for="{{item.limitations}}" wx:key="*this" class="limit-line">· {{item}}</text>
+          </view>
+        </view>
+      </view>
+
+      <view wx:if="{{missingness.length}}" class="card miss-card">
+        <view class="miss-title">还缺什么</view>
+        <view class="miss-row" wx:for="{{missingness}}" wx:key="key">{{item.text}}</view>
+      </view>
+
+      <view wx:if="{{constraints.length}}" class="card cons-card">
+        <view class="cons-title">当前生效的约束</view>
+        <view class="cons-row" wx:for="{{constraints}}" wx:key="key">
+          <text class="cons-tag {{item.severity === 'hard' ? 'hard' : 'soft'}}">{{item.severity === 'hard' ? '硬约束' : '软提示'}}</text>
+          <text class="cons-text">{{item.description}}</text>
+        </view>
+        <view class="cons-note">硬约束不可被忽略，只能解释为什么不能自动执行。</view>
+      </view>
+
+      <view class="state-asof">状态时间：{{stateAsOf}}</view>
+    </block>
+
+    <!-- 区块 3：我上次那样做之后发生了什么（Outcomes + 记忆） -->
+    <view class="section-title">做过之后发生了什么</view>
+
+    <view wx:if="{{errors.outcomes}}" class="state-card state-card-error">
+      <view class="state-title">历史结果暂时读不到</view>
+      <view class="state-desc">{{errors.outcomes}}</view>
+    </view>
+
+    <block wx:else>
+      <view wx:if="{{outcomeRows.length}}" class="card out-card">
+        <view class="out-row" wx:for="{{outcomeRows}}" wx:key="observedAt">
+          <view class="out-head">
+            <text class="out-action">{{item.actionKey}}</text>
+            <!-- insufficient_data 如实显示，不得表述为有效 -->
+            <text class="out-conclusion {{item.isInsufficient ? 'weak' : 'ok'}}">{{item.conclusion}}</text>
+          </view>
+          <view class="out-time">{{item.observedAt}}</view>
+        </view>
+      </view>
+      <view wx:else class="card empty">还没有已确认并完成的行动记录。</view>
+
+      <view wx:if="{{policyRows.length}}" class="card policy-card">
+        <view class="policy-title">个人偏好统计（可解释的 Beta 统计）</view>
+        <view class="policy-row" wx:for="{{policyRows}}" wx:key="family">
+          <text class="policy-name">{{item.family}}</text>
+          <text class="policy-num">提出 {{item.offered}} · 完成 {{item.completed}}</text>
+          <text class="policy-flag">{{item.personalised ? '已个性化' : '样本不足'}}</text>
+        </view>
+        <view class="policy-note">样本不足时不会影响排序；这里不做任何模型训练。</view>
+      </view>
+
+      <view wx:if="{{memoryUsed.length}}" class="card mem-card">
+        <view class="mem-title">正在影响建议的长期记忆</view>
+        <view class="mem-row" wx:for="{{memoryUsed}}" wx:key="key">
+          <text class="mem-key">{{item.key}}</text>
+          <text class="mem-value">{{item.value}}</text>
+          <text class="mem-steer">{{item.steer}}</text>
+        </view>
+        <view class="mem-note">记忆只能影响计划的形态与强度，不能改变安全边界。</view>
+      </view>
+
+      <view wx:if="{{memoryIgnored.length}}" class="card mem-card">
+        <view class="mem-title">已记录但不影响决策</view>
+        <view class="mem-row" wx:for="{{memoryIgnored}}" wx:key="key">
+          <text class="mem-key">{{item.key}}</text>
+          <text class="mem-value">{{item.reason}}</text>
+        </view>
+        <view class="mem-note">来源未被允许或键未被登记的记忆会被列出但绝不生效。</view>
+      </view>
+
+      <view wx:if="{{outcomeNote}}" class="out-note">{{outcomeNote}}</view>
+    </block>
+
+    <view class="foot-links">
+      <view class="foot-link tappable" bindtap="goInsights" hover-class="tap-chip" hover-start-time="0" hover-stay-time="80">看微实验</view>
+      <view class="foot-link tappable" bindtap="goState" hover-class="tap-chip" hover-start-time="0" hover-stay-time="80">看 7 日趋势</view>
+      <view class="foot-link tappable" bindtap="retry" hover-class="tap-chip" hover-start-time="0" hover-stay-time="80">刷新</view>
+    </view>
+
+    <view wx:if="{{decisionPolicy}}" class="policy-foot">{{decisionPolicy}}</view>
+  </block>
+</view>

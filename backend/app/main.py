@@ -52,6 +52,8 @@ async def lifespan(app: FastAPI):
                 db = SessionLocal()
                 try:
                     process_pending_stages(db)
+                    from app.services.policy_learning.outbox import process_pending_policy_events
+                    process_pending_policy_events(db)
                 finally:
                     db.close()
             except Exception:  # noqa: BLE001 - consumer must survive one bad cycle

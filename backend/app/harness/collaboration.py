@@ -21,9 +21,78 @@ from app.harness.motion_evidence import (
     TOOL_TIMELINE_READ,
 )
 from app.harness.registry import ToolRegistry
+from app.harness.state_tools import (
+    TOOL_CONSTRAINTS_READ,
+    TOOL_OUTCOMES_COMPARE,
+    TOOL_SIGNALS_READ,
+    TOOL_STATE_HISTORY,
+    TOOL_STATE_READ,
+)
 
 
 MULTI_AGENT_VERSION = "health-multi-agent-v1"
+
+# Capability plan §4.4: every domain worker may read the versioned state layer.
+# These are the lowest-privilege, most broadly useful tools, so they are granted to
+# all workers instead of being repeated in each profile.
+STATE_TOOLS: tuple[str, ...] = (
+    TOOL_STATE_READ,
+    TOOL_STATE_HISTORY,
+    TOOL_CONSTRAINTS_READ,
+    TOOL_SIGNALS_READ,
+    TOOL_OUTCOMES_COMPARE,
+)
+
+# Capability plan §7.4/§8.2: the planner and every reasoner must be able to check
+# what is actually available and simulate before proposing. Read-only.
+from app.harness.planning_tools import (  # noqa: E402
+    TOOL_CAPABILITIES_READ,
+    TOOL_DECISION_CONTRACT,
+    TOOL_NBA,
+    TOOL_PLAN_SIMULATE,
+)
+from app.harness.outcome_tools import (  # noqa: E402
+    TOOL_EXPERIMENT_RESULT,
+    TOOL_NEXT_ACTION_RANK,
+    TOOL_OUTCOMES_HISTORY,
+    TOOL_PREFERENCES_READ,
+)
+from app.harness.policy_tools import (  # noqa: E402
+    TOOL_POLICY_CANDIDATES,
+    TOOL_POLICY_EPISODE,
+    TOOL_POLICY_EVIDENCE,
+    TOOL_POLICY_EXPLAIN,
+    TOOL_POLICY_MEMORY,
+    TOOL_POLICY_TEMPLATES,
+)
+
+CAPABILITY_TOOLS: tuple[str, ...] = (
+    TOOL_CAPABILITIES_READ,
+    TOOL_PLAN_SIMULATE,
+    TOOL_DECISION_CONTRACT,
+    TOOL_NBA,
+)
+
+# Capability plan §9.5: memory/outcome tools. `preferences.read` and
+# `outcomes.history.read` are broadly useful, so every worker gets them; the
+# experiment result and the Bayesian ranker are granted to the roles that would
+# actually reason about a result (planner, coach, recovery, general).
+OUTCOME_TOOLS: tuple[str, ...] = (
+    TOOL_PREFERENCES_READ,
+    TOOL_OUTCOMES_HISTORY,
+)
+OUTCOME_DECISION_TOOLS: tuple[str, ...] = OUTCOME_TOOLS + (
+    TOOL_EXPERIMENT_RESULT,
+    TOOL_NEXT_ACTION_RANK,
+)
+POLICY_TOOLS: tuple[str, ...] = (
+    TOOL_POLICY_TEMPLATES,
+    TOOL_POLICY_CANDIDATES,
+    TOOL_POLICY_EPISODE,
+    TOOL_POLICY_EVIDENCE,
+    TOOL_POLICY_MEMORY,
+    TOOL_POLICY_EXPLAIN,
+)
 
 # Parallel workers never share a SQLAlchemy Session (spec §8.6). Each concurrent
 # worker gets a private Session bound to its own copy of the frozen read-only
@@ -65,6 +134,10 @@ WORKERS = {
             "health.knowledge.search",
             "health.resources.search",
             "harness.actions.list",
+            *STATE_TOOLS,
+            *CAPABILITY_TOOLS,
+            *OUTCOME_DECISION_TOOLS,
+            *POLICY_TOOLS,
         ),
     ),
     "coach": WorkerProfile(
@@ -80,31 +153,57 @@ WORKERS = {
             TOOL_FEEDBACK_READ,
             TOOL_TIMELINE_READ,
             TOOL_HISTORY_COMPARE,
+            *STATE_TOOLS,
+            *CAPABILITY_TOOLS,
+            *OUTCOME_DECISION_TOOLS,
+            *POLICY_TOOLS,
         ),
     ),
     "nutritionist": WorkerProfile(
         "nutritionist",
         "饮食子 Agent",
         "负责能量摄入、餐次、营养与饮食习惯，只依据记录和已审核知识。",
-        ("health.context.read", "health.knowledge.search"),
+        (
+            "health.context.read",
+            "health.knowledge.search",
+            *STATE_TOOLS,
+            *OUTCOME_TOOLS,
+            *POLICY_TOOLS,
+        ),
     ),
     "recovery": WorkerProfile(
         "recovery",
         "恢复子 Agent",
         "负责睡眠、疲劳、压力与恢复节律，必要时建议降低训练负荷。",
-        ("health.context.read", "health.knowledge.search"),
+        (
+            "health.context.read",
+            "health.knowledge.search",
+            *STATE_TOOLS,
+            TOOL_CAPABILITIES_READ,
+            TOOL_NBA,
+            *OUTCOME_DECISION_TOOLS,
+            *POLICY_TOOLS,
+        ),
     ),
     "records": WorkerProfile(
         "records",
         "记录子 Agent",
         "负责解释用户已有健康记录、趋势和数据缺口，不虚构缺失数据。",
-        ("health.context.read",),
+        ("health.context.read", *STATE_TOOLS, *OUTCOME_TOOLS, *POLICY_TOOLS),
     ),
     "general": WorkerProfile(
         "general",
         "通用健康子 Agent",
         "处理无法归入单一领域的一般生活方式问题，并明确不确定性。",
-        ("health.context.read", "health.knowledge.search"),
+        (
+            "health.context.read",
+            "health.knowledge.search",
+            *STATE_TOOLS,
+            TOOL_CAPABILITIES_READ,
+            TOOL_NBA,
+            *OUTCOME_DECISION_TOOLS,
+            *POLICY_TOOLS,
+        ),
     ),
 }
 
@@ -582,30 +681,51 @@ def _requests_action(observations: list[ToolObservation]) -> bool:
     return any(item.status == "approval_required" for item in observations)
 
 
+# Domain keyword sets used by the deterministic router. Kept module-level so the
+# model-call budget can be derived from the same evidence the router uses, instead
+# of a second, drifting guess (capability plan §13.5).
+DOMAIN_KEYWORDS: dict[str, tuple[str, ...]] = {
+    "nutritionist": (
+        "吃", "喝", "饮食", "营养", "热量", "卡路里", "蛋白质", "碳水", "脂肪",
+        "早餐", "午餐", "晚餐", "加餐", "食谱", "膳食", "盐", "糖", "油",
+    ),
+    "coach": (
+        "深蹲", "俯卧撑", "伏地挺身", "弓步", "箭步", "squat", "pushup", "lunge",
+        "练胸", "练背", "练腿", "动作", "组数", "次数", "力量", "有氧", "拉伸",
+    ),
+    "recovery": ("睡眠", "失眠", "累", "疲劳", "恢复", "压力", "休息", "酸痛"),
+    "records": ("记录", "趋势", "上周", "本月", "数据", "达标"),
+}
+
+
+def matched_domains(intent: str, message: str) -> list[str]:
+    """Every domain the message explicitly touches, in a stable order.
+
+    Used for two things that must agree: routing falls back to a single worker only
+    when exactly one domain is unambiguous, and the model-call budget is 2 for one
+    domain / 5 for several. Deriving both from this one function is what stops the
+    budget from silently drifting away from the routing decision.
+    """
+    text = (message or "").lower()
+    matched = [
+        worker
+        for worker, keywords in DOMAIN_KEYWORDS.items()
+        if any(word in text for word in keywords)
+    ]
+    if not matched and intent == "plan":
+        return ["planner"]
+    if not matched and intent == "exercise_knowledge":
+        return ["coach"]
+    return matched
+
+
 def deterministic_route(intent: str, message: str) -> str | None:
     """Return a worker id when the request is unambiguously single-domain.
 
     Only explicit, high-precision signals are used; anything with cross-domain
     wording returns ``None`` so the Router model decides (spec §8.6).
     """
-    text = (message or "").lower()
-    nutrition = (
-        "吃", "喝", "饮食", "营养", "热量", "卡路里", "蛋白质", "碳水", "脂肪",
-        "早餐", "午餐", "晚餐", "加餐", "食谱", "膳食", "盐", "糖", "油",
-    )
-    fitness = (
-        "深蹲", "俯卧撑", "伏地挺身", "弓步", "箭步", "squat", "pushup", "lunge",
-        "练胸", "练背", "练腿", "动作", "组数", "次数", "力量", "有氧", "拉伸",
-    )
-    recovery = ("睡眠", "失眠", "累", "疲劳", "恢复", "压力", "休息", "酸痛")
-    records = ("记录", "趋势", "上周", "本月", "数据", "达标")
-    hits = {
-        "nutritionist": any(word in text for word in nutrition),
-        "coach": any(word in text for word in fitness),
-        "recovery": any(word in text for word in recovery),
-        "records": any(word in text for word in records),
-    }
-    matched = [worker for worker, hit in hits.items() if hit]
+    matched = matched_domains(intent, message)
     if len(matched) == 1:
         return matched[0]
     if len(matched) > 1:
