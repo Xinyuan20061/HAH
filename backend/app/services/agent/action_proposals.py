@@ -108,6 +108,8 @@ class PrivacyDeleteArgs(ActionArguments):
 class PolicyEpisodeStartArgs(ActionArguments):
     strategy_unit_id: str = Field(min_length=1, max_length=64)
     protocol_hash: str = Field(min_length=64, max_length=64)
+    state_snapshot_hash: str = Field(min_length=64, max_length=64)
+    capability_snapshot_hash: str = Field(min_length=64, max_length=64)
     version: int = Field(default=1, ge=1)
     decision_id: str | None = Field(default=None, max_length=64)
 

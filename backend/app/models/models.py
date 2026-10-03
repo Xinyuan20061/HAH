@@ -148,6 +148,7 @@ class ExerciseRecord(Base, TimestampMixin):
     calories_burned: Mapped[float] = mapped_column(Float, default=0)
     intensity: Mapped[str] = mapped_column(String(20), default="medium")
     recorded_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, index=True)
+    version: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
 
 
 class HealthCheckIn(Base, TimestampMixin):
@@ -163,6 +164,7 @@ class HealthCheckIn(Base, TimestampMixin):
     weight_kg: Mapped[float] = mapped_column(Float, default=0)
     steps: Mapped[int] = mapped_column(Integer, default=0)
     mood: Mapped[str] = mapped_column(String(20), default="normal")
+    version: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
 
 
 class PlanTaskState(Base, TimestampMixin):
@@ -180,6 +182,7 @@ class PlanTaskState(Base, TimestampMixin):
     title: Mapped[str | None] = mapped_column(String(120), nullable=True)
     description: Mapped[str | None] = mapped_column(String(300), nullable=True)
     task_type: Mapped[str] = mapped_column(String(20), default="system")
+    version: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
 
 
 class ChatSession(Base, TimestampMixin):
@@ -1379,6 +1382,11 @@ class PersonalStrategyUnit(Base, TimestampMixin):
     protocol_hash: Mapped[str] = mapped_column(String(64), index=True)
     baseline_refs_json: Mapped[str] = mapped_column(Text, default="[]")
     status: Mapped[str] = mapped_column(String(20), default="compiled", index=True)
+    # Indexed by the user+key unique migration; avoid a second unversioned
+    # single-column index that would make ``alembic check`` report drift.
+    compile_idempotency_key: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    compile_request_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    compile_response_json: Mapped[str] = mapped_column(Text, default="{}", nullable=False)
 
 
 class PolicyEpisode(Base, TimestampMixin):
@@ -1403,6 +1411,11 @@ class PolicyEpisode(Base, TimestampMixin):
     effective_adjudication_revision: Mapped[int | None] = mapped_column(nullable=True)
     protocol_snapshot_json: Mapped[str] = mapped_column(Text, default="{}")
     execution_json: Mapped[str] = mapped_column(Text, default="[]")
+    baseline_context_key: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    followup_context_key: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    baseline_state_snapshot_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    followup_state_snapshot_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    changed_variables_json: Mapped[str] = mapped_column(Text, default="[]", nullable=False)
     context_key: Mapped[str] = mapped_column(String(64), index=True)
     stop_reason: Mapped[str | None] = mapped_column(String(120), nullable=True)
 
@@ -1514,6 +1527,9 @@ class PersonalPolicyBelief(Base, TimestampMixin):
 
 class PolicyDecision(Base):
     __tablename__ = "policy_decisions"
+    __table_args__ = (
+        Index("ix_policy_decisions_user_idempotency_key", "user_id", "idempotency_key", unique=True),
+    )
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     state_hash: Mapped[str] = mapped_column(String(64), default="")
@@ -1523,6 +1539,11 @@ class PolicyDecision(Base):
     policy_mode: Mapped[str] = mapped_column(String(40), default="deterministic_heuristic")
     propensity_json: Mapped[str] = mapped_column(Text, default="{}")
     config_hash: Mapped[str] = mapped_column(String(64), default="")
+    idempotency_key: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    idempotency_request_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    candidate_set_hash: Mapped[str] = mapped_column(String(64), default="")
+    capability_snapshot_hash: Mapped[str] = mapped_column(String(64), default="")
+    response_json: Mapped[str] = mapped_column(Text, default="{}", nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, index=True)
 
 
@@ -1585,7 +1606,31 @@ class HarnessPluginInstallation(Base, TimestampMixin):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     plugin_id: Mapped[str] = mapped_column(String(80))
     plugin_version: Mapped[str] = mapped_column(String(40))
-    enabled: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     config_json: Mapped[str] = mapped_column(Text, default="{}")
+    config_version: Mapped[int] = mapped_column(Integer, default=1)
+    reviewed_manifest_hash: Mapped[str] = mapped_column(String(64), default="")
+    last_run_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    last_error: Mapped[str] = mapped_column(String(255), default="")
     enabled_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     disabled_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class HarnessCapabilityAudit(Base, TimestampMixin):
+    """Desensitized, user-visible history of capability configuration/use."""
+
+    __tablename__ = "harness_capability_audits"
+    __table_args__ = (
+        UniqueConstraint("user_id", "idempotency_key", name="uq_harness_audit_idem"),
+        Index("ix_harness_capability_audit_owner_plugin", "user_id", "plugin_id", "created_at"),
+    )
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    plugin_id: Mapped[str] = mapped_column(String(80), index=True)
+    installation_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    event_type: Mapped[str] = mapped_column(String(40), index=True)
+    idempotency_key: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    request_hash: Mapped[str] = mapped_column(String(64), default="")
+    config_version: Mapped[int] = mapped_column(Integer, default=0)
+    detail_json: Mapped[str] = mapped_column(Text, default="{}")
+    response_json: Mapped[str] = mapped_column(Text, default="{}")

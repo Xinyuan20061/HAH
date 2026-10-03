@@ -1,0 +1,59 @@
+{
+  "schema_version": "healthmate.audit-baseline.v2",
+  "as_of": "2026-10-03",
+  "purpose": "区分源码实现、自动化验证、真实评测与部署证据；未验证事项不得由代码存在或历史测试数字推定通过。",
+  "source": {
+    "repository_commit_at_audit_start": "4606176089e163122e3aa7354b31ecb063826305",
+    "migration_head_at_audit_start": "0032_harness_plugins",
+    "migration_revision_files_present_after_implementation": "0037_policy_decision_idempotency",
+    "migration_chain_audited_this_closeout": false,
+    "tracked_spec": "docs/HEALTHMATE_FIRST_PRIZE_FULL_AUDIT_AND_DEVELOPMENT_SPEC_2026-10-03.md",
+    "motion_gold_report": null,
+    "food_protocol_report": null,
+    "notes": [
+      "迁移目录中新增了 0033 至 0037 的 revision 文件；未运行 Alembic head 审计或连接数据库确认实际迁移状态。",
+      "本轮人工巡读发现并修正策略观察接口缩进断点，以及证据失效后无法复用观察槽的问题；这些改动没有自动化回归结果。",
+      "周期开始现在只通过确认提案，并在确认时重核协议、冻结状态与能力授权摘要；相关代码与新增集成断言尚未运行验证。",
+      "Harness 安装、配置、预览、暂停/恢复和删除在客户端保留待确认幂等键，弱网重试可重放相同操作；此交互路径未进行自动化或真机验证。",
+      "Harness 的目标、表达方式和轻提示现在按已启用能力分别编译进 Agent 指令，避免最近配置的一项覆盖其他能力；已补回归断言但本轮未运行。",
+      "个人策略协议页在冻结状态或能力授权变化后清除过期草稿并刷新候选；真机恢复、授权切换和弱网交互未验证。",
+      "动作评分能力保持 fail-closed；没有真实逐动作评测报告时，不应把候选评分描述为已验证评分。",
+      "未发现规格所需的独立 gold_protocol_v1.json 或 food_protocol_v1.json；未伪造评测报告哈希。"
+    ]
+  },
+  "current_closeout_verification": {
+    "static_manual_review": "performed; source and UI paths manually inspected",
+    "automated_tests": "not run during this closeout",
+    "build_or_compile": "not run during this closeout",
+    "migration_audit_or_database_command": "not run during this closeout",
+    "miniprogram_device_validation": "not run",
+    "status": "implementation review only; current changes are not regression-verified"
+  },
+  "historical_local_verification_record": {
+    "miniprogram_tests": "123 passed (historical snapshot; not rerun against current closeout changes)",
+    "targeted_backend_tests": "25 passed (historical snapshot; not rerun against current closeout changes)",
+    "full_backend_tests": "499 passed (historical snapshot; not rerun against current closeout changes)",
+    "compileall": "reported passed in historical snapshot; not rerun against current closeout changes",
+    "migration_head_audit": "reported single head 0035_policy_context_snapshots in historical snapshot; current files extend to 0037 and were not audited",
+    "privacy_coverage_audit": "reported passed in historical snapshot; not rerun against current closeout changes",
+    "openapi_audit": "reported passed in historical snapshot; not rerun against current closeout changes",
+    "configured_database_alembic_check": "historically not clean; schema/index drift was reported",
+    "worker_full_test_suite": "historically unverified; recorded environment lacked a usable worker interpreter/cv2",
+    "real_device_tests": "not run"
+  },
+  "evaluation": {
+    "motion_real_video_dataset": "unverified",
+    "food_real_dataset": "unverified",
+    "double_blind_review": "unverified",
+    "gold_scorer_available": false,
+    "training_or_model_upgrade": "not performed; existing pause constraint preserved"
+  },
+  "deployment": {
+    "production_mysql_migration_and_rollback": "unverified",
+    "cloudbase_upload_refresh_delete_retry": "unverified",
+    "wechat_real_device_upload_and_weak_network": "unverified",
+    "production_observability_and_trace_audit": "unverified",
+    "backup_restore_and_worker_queue_failure_drill": "unverified"
+  },
+  "interpretation": "源码人工巡读说明实现意图，不证明运行正确；历史本地测试只覆盖其当时快照。Evaluation 与 deployment 在获得可复现真实证据前必须保持未验证。"
+}

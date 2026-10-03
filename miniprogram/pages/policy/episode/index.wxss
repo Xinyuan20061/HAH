@@ -1,0 +1,2 @@
+@import "../shared.wxss";
+.policy-input-row picker{flex:1;color:#111613}

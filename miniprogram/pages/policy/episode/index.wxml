@@ -1,0 +1,54 @@
+<view class="policy-page">
+  <view class="policy-hero">
+    <view class="policy-kicker">STEP 2 · RECORD, DO NOT GUESS</view>
+    <view class="policy-title">周期中的真实记录</view>
+    <view class="policy-lead">只报告已经发生的执行情况。来源更正后，旧证据会失效并提示重新补充。</view>
+  </view>
+  <view wx:if="{{loading}}" class="policy-loading">正在读取周期与证据…</view>
+  <view wx:elif="{{error && !episode}}" class="policy-card policy-error"><view class="policy-copy">{{error}}</view><button class="policy-button secondary" bindtap="retry">重新读取</button></view>
+  <block wx:if="{{episode}}">
+    <view class="policy-card">
+      <view class="policy-card-title">{{episode.statusLabel}}</view>
+      <view class="policy-row"><text>训练安排</text><text>每次 {{episode.sessionMinutes || '已确认'}} 分钟</text></view>
+      <view class="policy-row"><text>周期</text><text>{{episode.startLabel}} — {{episode.endLabel}}</text></view>
+      <view class="policy-row"><text>有效观察</text><text>{{episode.observationsCount}} 条</text></view>
+      <view class="policy-note">执行记录与训练负担自评是不同类型的信息；主观负担不会伪装成设备或健康测量。</view>
+    </view>
+
+    <view class="policy-section">逐日记录执行情况</view>
+    <view class="policy-card">
+      <view wx:for="{{opportunities}}" wx:key="id" class="policy-list-item">
+        <view class="policy-list-head"><text>第 {{item.slot + 1}} 天</text><text class="policy-pill">{{item.executionLabel}}</text></view>
+        <view class="policy-list-sub">计划日期：{{item.dateLabel}}</view>
+        <button wx:if="{{item.canReport}}" class="policy-button secondary" data-id="{{item.id}}" loading="{{busy}}" disabled="{{busy}}" bindtap="reportExecution">记录这一天的情况</button>
+        <view wx:if="{{!item.report_id && !item.canReport}}" class="policy-list-sub">到计划日期后可记录，不接受提前填写。</view>
+      </view>
+    </view>
+
+    <view class="policy-section">补充训练负担自评</view>
+    <view class="policy-card">
+      <view class="policy-copy">请按自己的感受评分：0 表示几乎没有负担，10 表示负担很重。历史基线应选择周期开始前真实发生的日期；同一序号的基线与周期内记录会配对比较。</view>
+      <view class="policy-input-row"><text>记录属于</text><picker mode="selector" range="{{endpoints}}" disabled="{{pendingObservation}}" bindchange="chooseEndpoint"><view>{{endpoints[endpoint === 'baseline' ? 0 : 1]}}　⌄</view></picker></view>
+      <view class="policy-input-row"><text>发生日期</text><picker mode="date" value="{{date}}" start="{{dateMin}}" end="{{dateMax}}" disabled="{{pendingObservation}}" bindchange="chooseDate"><view>{{date}}　⌄</view></picker></view>
+      <view class="policy-input-row"><text>第几条</text><picker mode="selector" range="{{slots}}" value="{{slot}}" disabled="{{pendingObservation}}" bindchange="chooseSlot"><view>{{slots[slot]}}　⌄</view></picker></view>
+      <view class="policy-input-row"><text>主观负担</text><input type="digit" value="{{value}}" disabled="{{pendingObservation}}" placeholder="0–10" bindinput="inputValue" /></view>
+      <view wx:if="{{pendingObservation}}" class="policy-note policy-warning">上次提交结果未确认。为避免重复或改写记录，请先用原内容安全重试；也可以放弃本机重试信息。</view>
+      <button class="policy-button" loading="{{busy}}" disabled="{{busy}}" bindtap="saveObservation">{{pendingObservation ? '安全重试上次自报' : '保存为本人自报'}}</button>
+      <button wx:if="{{pendingObservation}}" class="policy-button secondary" disabled="{{busy}}" bindtap="discardPendingObservation">放弃本机重试信息</button>
+      <view wx:if="{{error}}" class="policy-note policy-error">{{error}}</view>
+    </view>
+
+    <view class="policy-section">已记录的观察</view>
+    <view class="policy-card">
+      <view wx:if="{{!observations.length}}" class="policy-copy">还没有观察值。至少 5 条有效基线与 5 条周期内观察，才可能进入裁决；少于门槛会显示证据不足。</view>
+      <view wx:for="{{observations}}" wx:key="key" class="policy-list-item">
+        <view class="policy-list-head"><text>{{item.endpointLabel}} · {{item.dateLabel}}</text><text class="policy-pill">{{item.valueLabel}}</text></view>
+        <view class="policy-list-sub">{{item.sourceLabel}}<text wx:if="{{!item.valid}}"> · {{item.stateLabel}}</text></view>
+      </view>
+    </view>
+
+    <button wx:if="{{canReview}}" class="policy-button" bindtap="openReview">查看复查预览</button>
+    <button wx:if="{{canStop}}" class="policy-button danger" loading="{{busy}}" disabled="{{busy}}" bindtap="stopEpisode">停止周期</button>
+    <view class="policy-note policy-warning">若训练中出现不适，请立即停止，不要为了完成记录继续训练；本页面不作医疗判断。</view>
+  </block>
+</view>

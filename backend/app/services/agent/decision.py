@@ -28,7 +28,6 @@ from sqlalchemy.orm import Session
 from app.services.agent.actions import ACTION_REGISTRY
 from app.services.agent.capability_graph import capability_graph
 from app.services.health_state import HealthStateSnapshot, build_snapshot
-from app.services.health_state.builder import latest_snapshot, load_snapshot
 
 ACTION_CANDIDATES: tuple[str, ...] = (
     "plan.apply",
@@ -166,10 +165,14 @@ class DecisionContract:
 
 
 def _state(db: Session, user_id: int, window_days: int) -> HealthStateSnapshot:
-    row = latest_snapshot(db, user_id)
-    if row is not None and row.window_days == window_days:
-        return load_snapshot(row)
-    return build_snapshot(db, user_id, window_days=window_days, persist=False)
+    # Persisted snapshots may contain source domains the current capability
+    # configuration no longer grants; compute a fresh scoped view for decisions.
+    from app.harness.plugins import health_state_excluded_sources
+
+    return build_snapshot(
+        db, user_id, window_days=window_days, persist=False,
+        excluded_sources=health_state_excluded_sources(db, user_id),
+    )
 
 
 def _denied_constraints(state: HealthStateSnapshot) -> set[str]:
@@ -190,6 +193,9 @@ def planning_preferences(db: Session, user_id: int) -> dict[str, Any]:
     is expired, low-confidence or not a behavioural key is ignored here — which is
     the same rule ``memory_view`` publishes, applied at the point of use.
     """
+    from app.harness.plugins import capability_scope_granted
+    if not capability_scope_granted(db, user_id, "plan_outcome", "user.preferences.read"):
+        return {}
     from app.services.agent.outcome import memory_view
 
     effective = memory_view(db, user_id)["effective"]
@@ -512,9 +518,12 @@ def decide(
     alternatives = [item for item in automatic if item is not nba][:3]
 
     graph = capability_graph(db, user_id=user_id)
-    from app.services.agent.outcome import memory_view
-
-    memory = memory_view(db, user_id)
+    from app.harness.plugins import capability_scope_granted
+    if capability_scope_granted(db, user_id, "plan_outcome", "user.preferences.read"):
+        from app.services.agent.outcome import memory_view
+        memory = memory_view(db, user_id)
+    else:
+        memory = {"entries": [], "ignored": []}
     return DecisionContract(
         as_of=state.as_of.isoformat() + "Z",
         state_snapshot_hash=state.snapshot_hash,

@@ -238,7 +238,7 @@ def test_unsigned_preview_get_uses_bearer_and_reports_missing_storage(api, migra
     assert "asset_frame_4" not in fake.bytes
 
 
-def test_evidence_returns_signed_preview_url(api, migrated_engine, monkeypatch):
+def test_evidence_does_not_sign_missing_preview_object(api, migrated_engine, monkeypatch):
     fake = _install_fake(api, monkeypatch)
     with Session(migrated_engine) as db:
         run_id, _ = _seed_run_with_job(api, db)
@@ -260,7 +260,9 @@ def test_evidence_returns_signed_preview_url(api, migrated_engine, monkeypatch):
     assert r.status_code == 200, r.text
     frames = r.json()["frames"]
     assert frames[0]["id"] == "frame_4"
-    assert frames[0]["preview_url"] and "sig=" in frames[0]["preview_url"]
+    assert frames[0]["preview_url"] is None
+    assert frames[0]["preview"]["state"] == "unavailable"
+    assert frames[0]["unavailable_reason"] in {"missing_evidence_row", "object_missing"}
 
 
 # --------------------------------------------------------------------------- #

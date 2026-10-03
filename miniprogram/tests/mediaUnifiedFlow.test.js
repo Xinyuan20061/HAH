@@ -188,7 +188,7 @@ test('改模式/轮询超时：清 analysisId 起新任务；超时保留进行�
 test('主图 aspectFit + 横向 scroll-x 时间条，选中态有边框', () => {
   assert.match(wxml, /mode="aspectFit" class="frame-hero-img"/)
   assert.match(wxml, /scroll-view scroll-x/)
-  assert.match(wxml, /\{\{vm\.activeFrame\.id===item\.id\?'on':''\}\}/)
+  assert.match(wxml, /\{\{activeFrame\.id===item\.id\?'on':''\}\}/)
 })
 
 test('结果帧自带 preview_url 时直接映射为 previewUrl', () => {
@@ -239,4 +239,3 @@ test('/evidence 拉取路径已接线：只读 GET，失败不阻塞，点击仍
   assert.match(wxml, /binderror="onFrameImgError"/)
   assert.match(js, /onFrameImgError/)
 })
-

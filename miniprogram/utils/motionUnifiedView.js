@@ -45,7 +45,7 @@ const METRIC_LABELS = {
   duration_ms: '持续时间', duration: '持续时间',
   rhythm: '节奏', rhythm_control: '节奏',
   overall: '动作质量', quality: '动作质量', score: '动作质量',
-  completeness: '完成度', stability: '稳定性'
+  completeness: '完成度', stability: '稳定性', risk_index: '动作偏差提示'
 }
 
 function fmtSeconds(ms) {
@@ -89,7 +89,8 @@ function normalizeTimeline(timeline) {
     .map((f, index) => ({
       id: f.id || ('frame_' + index),
       timestamp_ms: Number(f.timestamp_ms),
-      previewUrl: f.preview_url || f.image_url || '',
+      previewUrl: (f.preview && f.preview.url) || f.preview_url || f.image_url || '',
+      previewState: (f.preview && f.preview.state) || (f.preview_url || f.image_url ? 'available' : 'unavailable'),
       phase: f.phase || '',
       observation: f.observation || f.finding || '',
       explanation: f.explanation || '',
@@ -105,7 +106,8 @@ function formatMetric(m) {
   let value = m.value
   if (value == null) return null
   if (id === 'duration_ms' && Number.isFinite(Number(value))) value = (Number(value) / 1000).toFixed(1) + 's'
-  return { label: METRIC_LABELS[id] || id, value, unit: m.unit || '' }
+  if (!Object.prototype.hasOwnProperty.call(METRIC_LABELS, id)) return null
+  return { label: METRIC_LABELS[id], value, unit: id === 'risk_index' ? '' : (m.unit || '') }
 }
 
 // /evidence 只读返回帧级预览映射（frame_id → 可渲染签名 URL）。
@@ -124,9 +126,24 @@ function buildPreviewMap(evidence) {
 
 // 结果帧已带 preview_url 时优先用；为空的才用 evidence 映射补齐（不覆盖已有 URL）。
 function mergeEvidencePreviews(frames, evidence) {
+  const list = (evidence && (evidence.frames || evidence.evidence)) || (Array.isArray(evidence) ? evidence : [])
   const map = buildPreviewMap(evidence)
-  if (!Object.keys(map).length) return frames
-  return frames.map(f => (f.previewUrl ? f : { ...f, previewUrl: map[f.id] || '' }))
+  const states = {}
+  for (const item of list) {
+    if (!item) continue
+    const fid = item.frame_id || item.id
+    const state = (item.preview && item.preview.state) || item.preview_state
+    if (fid && state) states[fid] = state
+  }
+  if (!Object.keys(map).length && !Object.keys(states).length) return frames
+  let changed = false
+  const merged = frames.map(f => {
+    const previewUrl = f.previewUrl || map[f.id] || ''
+    const previewState = states[f.id] || (previewUrl ? 'available' : f.previewState)
+    if (previewUrl !== f.previewUrl || previewState !== f.previewState) changed = true
+    return { ...f, previewUrl, previewState }
+  })
+  return changed ? merged : frames
 }
 
 // 关键边界（R11 / §4.3）：

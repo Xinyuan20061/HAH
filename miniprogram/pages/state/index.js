@@ -269,16 +269,23 @@ Page({
     }
     const decision = decisionRes.value || {}
     const episode = (episodeRes.value || {}).episode
+    const selectedId = String(decision.selected || '')
+    const selectedLabel = selectedId.indexOf('session_duration') >= 0
+      ? '尝试更短的单次训练'
+      : selectedId ? '个人策略候选' : null
+    const statusLabels = {
+      active: '进行中', awaiting_review: '等待复查', reviewed: '已复查', stopped: '已停止'
+    }
     this.setData({
       policyDecision: {
-        selected: decision.selected || null,
+        selected: selectedLabel,
         kind: decision.kind || 'collect_evidence_or_wait',
         personalised: !!decision.personalised,
         explanation: decision.explanation || '排序只使用已经通过门控的个人证据。'
       },
       policyEpisode: episode ? {
         id: episode.episode_id,
-        status: episode.status,
+        status: statusLabels[episode.status] || '状态待更新',
         version: episode.version,
         completed: (episode.reports || []).filter(item => item.execution === 'completed').length,
         total: (episode.opportunities || []).length
@@ -308,5 +315,6 @@ Page({
   },
 
   goState() { wx.navigateTo({ url: '/pages/trends/index' }) },
-  goInsights() { wx.navigateTo({ url: '/pages/insights/index' }) }
+  goInsights() { wx.navigateTo({ url: '/pages/insights/index' }) },
+  goPolicy() { wx.navigateTo({ url: '/pages/policy/overview/index' }) }
 })

@@ -19,6 +19,7 @@ from app.api.deps import current_user
 from app.core.database import get_db
 from app.core.time import utc_iso
 from app.schemas.errors import ApiException
+from app.harness.plugins import authorize_capability
 from app.services.agent.proactive import PROACTIVE_CODES, build_proactive_insights
 from app.services.agent.tools import read_context
 from app.services.health_state import (
@@ -34,6 +35,39 @@ router = APIRouter(prefix="/health", tags=["health-state"])
 state_router = APIRouter(prefix="/health/state", tags=["health-state"])
 
 MAX_WINDOW_DAYS = 90
+
+
+def _authorize_owner_access(
+    db: Session,
+    user_id: int,
+    *,
+    plugin_id: str,
+    scope: str | tuple[str, ...],
+    route: str,
+    phase: str = "read_history",
+) -> None:
+    """Route first-party, user-initiated access through the central policy.
+
+    These endpoints serve the data owner, so viewing/managing one's own records
+    remains available while an assistant capability is paused. Agent and Harness
+    reads use ``read``/``new_work`` (and their own audited bindings) instead;
+    this owner-access classification must never be reused for model/tool paths.
+    """
+    result = authorize_capability(
+        db,
+        user_id,
+        plugin_id,
+        "user_action",
+        scope,
+        phase,
+    )
+    if not result.get("allowed"):
+        raise ApiException(
+            403,
+            "CAPABILITY_ACCESS_DENIED",
+            "这项个人数据操作当前不可用",
+            details={"route": route, "reason": result.get("reason")},
+        )
 
 
 def _window(window_days: int) -> int:
@@ -54,6 +88,13 @@ def read_state(
     window_days: int = Query(default=7),
 ):
     """The current versioned snapshot, computed and persisted on demand."""
+    _authorize_owner_access(
+        db,
+        user.id,
+        plugin_id="health_state",
+        scope=("health.profile.read", "health.records.read", "health.goals.read"),
+        route="health.state.read",
+    )
     snapshot = build_snapshot(db, user.id, window_days=_window(window_days))
     return {
         **snapshot.to_persistable(),
@@ -75,6 +116,13 @@ def state_history(
     db: Session = Depends(get_db),
     days: int = Query(default=30),
 ):
+    _authorize_owner_access(
+        db,
+        user.id,
+        plugin_id="health_state",
+        scope=("health.profile.read", "health.records.read", "health.goals.read"),
+        route="health.state.history",
+    )
     if key not in FEATURE_KEYS:
         raise ApiException(
             404,
@@ -117,6 +165,13 @@ def read_constraints(
     db: Session = Depends(get_db),
     window_days: int = Query(default=7),
 ):
+    _authorize_owner_access(
+        db,
+        user.id,
+        plugin_id="health_state",
+        scope=("health.profile.read", "health.records.read", "health.goals.read"),
+        route="health.state.constraints",
+    )
     snapshot = build_snapshot(db, user.id, window_days=_window(window_days))
     return {
         "as_of": utc_iso(snapshot.as_of),
@@ -137,6 +192,13 @@ def read_signals(
     status: str = Query(default="active"),
 ):
     """Active proactive signals, derived from the state layer."""
+    _authorize_owner_access(
+        db,
+        user.id,
+        plugin_id="health_state",
+        scope=("health.profile.read", "health.records.read", "health.goals.read"),
+        route="health.signals.read",
+    )
     if status not in {"active", "all"}:
         raise ApiException(422, "VALIDATION_ERROR", "status 只能是 active 或 all")
     context = read_context(db, user)
@@ -144,6 +206,7 @@ def read_signals(
     insights = payload.get("insights", [])
     if status == "active":
         insights = [item for item in insights if item.get("code") in PROACTIVE_CODES]
+    db.commit()  # persist optional cross-capability usage audit entries
     return {
         "state_snapshot_hash": (context.get("state") or {}).get("snapshot_hash"),
         "data_quality": payload.get("data_quality", {}),
@@ -159,6 +222,13 @@ def read_outcomes(
     days: int = Query(default=30),
 ):
     """Observed outcomes of executed actions and experiments (plan §9)."""
+    _authorize_owner_access(
+        db,
+        user.id,
+        plugin_id="plan_outcome",
+        scope="plan.outcomes.read",
+        route="health.outcomes.read",
+    )
     from app.services.agent.outcome import outcome_history
 
     if days < 1 or days > 365:
@@ -183,6 +253,13 @@ def read_long_term_memory(user=Depends(current_user), db: Session = Depends(get_
     Plan §11 Phase 5 requires this to be viewable; ``influential`` distinguishes a
     stored entry from one that can actually change behaviour.
     """
+    _authorize_owner_access(
+        db,
+        user.id,
+        plugin_id="plan_outcome",
+        scope="user.preferences.read",
+        route="health.preferences.read",
+    )
     from app.services.agent.outcome import ALLOWED_PREFERENCE_KEYS, memory_view
 
     view = memory_view(db, user.id)
@@ -194,6 +271,14 @@ def set_long_term_memory(
     body: PreferenceIn, user=Depends(current_user), db: Session = Depends(get_db)
 ):
     """Record an *explicit* user statement. Inferred memory never takes this path."""
+    _authorize_owner_access(
+        db,
+        user.id,
+        plugin_id="plan_outcome",
+        scope="user.preferences.read",
+        route="health.preferences.write",
+        phase="close_existing",
+    )
     from app.services.agent.outcome import (
         ALLOWED_PREFERENCE_KEYS,
         OutcomeError,
@@ -231,6 +316,14 @@ def clear_long_term_memory(
     key: str, user=Depends(current_user), db: Session = Depends(get_db)
 ):
     """Clearing memory must stop it influencing ranking immediately."""
+    _authorize_owner_access(
+        db,
+        user.id,
+        plugin_id="plan_outcome",
+        scope="user.preferences.read",
+        route="health.preferences.delete",
+        phase="delete",
+    )
     from app.services.agent.outcome import clear_preference
 
     if not clear_preference(db, user.id, key):
@@ -245,6 +338,13 @@ def experiment_results(
     limit: int = Query(default=10, ge=1, le=50),
 ):
     """Micro-experiment conclusions, with `insufficient_data` stated as such."""
+    _authorize_owner_access(
+        db,
+        user.id,
+        plugin_id="plan_outcome",
+        scope="plan.outcomes.read",
+        route="health.experiments.results",
+    )
     from app.services.agent.experiments import list_experiments
 
     items = list_experiments(db, user.id, limit=limit)

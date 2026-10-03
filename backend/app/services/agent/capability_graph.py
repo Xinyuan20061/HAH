@@ -268,14 +268,14 @@ def capability_graph(
 
 
 def _snapshot_for(db, user_id: int):
-    """Latest persisted snapshot when one exists, else compute one (no write)."""
+    """Compute the current user-scoped snapshot; persisted snapshots may be broader."""
     from app.services.health_state import build_snapshot
-    from app.services.health_state.builder import latest_snapshot, load_snapshot
+    from app.harness.plugins import health_state_excluded_sources
 
-    row = latest_snapshot(db, user_id)
-    if row is not None:
-        return load_snapshot(row)
-    return build_snapshot(db, user_id, persist=False)
+    return build_snapshot(
+        db, user_id, persist=False,
+        excluded_sources=health_state_excluded_sources(db, user_id),
+    )
 
 
 def available_ids(graph: dict[str, Capability]) -> list[str]:

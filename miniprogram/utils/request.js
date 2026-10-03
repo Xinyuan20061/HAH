@@ -128,13 +128,13 @@ async function request({ url, method = 'GET', data = {}, timeout, retried = fals
     }
     if (res.statusCode >= 200 && res.statusCode < 300) { if (method === 'GET' && allowCache) cacheSet(url, res.data); return res.data }
     if (res.statusCode === 401 && !retried && !url.startsWith('/auth/')) {
-      wx.removeStorageSync('token'); await directLogin(); return request({ url, method, data, timeout, retried: true, networkRetry, allowCache })
+      wx.removeStorageSync('token'); await directLogin(); return request({ url, method, data, timeout, retried: true, networkRetry, allowCache, headers: extraHeaders })
     }
     throw httpError(res, url)
   } catch (e) {
     if (e && e.statusCode) throw e
     const safeRetry = method === 'GET' || ['/media/register-cloud', '/media/motion-jobs', '/vision/food-jobs'].includes(url)
-    if (safeRetry && networkRetry < 2) { await sleep(350 * Math.pow(2, networkRetry)); return request({ url, method, data, timeout, retried, networkRetry: networkRetry + 1, allowCache }) }
+    if (safeRetry && networkRetry < 2) { await sleep(350 * Math.pow(2, networkRetry)); return request({ url, method, data, timeout, retried, networkRetry: networkRetry + 1, allowCache, headers: extraHeaders }) }
     if (method === 'GET' && allowCache) { const cached = cacheGet(url); if (cached !== null) return cached }
     throw networkError(e, url)
   }
@@ -249,9 +249,9 @@ module.exports = {
   postIdempotent: (url, data, scope) =>
     request({ url, method: 'POST', data, headers: { 'Idempotency-Key': idempotencyKey(scope || 'post') } }),
   postLong: (url, data) => request({ url, method: 'POST', data, timeout: 120000 }),
-  patch: (url, data) => request({ url, method: 'PATCH', data }),
+  patch: (url, data, headers) => request({ url, method: 'PATCH', data, headers }),
   put: (url, data) => request({ url, method: 'PUT', data }),
-  del: (url, data={}) => request({ url, method: 'DELETE', data }),
+  del: (url, data={}, headers) => request({ url, method: 'DELETE', data, headers }),
   downloadPost, upload, streamPost, health, ensureToken, idempotencyKey,
   getBaseUrl: baseUrl, isCloud, getTransport: config.getTransport,
   setBaseUrl: config.setApiBaseUrl, clearBaseUrl: config.clearApiBaseUrl

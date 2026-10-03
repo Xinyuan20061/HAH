@@ -1,0 +1,45 @@
+<view class="policy-page">
+  <view class="policy-hero">
+    <view class="policy-kicker">STEP 3 · REVIEW THE EVIDENCE</view>
+    <view class="policy-title">复查这次观察</view>
+    <view class="policy-lead">执行、观察来源与可比较性分开审视；一次个人周期不等同因果证据。</view>
+  </view>
+  <view wx:if="{{loading}}" class="policy-loading">正在核对来源与判定门槛…</view>
+  <view wx:elif="{{error && !episode}}" class="policy-card policy-error"><view class="policy-copy">{{error}}</view><button class="policy-button secondary" bindtap="retry">重新读取</button></view>
+  <block wx:if="{{episode}}">
+    <view class="policy-card">
+      <view class="policy-card-title">已冻结的协议</view>
+      <view class="policy-row"><text>状态</text><text class="policy-pill">{{episode.statusLabel}}</text></view>
+      <view class="policy-row"><text>训练安排</text><text>{{episode.sessionMinutes || '按确认协议'}}<text wx:if="{{episode.sessionMinutes}}"> 分钟</text></text></view>
+      <view class="policy-row"><text>观察指标</text><text>{{explanation.metricLabel}}</text></view>
+      <view class="policy-row"><text>最低有效观察</text><text>{{explanation.minimumDays}} 条</text></view>
+      <view class="policy-muted">周期：{{episode.startLabel}} — {{episode.endLabel}}</view>
+    </view>
+
+    <view wx:if="{{verdict}}" class="policy-card">
+      <view class="policy-card-title">{{verdict.preview ? '复查预览（尚未保存）' : '本周期结论'}}</view>
+      <view wx:if="{{revoked}}" class="policy-note policy-warning">来源后来发生变化，旧结论已撤回，不再用于当前个性化排序。</view>
+      <view class="policy-row"><text>总体结果</text><text class="policy-pill">{{verdict.label}}</text></view>
+      <view class="policy-row"><text>执行记录</text><text>{{verdict.executionLabel}}</text></view>
+      <view class="policy-row"><text>观察覆盖</text><text>{{verdict.availabilityLabel}}</text></view>
+      <view wx:if="{{verdict.support_label !== null}}" class="policy-row"><text>预设方向</text><text>{{verdict.supportLabel}}</text></view>
+      <view wx:if="{{verdict.scoreLabel !== null}}" class="policy-row"><text>观察到的数值差异</text><text>{{verdict.scoreLabel}}</text></view>
+      <view wx:for="{{verdict.reasons}}" wx:key="*this" class="policy-note policy-warning">{{item}}</view>
+    </view>
+    <view wx:else class="policy-card">
+      <view class="policy-card-title">还不能生成最终复查</view>
+      <view class="policy-copy">周期窗口尚未结束，或当前状态不允许复查。你仍可返回周期页补充真实记录或停止周期。</view>
+    </view>
+
+    <view class="policy-card">
+      <view class="policy-card-title">来源与限制</view>
+      <view class="policy-copy">{{explanation.evidenceCount}} 条已保存的裁决证据引用。原始来源由服务端按所有权、版本与时间窗口复核。</view>
+      <view wx:for="{{explanation.limitations}}" wx:key="*this" class="policy-note">{{item}}</view>
+      <view class="policy-note policy-warning">即使观察到预设方向，也只描述这一次周期；不能据此宣称健康改善或证明因果。</view>
+    </view>
+
+    <button wx:if="{{canFinish}}" class="policy-button" loading="{{busy}}" disabled="{{busy}}" bindtap="finish">确认生成并保存复查</button>
+    <button class="policy-button secondary" bindtap="goHistory">查看历史与来源状态</button>
+    <view wx:if="{{error}}" class="policy-note policy-error">{{error}}</view>
+  </block>
+</view>

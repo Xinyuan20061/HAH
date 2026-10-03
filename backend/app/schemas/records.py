@@ -141,3 +141,4 @@ class ExerciseOut(ExerciseIn):
     model_config = ConfigDict(from_attributes=True)
     id: int
     recorded_at: UTCDateTime
+    version: int

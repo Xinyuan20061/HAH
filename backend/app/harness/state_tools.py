@@ -15,12 +15,11 @@ from typing import Any
 
 from app.harness.contracts import ToolContext, ToolSpec
 from app.services.health_state import (
+    FEATURES_BY_KEY,
     FEATURE_KEYS,
     build_snapshot,
     feature_history,
 )
-from app.services.health_state.builder import latest_snapshot, load_snapshot
-
 # Every persona may read the state layer; the planner persona also needs the
 # planning tools, so the allowed-agent set is explicit rather than the default.
 ALL_PERSONAS: tuple[str, ...] = ("xiaojian", "xiaokang", "steward", "planner")
@@ -56,8 +55,11 @@ def _snapshot(context: ToolContext, arguments: dict):
     key = ("state_snapshot", _window(context, arguments))
     cache: dict = context.state.setdefault("state_cache", {})
     if key not in cache:
+        from app.harness.plugins import health_state_excluded_sources
+
         cache[key] = build_snapshot(
-            context.db, uid, window_days=key[1], persist=False
+            context.db, uid, window_days=key[1], persist=False,
+            excluded_sources=health_state_excluded_sources(context.db, uid),
         )
     return cache[key]
 
@@ -108,6 +110,20 @@ def read_state_history(context: ToolContext, arguments: dict) -> dict[str, Any]:
             "reason": "unknown_feature",
             "available_keys": list(FEATURE_KEYS),
         }
+    from app.harness.plugins import capability_scope_granted
+
+    definition = FEATURES_BY_KEY.get(key)
+    additional_scopes = {
+        "motion_analysis": ("motion_evidence", "motion.analysis.read"),
+        "plan": ("plan_outcome", "plan.outcomes.read"),
+        "experiment": ("plan_outcome", "plan.outcomes.read"),
+    }
+    for source in definition.sources if definition else ():
+        binding = additional_scopes.get(source)
+        if source not in {"checkin", "diet_record", "exercise_record", "goal"} and binding is None:
+            return {"found": False, "reason": "source_unavailable", "key": key}
+        if binding and not capability_scope_granted(context.db, uid, *binding):
+            return {"found": False, "reason": "scope_not_granted", "key": key}
     try:
         days = int(arguments.get("days") or 30)
     except (TypeError, ValueError):

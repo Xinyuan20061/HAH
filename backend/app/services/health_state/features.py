@@ -51,6 +51,7 @@ class FeatureContext:
     window_days: int = 7
     end: date | None = None
     _days: list[dict] | None = None
+    excluded_sources: frozenset[str] = frozenset()
 
     @property
     def end_date(self) -> date:
@@ -62,7 +63,13 @@ class FeatureContext:
             start = self.end_date.fromordinal(
                 self.end_date.toordinal() - (self.window_days - 1)
             )
-            self._days = daily_facts(self.db, self.user_id, start, self.end_date)
+            self._days = daily_facts(
+                self.db,
+                self.user_id,
+                start,
+                self.end_date,
+                include_plan="plan" not in self.excluded_sources,
+            )
         return self._days
 
     def observed(self, key: str) -> list[dict]:
@@ -561,5 +568,7 @@ def display_titles() -> dict[str, str]:
 def compute_all(ctx: FeatureContext) -> dict[str, StateValue]:
     values: dict[str, StateValue] = {}
     for definition in FEATURES:
+        if ctx.excluded_sources.intersection(definition.sources):
+            continue
         values[definition.key] = definition.compute(ctx)
     return values

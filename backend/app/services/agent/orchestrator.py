@@ -136,8 +136,12 @@ def _strip_generated_urls(text: str) -> str:
 
 
 def _fallback_plan(context, message):
-    goals = context["goals"]
-    today = context["today"]
+    # Provider failures can happen before the optional context enrichment
+    # finishes.  The fallback must remain a safe, usable plan rather than
+    # raising a second exception while handling the first one.
+    goals = context.get("goals") or {}
+    today = context.get("today") or {}
+    exercise_target = int(goals.get("exercise_target") or 30)
     items = []
     if today.get("sleep_hours") and today["sleep_hours"] < 6:
         items.append(
@@ -156,21 +160,21 @@ def _fallback_plan(context, message):
                 "category": "exercise",
                 "title": "全身基础训练",
                 "description": "深蹲、俯卧撑/跪姿俯卧撑、划船替代动作与核心训练，动作质量优先。",
-                "target": {"duration_min": min(35, goals["exercise_target"])},
+                "target": {"duration_min": min(35, exercise_target)},
             },
             {
                 "date_offset": 2,
                 "category": "exercise",
                 "title": "中等强度有氧",
                 "description": "快走、骑行或慢跑，保持可以说短句的强度。",
-                "target": {"duration_min": max(20, min(40, goals["exercise_target"]))},
+                "target": {"duration_min": max(20, min(40, exercise_target))},
             },
             {
                 "date_offset": 4,
                 "category": "exercise",
                 "title": "力量 + 灵活性",
                 "description": "进行全身基础力量，并用 5–10 分钟完成拉伸和活动度练习。",
-                "target": {"duration_min": min(35, goals["exercise_target"])},
+                "target": {"duration_min": min(35, exercise_target)},
             },
         ]
     )
@@ -213,6 +217,61 @@ def _sanitize_plan(data):
         if items
         else None
     )
+
+
+def _public_decision_explanation(facts_used, observations, plan, actions, style):
+    labels = {
+        "profile": "健康档案", "today": "今日记录", "goals": "当前目标",
+        "recent_7d": "最近七天的记录", "weekly_facts": "周度汇总",
+        "health_state": "健康状态摘要", "health_state_snapshot": "健康状态摘要",
+        "knowledge_documents": "已审核健康资料", "training_adjustment": "训练负担与恢复限制",
+        "fitness_knowledge_graph": "审核动作知识", "motion_analysis": "动作分析证据",
+        "policy_history": "个人策略历史", "plan_outcomes": "计划执行与结果",
+    }
+    basis = list(dict.fromkeys(labels[key] for key in facts_used if isinstance(key, str) and key in labels))[:6]
+    limitations = []
+    for item in observations:
+        if item.status == "blocked":
+            limitations.append("部分个人数据未授权或相关能力已暂停，本次建议没有使用这部分信息。")
+        elif item.status == "error":
+            limitations.append("一项辅助能力暂时不可用；当前回答不会把缺失结果当作事实。")
+    if not basis:
+        limitations.append("本次没有可展示的个人记录依据，回答按一般健康信息处理。")
+    alternatives = []
+    seen = set()
+    for observation in observations:
+        payload = observation.output if isinstance(observation.output, dict) else {}
+        for candidate in payload.get("alternatives", []) if isinstance(payload.get("alternatives"), list) else []:
+            if not isinstance(candidate, dict):
+                continue
+            title = str(candidate.get("title") or "").strip()[:100]
+            reason = str(candidate.get("reason") or "").strip()[:180]
+            if title and title not in seen:
+                seen.add(title)
+                alternatives.append({"title": title, "reason": reason or "可作为另一种选择"})
+        if len(alternatives) >= 2:
+            break
+    estimated_load = None
+    if isinstance(plan, dict) and isinstance(plan.get("items"), list):
+        items = plan["items"]
+        durations = []
+        for item in items:
+            target = item.get("target") if isinstance(item, dict) else None
+            raw = target.get("duration_min") if isinstance(target, dict) else None
+            if isinstance(raw, (int, float)) and 0 < raw <= 600:
+                durations.append(int(raw))
+        if durations:
+            days = len({item.get("date_offset") for item in items if isinstance(item, dict) and item.get("date_offset") is not None})
+            estimated_load = {"sessions": days or len(durations), "minutes_per_week": sum(durations), "label": f"约 {days or len(durations)} 次 · {sum(durations)} 分钟/周"}
+    style_labels = {"balanced": "清晰自然", "concise": "简短直接", "evidence_first": "依据优先"}
+    return {
+        "basis": basis,
+        "limitations": list(dict.fromkeys(limitations))[:3],
+        "alternatives": alternatives[:2],
+        "estimated_load": estimated_load,
+        "action_confirmation_required": bool(plan or actions),
+        "response_style": style_labels.get(style, "清晰自然"),
+    }
 
 
 async def respond(
@@ -268,6 +327,34 @@ async def respond(
     tool_context.state["run_id"] = run.id
     tool_context.state["action_source"] = "agent"
     tool_context.state["budget"] = budget
+    from app.harness.plugins import authorize_capability, response_preferences
+    user_presentation = response_preferences(db, user.id)
+    presentation_styles = {
+        "balanced": "清晰自然，先给结论并简要交代依据、限制和下一步",
+        "concise": "简短直接，但保留安全提醒、关键依据和不确定性",
+        "evidence_first": "先说明已授权记录或审核资料依据，资料不足时明确说不知道",
+    }
+    configured_preferences = user_presentation.get("capabilities") or []
+    if configured_preferences:
+        capability_preference_lines = []
+        for item in configured_preferences:
+            parts = []
+            if item.get("goal"):
+                parts.append(f"优先目标：{item['goal']}")
+            parts.append(f"表达方式：{presentation_styles.get(item.get('style'), presentation_styles['balanced'])}")
+            parts.append("相关对话中可轻提示" if item.get("notification_frequency") == "on_request" else "不额外提示")
+            capability_preference_lines.append(f"{item.get('plugin') or '健康能力'}（{'；'.join(parts)}）")
+        presentation_instruction = (
+            "能力中心偏好（各自只作用于对应领域，不跨能力套用）："
+            + "；".join(capability_preference_lines)
+            + "。只有本轮确实涉及相应能力时才采用；用户当前明确要求优先，偏好不得改变安全门槛、授权范围或证据标准。\n"
+        )
+    else:
+        presentation_instruction = "表达偏好：清晰自然，先给结论并简要交代依据、限制和下一步。偏好只影响呈现，不改变安全门槛、授权范围或证据标准。\n"
+    plan_capability = authorize_capability(
+        db, user.id, "plan_outcome", "propose", "plan.proposals", "new_work",
+    )
+    plan_proposal_authorized = bool(plan_capability.get("allowed"))
     context: dict = {}
     harness_observations: list[ToolObservation] = []
     harness_stop_reason = "safety"
@@ -380,6 +467,8 @@ async def respond(
             f"用户请求：{message}\n"
             + ("对话记忆：" + memory if memory else "")
             + f"\n{instruction}\n"
+            + presentation_instruction
+            + ("计划行动申请权限已开启，可在符合安全边界时生成结构化计划。\n" if plan_proposal_authorized else "计划行动申请未获授权：不要生成可一键写入的结构化计划，可提供一般原则并说明如何在能力中心开启。\n")
             + '最终结果使用：{"reply":"简洁回答","facts_used":[...],"plan":null}。'
             + '若意图是制定本周计划，plan 改为 {"title":"","items":[{"date_offset":0,"category":"exercise|diet|sleep|habit|recovery","title":"","description":"","target":{"duration_min":30}}]}。'
             + "date_offset 只能为0到6；最多10项。"
@@ -501,6 +590,8 @@ async def respond(
                 + data["reply"]
             )
         data["plan"] = _sanitize_plan(data)
+        if not plan_proposal_authorized:
+            data["plan"] = None
         adjustment = context.get("training_adjustment", {})
         data["plan"], applied_changes = apply_plan_guardrails(data["plan"], adjustment)
         data["plan_adjustment"] = {**adjustment, "applied_changes": applied_changes}
@@ -594,9 +685,35 @@ async def respond(
         data["actions"] = actions
         result = data
 
+    # A model can ignore prompt guidance. Never expose a structured plan card
+    # (whose UI includes a one-tap write action) without the explicit capability
+    # grant; the API apply-plan gate remains a second independent boundary.
+    if not plan_proposal_authorized:
+        result["plan"] = None
+
+    explanation = _public_decision_explanation(
+        result.get("facts_used") if isinstance(result.get("facts_used"), list) else [],
+        harness_observations,
+        result.get("plan") if isinstance(result.get("plan"), dict) else None,
+        result.get("actions") if isinstance(result.get("actions"), list) else [],
+        response_style,
+    )
+    if intent == "plan" and not plan_proposal_authorized:
+        explanation["limitations"].append("尚未授权计划行动申请，因此本次不提供一键写入计划。")
+    result["decision_explanation"] = explanation
     elapsed = (time.perf_counter() - started) * 1000
     run.intent = intent
-    run.context_json = json.dumps(context, ensure_ascii=False, default=str)
+    stored_context = dict(context) if isinstance(context, dict) else {}
+    installation = plan_capability.get("installation")
+    if plan_proposal_authorized and installation is not None:
+        stored_context["_capability_bindings"] = {
+            "plan_outcome": {
+                "installation_id": installation.id,
+                "config_version": installation.config_version,
+                "manifest_hash": installation.reviewed_manifest_hash,
+            }
+        }
+    run.context_json = json.dumps(stored_context, ensure_ascii=False, default=str)
     run.result_json = json.dumps(result, ensure_ascii=False, default=str)
     run.provider = provider
     run.status = "completed"

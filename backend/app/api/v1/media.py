@@ -32,6 +32,7 @@ from app.models import (
     User,
 )
 from app.services.storage import get_storage
+from app.services.storage import StorageError
 from app.schemas.errors import ApiException
 from app.services.ai_jobs import (
     create_ai_job,
@@ -274,6 +275,69 @@ def refresh_cloud_source(
         "media_id": asset.id,
         "resumed_jobs": resumed,
         "source_url_expires_at": utc_iso(asset.source_url_expires_at),
+    }
+
+
+@router.get("/{media_id}/playback")
+def media_playback(media_id: int, user=Depends(current_user), db: Session = Depends(get_db)):
+    """Return a user-owned, short-lived playback URL for a source video.
+
+    A task result may outlive the mini-program's temporary local path. The API
+    therefore resolves playback from the authorized media asset and never
+    exposes a worker download URL as a durable asset link.
+    """
+    asset = db.scalar(select(MediaAsset).where(MediaAsset.id == media_id))
+    if asset is None or asset.user_id != user.id:
+        raise ApiException(404, "MEDIA_NOT_FOUND", "视频素材不存在")
+    if asset.media_type != "video" or asset.status not in {"ready", "completed"}:
+        return {
+            "state": "unavailable",
+            "playable_url": None,
+            "expires_at": None,
+            "mime_type": asset.content_type or "video/mp4",
+            "duration_ms": None,
+            "reason": "MEDIA_NOT_PLAYABLE",
+        }
+
+    now = utc_now()
+    if asset.storage_backend == "cloudbase":
+        if not asset.source_url or not asset.source_url_expires_at or asset.source_url_expires_at <= now:
+            return {
+                "state": "unavailable",
+                "playable_url": None,
+                "expires_at": asset.source_url_expires_at.isoformat() + "Z" if asset.source_url_expires_at else None,
+                "mime_type": asset.content_type or "video/mp4",
+                "duration_ms": None,
+                "reason": "SOURCE_URL_EXPIRED",
+            }
+        return {
+            "state": "available",
+            "playable_url": asset.source_url,
+            "expires_at": asset.source_url_expires_at.isoformat() + "Z",
+            "mime_type": asset.content_type or "video/mp4",
+            "duration_ms": None,
+        }
+
+    try:
+        url = get_storage().public_url(asset.storage_key)
+    except StorageError:
+        return {
+            "state": "unavailable",
+            "playable_url": None,
+            "expires_at": None,
+            "mime_type": asset.content_type or "video/mp4",
+            "duration_ms": None,
+            "reason": "STORAGE_UNAVAILABLE",
+        }
+    if url.startswith("/"):
+        url = settings.public_base_url.rstrip("/") + url
+    # Local URLs are served by the app and do not carry a remote expiry.
+    return {
+        "state": "available",
+        "playable_url": url,
+        "expires_at": None,
+        "mime_type": asset.content_type or "video/mp4",
+        "duration_ms": None,
     }
 
 
@@ -1143,13 +1207,43 @@ def motion_analysis_evidence(
             continue
         frame_id = frame.get("id")
         preview_url = None
+        preview_state = "unavailable"
+        unavailable_reason = "missing_evidence_row"
+        ev = None
         if frame_id:
+            ev = db.scalar(
+                select(MotionEvidenceFrame).where(
+                    MotionEvidenceFrame.run_id == run.id,
+                    MotionEvidenceFrame.frame_id == str(frame_id),
+                )
+            )
+        if ev is not None and ev.preview_asset_id:
+            expires_at = ev.expires_at
+            if expires_at is not None and expires_at <= utc_now():
+                preview_state = "expired"
+                unavailable_reason = "expired"
+            else:
+                try:
+                    # The result JSON is not an asset receipt. Verify the real
+                    # object before minting a URL, otherwise a stale worker id
+                    # becomes a broken image loop in the mini-program.
+                    storage.read_preview_bytes(ev.preview_asset_id)
+                except PreviewNotFound:
+                    unavailable_reason = "object_missing"
+                except Exception:  # pragma: no cover - storage provider boundary
+                    unavailable_reason = "storage_unavailable"
+                else:
+                    preview_state = "available"
+                    unavailable_reason = None
+        if preview_state == "available" and frame_id:
             try:
                 preview_url = origin + storage.build_read_url(
                     run.id, frame_id, user_id=run.user_id, expiry_ts=expiry_ts
                 )
             except Exception:  # pragma: no cover - storage not wired / B pending
                 preview_url = None
+                preview_state = "unavailable"
+                unavailable_reason = "signing_unavailable"
         frames.append(
             {
                 "id": frame_id,
@@ -1159,8 +1253,18 @@ def motion_analysis_evidence(
                 "explanation": frame.get("explanation"),
                 "next_step": frame.get("next_step"),
                 "advice_kind": frame.get("advice_kind"),
-                "has_image": bool(frame.get("preview_asset_id") or frame.get("preview_url")),
+                "preview": {
+                    "state": preview_state,
+                    "url": preview_url,
+                    "expires_at": ev.expires_at.isoformat() + "Z" if ev and ev.expires_at else None,
+                    "sha256": frame.get("preview_sha256"),
+                    "unavailable_reason": unavailable_reason,
+                },
+                # Legacy fields remain, but are now derived from verified bytes.
+                "has_image": preview_state == "available",
                 "preview_url": preview_url,
+                "preview_state": preview_state,
+                "unavailable_reason": unavailable_reason,
             }
         )
     return {

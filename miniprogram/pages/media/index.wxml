@@ -4,7 +4,7 @@
   <view class="media-hero"><view class="kicker">动作反馈</view><view class="title">录一段，看看动作</view><view class="subtitle">保持全身入镜，建议拍摄 5–20 秒。</view></view>
 
   <view class="drop tappable" bindtap="choose" hover-class="tap" hover-start-time="0" hover-stay-time="80"><view class="upload-icon ui-fixed-circle"><image src="/assets/icons/upload.png" mode="aspectFit"/></view><text class="b">{{file?'已选择视频':'选择动作视频'}}</text><text class="small">{{file?name:'支持 MP4 / MOV'}}</text></view>
-  <video wx:if="{{file&&type==='video'}}" id="motionVideo" src="{{file}}" controls object-fit="contain" class="preview"></video>
+  <video wx:if="{{(file&&type==='video') || playableUrl}}" id="motionVideo" src="{{playableUrl || file}}" controls object-fit="contain" class="preview"></video>
 
   <view class="privacy-note">开启云端复核时，会自动查看这段视频的关键画面（已模糊人脸）；关闭则只用动作轨迹本地分析。结果仅供一般健身参考，不做医疗判断。</view>
 
@@ -42,25 +42,26 @@
     </view>
 
     <!-- ④ 时间轴：主画面 + 横向时间条 -->
-    <view wx:if="{{vm.timelineFrames.length}}" class="timeline-block">
+    <view wx:if="{{timelineFrames.length}}" class="timeline-block">
       <view class="block-title">动作时间轴</view>
-      <view wx:if="{{vm.activeFrame}}" class="frame-detail-card">
-        <image wx:if="{{vm.activeFrame.previewUrl && !brokenImgs[vm.activeFrame.id]}}" src="{{vm.activeFrame.previewUrl}}" mode="aspectFit" class="frame-hero-img" data-id="{{vm.activeFrame.id}}" binderror="onFrameImgError"/>
-        <view wx:elif="{{!(vm.activeFrame.previewUrl && !brokenImgs[vm.activeFrame.id])}}" class="frame-hero-placeholder">暂无画面，文字讲解见下</view>
+      <view wx:if="{{activeFrame}}" class="frame-detail-card">
+        <image wx:if="{{activeFrame.previewUrl && !brokenImgs[activeFrame.id]}}" src="{{activeFrame.previewUrl}}" mode="aspectFit" class="frame-hero-img" data-id="{{activeFrame.id}}" binderror="onFrameImgError"/>
+        <view wx:elif="{{!(activeFrame.previewUrl && !brokenImgs[activeFrame.id])}}" class="frame-hero-placeholder">{{activeFrame.previewState==='expired'?'画面已过期，文字讲解仍可查看':'暂无可用画面，文字讲解见下'}}</view>
         <view class="frame-detail-head">
-          <view class="frame-detail-title">{{vm.activeFrame.timeLabel}}<text wx:if="{{vm.activeFrame.phase}}"> · {{vm.activeFrame.phase}}</text></view>
-          <view class="replay-btn tappable" bindtap="replayFrame" hover-class="tap" hover-start-time="0" hover-stay-time="80">回看这一刻</view>
+          <view class="frame-detail-title">{{activeFrame.timeLabel}}<text wx:if="{{activeFrame.phase}}"> · {{activeFrame.phase}}</text></view>
+          <view wx:if="{{playableUrl}}" class="replay-btn tappable" bindtap="replayFrame" hover-class="tap" hover-start-time="0" hover-stay-time="80">回看这一刻</view>
+          <view wx:else class="replay-btn disabled">视频不可回放</view>
         </view>
-        <view wx:if="{{vm.activeFrame.adviceKindLabel}}" class="frame-stage">{{vm.activeFrame.adviceKindLabel}}</view>
+        <view wx:if="{{activeFrame.adviceKindLabel}}" class="frame-stage">{{activeFrame.adviceKindLabel}}</view>
         <view class="frame-explanation">
-          <view wx:if="{{vm.activeFrame.observation}}"><b>看到什么</b><text>{{vm.activeFrame.observation}}</text></view>
-          <view wx:if="{{vm.activeFrame.explanation}}"><b>为什么要留意</b><text>{{vm.activeFrame.explanation}}</text></view>
-          <view wx:if="{{vm.activeFrame.nextStep}}"><b>下一遍怎么做</b><text>{{vm.activeFrame.nextStep}}</text></view>
+          <view wx:if="{{activeFrame.observation}}"><b>看到什么</b><text>{{activeFrame.observation}}</text></view>
+          <view wx:if="{{activeFrame.explanation}}"><b>为什么要留意</b><text>{{activeFrame.explanation}}</text></view>
+          <view wx:if="{{activeFrame.nextStep}}"><b>下一遍怎么做</b><text>{{activeFrame.nextStep}}</text></view>
         </view>
       </view>
       <scroll-view scroll-x enhanced show-scrollbar="{{false}}" class="frame-strip">
-        <view wx:for="{{vm.timelineFrames}}" wx:key="id"
-              class="frame-item {{vm.activeFrame.id===item.id?'on':''}}"
+        <view wx:for="{{timelineFrames}}" wx:key="id"
+              class="frame-item {{activeFrame.id===item.id?'on':''}}"
               data-id="{{item.id}}" bindtap="selectFrame" hover-class="tap" hover-start-time="0" hover-stay-time="80">
           <image wx:if="{{item.previewUrl && !brokenImgs[item.id]}}" src="{{item.previewUrl}}" mode="aspectFill" data-id="{{item.id}}" binderror="onFrameImgError"/>
           <view wx:elif="{{!(item.previewUrl && !brokenImgs[item.id])}}" class="frame-thumb-placeholder"></view>

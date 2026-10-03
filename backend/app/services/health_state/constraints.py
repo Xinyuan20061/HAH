@@ -102,8 +102,10 @@ def _out_of_catalog_exercises(db: Session, user_id: int) -> list[str]:
 
 
 def build_constraints(
-    db: Session, user_id: int, ctx: FeatureContext, values: dict
+    db: Session, user_id: int, ctx: FeatureContext, values: dict,
+    *, excluded_sources: set[str] | None = None,
 ) -> list[HealthConstraint]:
+    excluded = excluded_sources or set()
     constraints: list[HealthConstraint] = []
 
     for category in _rule_flags(db, user_id):
@@ -128,7 +130,7 @@ def build_constraints(
         )
 
     trend = values.get("motion_quality_trend")
-    if trend is not None and trend.value is None:
+    if "motion_analysis" not in excluded and trend is not None and trend.value is None:
         limitations = " ".join(trend.limitations)
         if "至少 3 次" in limitations or "3 次" in limitations:
             constraints.append(
@@ -142,15 +144,16 @@ def build_constraints(
                 )
             )
 
-    for exercise in _out_of_catalog_exercises(db, user_id):
-        constraints.append(
-            HealthConstraint(
-                key=f"unmeasurable_exercise:{exercise}",
-                severity="hard",
-                source="motion_catalog",
-                description=f"动作 {exercise} 没有登记的测量器，禁止据此产生数值评分或自动加负荷。",
+    if "motion_analysis" not in excluded:
+        for exercise in _out_of_catalog_exercises(db, user_id):
+            constraints.append(
+                HealthConstraint(
+                    key=f"unmeasurable_exercise:{exercise}",
+                    severity="hard",
+                    source="motion_catalog",
+                    description=f"动作 {exercise} 没有登记的测量器，禁止据此产生数值评分或自动加负荷。",
+                )
             )
-        )
 
     profile = db.scalar(select(HealthProfile).where(HealthProfile.user_id == user_id))
     if profile is None:
@@ -163,37 +166,39 @@ def build_constraints(
             )
         )
 
-    intent = db.scalar(
-        select(UserTrainingIntent).where(UserTrainingIntent.user_id == user_id)
-    )
-    if intent is not None:
-        for item in _excluded_exercises(intent):
+    if "user_preference" not in excluded:
+        intent = db.scalar(
+            select(UserTrainingIntent).where(UserTrainingIntent.user_id == user_id)
+        )
+        if intent is not None:
+            for item in _excluded_exercises(intent):
+                constraints.append(
+                    HealthConstraint(
+                        key=f"user_excluded_exercise:{item}",
+                        severity="hard",
+                        source="user_preference",
+                        description=f"用户明确排除的动作 {item} 永不自动加入计划。",
+                    )
+                )
+
+    if not {"plan", "experiment"}.intersection(excluded):
+        experiment = db.scalar(
+            select(AgentMicroExperiment).where(
+                AgentMicroExperiment.user_id == user_id,
+                AgentMicroExperiment.status == "active",
+            )
+        )
+        if experiment is not None:
             constraints.append(
                 HealthConstraint(
-                    key=f"user_excluded_exercise:{item}",
-                    severity="hard",
-                    source="user_preference",
-                    description=f"用户明确排除的动作 {item} 永不自动加入计划。",
-                )
-            )
-
-    experiment = db.scalar(
-        select(AgentMicroExperiment).where(
-            AgentMicroExperiment.user_id == user_id,
-            AgentMicroExperiment.status == "active",
-        )
-    )
-    if experiment is not None:
-        constraints.append(
-            HealthConstraint(
-                key="experiment_active",
-                severity="soft",
-                source="experiment",
-                description=(
-                    f"微实验 {experiment.insight_code} 进行中；一次只改变一个主要行为，"
-                    "避免同时引入互斥改动。"
+                    key="experiment_active",
+                    severity="soft",
+                    source="experiment",
+                    description=(
+                        f"微实验 {experiment.insight_code} 进行中；一次只改变一个主要行为，"
+                        "避免同时引入互斥改动。"
+                    ),
                 ),
             )
-        )
 
     return constraints

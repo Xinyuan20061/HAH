@@ -181,6 +181,8 @@ def apply_adjustment(db: Session, user_id: int, adjustment_id: int):
     a.applied_at = utc_now()
     db.add(setting)
     db.add(a)
+    from app.services.health_state.invalidation import SOURCE_GOAL, record_changed
+    record_changed(db, user_id, SOURCE_GOAL)
     db.commit()
     db.refresh(a)
     return a

@@ -24,16 +24,22 @@ function normalizeAgent(agent) {
   })
 }
 
-function presentTrace(trace) {
+function presentTrace(trace, explanation) {
   if (!trace || !trace.specialist) return null
   const reasons = []
   ;(trace.adjustment_reasons || []).forEach(x => { if (x && x.label) reasons.push(x.label) })
   ;(trace.coaching_focus || []).forEach(x => { if (x && x.label) reasons.push(x.label) })
   ;(trace.plan_guardrail_changes || []).forEach(x => { if (x) reasons.push(x) })
+  const detail = explanation || {}
   return {
     specialistLabel: SPECIALIST_NAMES[trace.specialist] || '综合建议',
     reasons: [...new Set(reasons)].slice(0, 4),
-    hasReasons: reasons.length > 0
+    hasReasons: reasons.length > 0,
+    basis: (detail.basis || []).slice(0, 5),
+    limitations: (detail.limitations || []).slice(0, 3),
+    alternatives: (detail.alternatives || []).slice(0, 2),
+    estimatedLoad: detail.estimated_load ? detail.estimated_load.label : '',
+    responseStyle: detail.response_style || ''
   }
 }
 
@@ -241,7 +247,7 @@ Page({
       resources: r.resources || [],
       knowledgeSources: r.knowledge_sources || [],
       exerciseRecommendations: r.exercise_recommendations && r.exercise_recommendations.items || [],
-      trace: presentTrace(r.trace),
+      trace: presentTrace(r.trace, r.decision_explanation),
       runId: r.run_id,
       applied: false,
       safetyLevel: r.safety_level || 'normal',

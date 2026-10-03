@@ -73,7 +73,12 @@ def plan_context_for(db: Session, user_id: int):
     if user is None:
         return PlanContext()
     context = read_context(db, user)
-    snapshot = build_snapshot(db, user_id, persist=False)
+    from app.harness.plugins import health_state_excluded_sources
+
+    snapshot = build_snapshot(
+        db, user_id, persist=False,
+        excluded_sources=health_state_excluded_sources(db, user_id),
+    )
     recovery: list[str] = []
     debt = snapshot.numeric("sleep_debt_7d")
     if debt is not None and debt >= 5:
@@ -311,10 +316,19 @@ def _experiment_cancel(db: Session, *, user_id: int, arguments: dict[str, Any]) 
 def _policy_episode_start(db: Session, *, user_id: int, arguments: dict[str, Any]) -> dict:
     from app.services.policy_learning.repository import PolicyError, start_episode
     try:
-        return start_episode(db, user_id, str(arguments["strategy_unit_id"]), str(arguments["protocol_hash"]), int(arguments.get("version") or 1), arguments.get("decision_id"))
+        return start_episode(
+            db,
+            user_id,
+            str(arguments["strategy_unit_id"]),
+            str(arguments["protocol_hash"]),
+            int(arguments.get("version") or 1),
+            arguments.get("decision_id"),
+            state_snapshot_hash=str(arguments["state_snapshot_hash"]),
+            capability_snapshot_hash=str(arguments["capability_snapshot_hash"]),
+        )
     except PolicyError as exc:
         from app.schemas.errors import ApiException
-        status = 404 if exc.code == "POLICY_NOT_FOUND" else 409 if exc.code.endswith("CONFLICT") or exc.code == "POLICY_EPISODE_ACTIVE" else 422
+        status = 404 if exc.code == "POLICY_NOT_FOUND" else 409 if exc.code.endswith("CONFLICT") or exc.code in {"POLICY_EPISODE_ACTIVE", "POLICY_STATE_CHANGED", "POLICY_CAPABILITY_CHANGED", "POLICY_PROTOCOL_CHANGED"} else 422
         raise ApiException(status, exc.code, exc.message) from exc
 
 

@@ -41,7 +41,7 @@ def migrated_engine(tmp_path_factory):
 
 
 @pytest.fixture
-def api(migrated_engine, monkeypatch):
+def api(migrated_engine, monkeypatch, request):
     with migrated_engine.begin() as connection:
         for table in reversed(Base.metadata.sorted_tables):
             # Immutable migration seed data, not per-test/user state. Keep it just
@@ -88,6 +88,23 @@ def api(migrated_engine, monkeypatch):
         db.add(user)
         db.commit()
         user_id = user.id
+        # Most legacy tests exercise an already-consented product surface. The
+        # dedicated plugin tests intentionally omit this seed so they can prove
+        # that missing consent is fail-closed.
+        if not request.module.__name__.endswith("test_harness_plugins"):
+            from app.harness.plugins import BUILTIN_PLUGINS
+            from app.models import HarnessPluginInstallation
+            from app.core.time import utc_now
+            for manifest in BUILTIN_PLUGINS:
+                db.add(HarnessPluginInstallation(
+                    user_id=user_id,
+                    plugin_id=manifest.plugin_id,
+                    plugin_version=manifest.version,
+                    enabled=True,
+                    config_json='{"data_scope": [], "notifications": true}',
+                    enabled_at=utc_now(),
+                ))
+            db.commit()
     with TestClient(app) as client:
         client.headers["Authorization"] = "Bearer " + create_access_token(str(user_id))
         client.user_id = user_id

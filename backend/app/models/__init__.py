@@ -72,4 +72,5 @@ from .models import (
     PolicyDomainGeneration,
     PolicyLearningControl,
     HarnessPluginInstallation,
+    HarnessCapabilityAudit,
 )

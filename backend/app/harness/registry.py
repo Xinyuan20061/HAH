@@ -54,16 +54,25 @@ class ToolRegistry:
         if spec is None or context.agent_id not in spec.allowed_agents:
             return ToolObservation(name, "blocked", None, "工具未注册或当前智能体无权使用", step)
         user_id = getattr(context.user, "id", None)
+        capability = {"allowed": True, "reason": None}
         if isinstance(user_id, int):
-            from app.harness.plugins import is_tool_enabled
-            if not is_tool_enabled(context.db, user_id, name):
-                return ToolObservation(name, "blocked", None, "该健康能力已暂停，请在能力中心重新启用", step)
+            from app.harness.plugins import authorize_tool, record_tool_access
+            capability = authorize_tool(context.db, user_id, name)
+            if not capability.get("allowed"):
+                record_tool_access(
+                    context.db, user_id, name, allowed=False, status="blocked",
+                    reason=capability.get("reason"),
+                )
+                return ToolObservation(name, "blocked", None, _block_summary(capability.get("reason")), step)
         try:
             output = spec.handler(context, arguments or {})
         except Exception as exc:
             # The reason is a whitelisted contract message, never provider text:
             # it makes a rejected proposal diagnosable instead of opaque.
             reason = str(exc)[:160] or type(exc).__name__
+            if isinstance(user_id, int):
+                from app.harness.plugins import record_tool_access
+                record_tool_access(context.db, user_id, name, allowed=True, status="error")
             return ToolObservation(
                 name, "error", None, f"工具执行失败: {reason}", step
             )
@@ -74,10 +83,26 @@ class ToolRegistry:
             status = "approval_required"
             if isinstance(output, dict) and output.get("approval_required") is False:
                 status = "ok" if confirmed else "approval_required"
+            if isinstance(user_id, int):
+                from app.harness.plugins import record_tool_access
+                record_tool_access(context.db, user_id, name, allowed=True, status=status)
             return ToolObservation(
                 name, status, output, _summarize_action(output), step
             )
+        if isinstance(user_id, int):
+            from app.harness.plugins import record_tool_access
+            record_tool_access(context.db, user_id, name, allowed=True, status="ok")
         return ToolObservation(name, "ok", output, _summarize(output), step)
+
+
+def _block_summary(reason: str | None) -> str:
+    if reason == "capability_paused":
+        return "这项能力已暂停；可以在能力中心恢复，新建议不会在暂停期间生成"
+    if reason == "scope_not_granted":
+        return "当前授权范围不包含完成这项建议所需的数据"
+    if reason == "proposals_disabled":
+        return "这项能力目前不允许提出行动申请；你仍可查看已有记录"
+    return "这项能力未获授权或审核版本已变化，请检查能力设置"
 
 
 def _summarize_action(output: Any) -> str:

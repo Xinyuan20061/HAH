@@ -125,6 +125,10 @@ def _seed_run(db: Session, user_id: int, summary_text: str) -> int:
 
 def _ctx(db: Session, user_id: int, agent_id: str = "xiaojian") -> ToolContext:
     user = db.get(User, user_id)
+    # These direct registry tests model an already-consented motion capability;
+    # the product default remains opt-in and is covered by plugin tests.
+    from app.harness.plugins import set_plugin_enabled
+    set_plugin_enabled(db, user_id, "motion_evidence", enabled=True)
     return ToolContext(db=db, user=user, agent_id=agent_id)
 
 

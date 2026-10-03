@@ -28,16 +28,19 @@ import hashlib
 import json
 import logging
 import uuid
+from dataclasses import replace
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.time import utc_now
+from app.services.health_state.invalidation import SOURCE_MOTION, record_changed
 from app.models import (
     AIJob,
     MediaAsset,
     MotionAnalysisFeedback,
     MotionAnalysisRun,
+    MotionGoldEvaluation,
 )
 from app.services.motion.decision import (
     KineticsCandidate,
@@ -243,6 +246,24 @@ def _frame_image_data_url(frame: dict) -> str | None:
     if not raw:
         return None
     return "data:image/jpeg;base64," + base64.b64encode(raw).decode("ascii")
+
+
+def _validated_score_gate(db: Session, exercise_id: str | None) -> tuple[bool, int | None, str]:
+    """Only a persisted, per-action Gold gate can unlock quality scores."""
+    if not exercise_id:
+        return False, None, "NO_RECOGNIZED_EXERCISE"
+    row = db.scalar(
+        select(MotionGoldEvaluation)
+        .where(
+            MotionGoldEvaluation.exercise_id == exercise_id,
+            MotionGoldEvaluation.tier == "gold",
+            MotionGoldEvaluation.available.is_(True),
+        )
+        .order_by(MotionGoldEvaluation.created_at.desc())
+    )
+    if row is None:
+        return False, None, "NO_VALIDATED_SCORER"
+    return True, row.id, "VALIDATED_SCORER"
 
 
 def _normalize_kinetics(kinetics_raw: dict | None) -> list[KineticsCandidate]:
@@ -615,6 +636,12 @@ def handle_unified_worker_result(
 
     vision_evidence = _coach_to_vision(coach_review) if coach_review is not None else None
     decision: MotionDecision = decide_motion(local, vision_evidence, tuple(kinetics_cands), quality)
+    score_ok, evaluation_id, score_reason = _validated_score_gate(
+        db, decision.recognition.canonical_id if decision.scoreable else None
+    )
+    # Recognition and measured repetitions remain usable, but a rules score is
+    # never presented as a validated quality score without a matching Gold row.
+    decision = replace(decision, scoreable=bool(decision.scoreable and score_ok))
 
     # ---- summary stage --------------------------------------------------- #
     run.status = "feedback_generation"
@@ -659,6 +686,8 @@ def handle_unified_worker_result(
         stage_log=stage_log,
         cache_key=cache_key,
         worker_method=str(recognition.get("method") or "local_worker"),
+        evaluation_id=evaluation_id,
+        score_reason=score_reason,
     )
 
     if decision.recognition.state == "unknown" and decision.reason_code == "INSUFFICIENT_VIDEO_EVIDENCE":
@@ -680,6 +709,7 @@ def handle_unified_worker_result(
 
     run.status = final_status
     run.finished_at = utc_now()
+    record_changed(db, job.user_id, SOURCE_MOTION)
     db.commit()
 
 
@@ -756,7 +786,7 @@ def _metrics_payload(decision: MotionDecision, pose: dict, score_in: dict) -> li
             ("completeness", "分"),
             ("stability", "分"),
             ("rhythm_control", "分"),
-            ("risk_index", "风险分"),
+            ("risk_index", ""),
             ("overall", "分"),
         ):
             v = score_in.get(key)
@@ -831,6 +861,8 @@ def _build_result(
     stage_log: list[dict],
     cache_key: str,
     worker_method: str,
+    evaluation_id: int | None = None,
+    score_reason: str = "NO_VALIDATED_SCORER",
 ) -> dict:
     rec = decision.recognition
     metrics = _metrics_payload(decision, pose, score_in)
@@ -873,7 +905,10 @@ def _build_result(
                 "id": real_id,
                 "timestamp_ms": t_ms,
                 "preview_asset_id": fr.get("preview_asset_id"),
-                "preview_url": _frame_image_data_url(fr),
+                # Preview bytes are never embedded in the user result. The
+                # read-side /evidence endpoint verifies the real object and
+                # mints a short-lived URL per frame.
+                "preview_url": None,
                 "phase": phase,
                 "observation": observation,
                 "explanation": explanation,
@@ -924,6 +959,12 @@ def _build_result(
             "review_status": review_status,
         },
         "capabilities": capabilities,
+        "capability": {
+            "tier": "validated_score" if decision.scoreable else "visual_feedback",
+            "score_available": bool(decision.scoreable),
+            "reason_code": "VALIDATED_SCORER" if decision.scoreable else score_reason,
+            "evaluation_id": evaluation_id if decision.scoreable else None,
+        },
         "summary": {
             "text": summary_text,
             "primary_next_step": primary_next_step,
@@ -1012,6 +1053,10 @@ def apply_post_review(
     quality = quality_from_receipt(recognition, pose, frames)
     vision_evidence = _coach_to_vision(coach_review) if coach_review is not None else None
     decision = decide_motion(local, vision_evidence, tuple(kinetics_cands), quality)
+    score_ok, evaluation_id, score_reason = _validated_score_gate(
+        db, decision.recognition.canonical_id if decision.scoreable else None
+    )
+    decision = replace(decision, scoreable=bool(decision.scoreable and score_ok))
 
     indexed = [(f"frame:{i}", fr) for i, fr in enumerate(frames) if isinstance(fr, dict)]
     summary = evidence.get("summary") or {}
@@ -1040,6 +1085,8 @@ def apply_post_review(
         stage_log=list(evidence.get("stages") or []),
         cache_key=str(evidence.get("cache_key") or "post-review"),
         worker_method=str(recognition.get("method") or "local_worker"),
+        evaluation_id=evaluation_id,
+        score_reason=score_reason,
     )
 
     feedback = db.scalar(
@@ -1052,6 +1099,7 @@ def apply_post_review(
     feedback.result_json = json.dumps(result, ensure_ascii=False, default=str)
     run.status = "completed"
     run.finished_at = utc_now()
+    record_changed(db, run.user_id, SOURCE_MOTION)
     db.commit()
     return result
 

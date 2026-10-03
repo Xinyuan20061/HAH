@@ -5,13 +5,42 @@ from __future__ import annotations
 import json
 from datetime import timedelta
 
-from sqlalchemy import select, update
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.time import utc_now
 from app.models import PolicyAdjudication, PolicyDomainGeneration, PolicyEpisode, PolicyObservationRef, PolicyOutbox
+from app.harness.plugins import authorize_capability, record_capability_api_access
 
 from .repository import PolicyError, rebuild_beliefs
+
+
+def _advance_processed_generation(db: Session, user_id: int, source_type: str) -> int | None:
+    generation = db.scalar(select(PolicyDomainGeneration).where(
+        PolicyDomainGeneration.user_id == user_id,
+        PolicyDomainGeneration.domain == source_type,
+    ))
+    if generation is None:
+        return None
+    events = db.scalars(select(PolicyOutbox).where(
+        PolicyOutbox.user_id == user_id,
+        PolicyOutbox.event_type == "policy.source_invalidated",
+        PolicyOutbox.revision > generation.processed_generation,
+        PolicyOutbox.revision <= generation.source_generation,
+    ).order_by(PolicyOutbox.revision)).all()
+    cursor = generation.processed_generation
+    for pending in events:
+        if pending.revision != cursor + 1 or pending.status != "processed":
+            break
+        try:
+            payload = json.loads(pending.payload or "{}")
+        except (TypeError, ValueError):
+            break
+        if payload.get("source_type") != source_type:
+            break
+        cursor = pending.revision
+    generation.processed_generation = cursor
+    return cursor
 
 
 def consume_policy_event(db: Session, event_id: str, *, claimed: bool = False) -> dict:
@@ -23,17 +52,45 @@ def consume_policy_event(db: Session, event_id: str, *, claimed: bool = False) -
     if event.status == "processing" and not claimed:
         return {"processed": False, "reason": "claimed", "event_id": event_id}
     try:
+        maintenance_phase = "delete" if event.event_type == "policy.source_invalidated" else "close_existing"
+        capability = authorize_capability(
+            db, event.user_id, "personal_policy", "system_maintenance", (), maintenance_phase,
+        )
+        record_capability_api_access(
+            db, event.user_id, "personal_policy", route="outbox_maintenance",
+            allowed=bool(capability.get("allowed")), reason=capability.get("reason"),
+        )
+        if not capability.get("allowed"):
+            event.status = "pending"
+            event.attempts += 1
+            event.next_retry_at = utc_now() + timedelta(
+                seconds=min(300, 2 ** min(event.attempts, 8))
+            )
+            db.flush()
+            return {"processed": False, "reason": "capability_unavailable", "event_id": event_id}
         payload = json.loads(event.payload or "{}")
         if event.event_type == "policy.source_invalidated":
-            strategy_ids = set(payload.get("strategy_ids") or [])
-            contexts = set(payload.get("context_keys") or [])
-            from app.models import PersonalStrategyUnit
-            units = db.scalars(select(PersonalStrategyUnit).where(PersonalStrategyUnit.user_id == event.user_id, PersonalStrategyUnit.strategy_id.in_(strategy_ids) if strategy_ids else True, PersonalStrategyUnit.context_key.in_(contexts) if contexts else True)).all()
-            for unit in units:
-                rebuild_beliefs(db, event.user_id, unit.strategy_id, unit.context_key)
+            strategy_contexts = payload.get("strategy_contexts") or []
+            for pair in strategy_contexts:
+                rebuild_beliefs(
+                    db,
+                    event.user_id,
+                    pair["strategy_id"],
+                    pair["context_key"],
+                )
             event.status, event.attempts = "processed", event.attempts + 1
             db.flush()
-            return {"processed": True, "event_id": event_id, "invalidated": True}
+            processed_generation = _advance_processed_generation(
+                db, event.user_id, payload.get("source_type") or ""
+            )
+            db.flush()
+            return {
+                "processed": True,
+                "event_id": event_id,
+                "invalidated": True,
+                "beliefs_rebuilt": len(strategy_contexts),
+                "processed_generation": processed_generation,
+            }
         episode = db.get(PolicyEpisode, payload.get("episode_id") or event.ref_id)
         if episode is None or episode.user_id != event.user_id:
             event.status = "failed"
@@ -62,19 +119,50 @@ def process_pending_policy_events(db: Session, limit: int = 20) -> dict:
     processed = failed = 0
     for row in rows:
         try:
-            row.status = "processing"
-            db.flush()
-            consume_policy_event(db, row.event_id, claimed=True); processed += 1
+            # Keep each event's belief rebuild atomic. A single malformed
+            # event or transient database error must not poison the shared
+            # batch transaction and strand the remaining claimed work.
+            with db.begin_nested():
+                row.status = "processing"
+                db.flush()
+                result = consume_policy_event(db, row.event_id, claimed=True)
+            if result.get("processed"):
+                processed += 1
+            else:
+                failed += 1
         except Exception:
             row.status = "pending"
+            row.attempts += 1
+            row.next_retry_at = utc_now() + timedelta(
+                seconds=min(300, 2 ** min(row.attempts, 8))
+            )
+            db.flush()
             failed += 1
     db.commit()
     return {"claimed": len(rows), "processed": processed, "failed": failed}
 
 
-def invalidate_source(db: Session, user_id: int, source_type: str, source_id: str, *, deleted: bool = False) -> dict:
-    refs = db.scalars(select(PolicyObservationRef).where(PolicyObservationRef.user_id == user_id, PolicyObservationRef.source_type == source_type, PolicyObservationRef.source_id == source_id, PolicyObservationRef.valid.is_(True))).all()
+def invalidate_source(
+    db: Session,
+    user_id: int,
+    source_type: str,
+    source_id: str,
+    *,
+    source_revision: int | None = None,
+    deleted: bool = False,
+) -> dict:
+    ref_query = select(PolicyObservationRef).where(
+        PolicyObservationRef.user_id == user_id,
+        PolicyObservationRef.source_type == source_type,
+        PolicyObservationRef.source_id == source_id,
+        PolicyObservationRef.valid.is_(True),
+    )
+    if not deleted and source_revision is not None:
+        ref_query = ref_query.where(PolicyObservationRef.source_revision < source_revision)
+    refs = db.scalars(ref_query).all()
     affected = {row.episode_id for row in refs}
+    if not refs:
+        return {"affected_episode_ids": [], "source_generation": None, "deleted": deleted}
     for ref in refs:
         ref.valid = False
     generation = db.scalar(select(PolicyDomainGeneration).where(PolicyDomainGeneration.user_id == user_id, PolicyDomainGeneration.domain == source_type))
@@ -88,6 +176,26 @@ def invalidate_source(db: Session, user_id: int, source_type: str, source_id: st
             row.stale = True
     from app.models import PersonalStrategyUnit
     units = db.scalars(select(PersonalStrategyUnit).join(PolicyEpisode, PolicyEpisode.unit_id == PersonalStrategyUnit.id).where(PersonalStrategyUnit.user_id == user_id, PolicyEpisode.id.in_(affected))).all() if affected else []
-    db.add(PolicyOutbox(event_id=__import__("uuid").uuid4().hex, user_id=user_id, event_type="policy.source_invalidated", ref_id=f"{source_type}:{source_id}", revision=generation.source_generation, payload=json.dumps({"source_type": source_type, "source_id": source_id, "deleted": deleted, "strategy_ids": sorted({u.strategy_id for u in units}), "context_keys": sorted({u.context_key for u in units})}, ensure_ascii=False), status="pending"))
+    strategy_contexts = sorted(
+        { (unit.strategy_id, unit.context_key) for unit in units }
+    )
+    db.add(PolicyOutbox(
+        event_id=__import__("uuid").uuid4().hex,
+        user_id=user_id,
+        event_type="policy.source_invalidated",
+        ref_id=f"{source_type}:{source_id}",
+        revision=generation.source_generation,
+        payload=json.dumps({
+            "source_type": source_type,
+            "source_id": source_id,
+            "source_revision": source_revision,
+            "deleted": deleted,
+            "strategy_contexts": [
+                {"strategy_id": strategy_id, "context_key": context_key}
+                for strategy_id, context_key in strategy_contexts
+            ],
+        }, ensure_ascii=False),
+        status="pending",
+    ))
     db.flush()
     return {"affected_episode_ids": sorted(affected), "source_generation": generation.source_generation, "deleted": deleted}

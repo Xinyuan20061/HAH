@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import current_user
 from app.core.database import get_db
+from app.harness.plugins import authorize_capability, health_state_excluded_sources, record_capability_api_access
 from app.schemas.errors import ApiException
 from app.services.agent.capability_graph import capability_graph, manifest, unavailable_reasons
 from app.services.agent.decision import decide, next_best_action
@@ -24,6 +25,20 @@ from app.services.health_state import build_snapshot
 
 router = APIRouter(prefix="/agent", tags=["health-agent"])
 plan_router = APIRouter(prefix="/plan", tags=["plan-solver"])
+
+
+def _require_plan_capability(db: Session, user_id: int, *, operation: str, scopes: tuple[str, ...], route: str) -> None:
+    result = authorize_capability(db, user_id, "plan_outcome", operation, scopes, "new_work")
+    record_capability_api_access(
+        db, user_id, "plan_outcome", route=route,
+        allowed=bool(result.get("allowed")), reason=result.get("reason"),
+    )
+    if result.get("allowed"):
+        return
+    reason = result.get("reason")
+    code = "PLUGIN_ACTIONS_DISABLED" if reason == "proposals_disabled" else "PLUGIN_SCOPE_NOT_GRANTED" if reason == "scope_not_granted" else "PLUGIN_DISABLED"
+    db.commit()
+    raise ApiException(409, code, "计划与结果能力未开启或授权范围不足；请在健康能力中检查配置")
 
 
 class PlanRequestIn(BaseModel):
@@ -60,7 +75,10 @@ def _plan_context(db: Session, user) -> PlanContext:
         for key in item.get("evidence", []) or []:
             if isinstance(key, str) and key.endswith("_consistency"):
                 motion_focus.append(key)
-    state = build_snapshot(db, user.id, persist=False)
+    state = build_snapshot(
+        db, user.id, persist=False,
+        excluded_sources=health_state_excluded_sources(db, user.id),
+    )
     recovery: list[str] = []
     debt = state.numeric("sleep_debt_7d")
     if debt is not None and debt >= 5:
@@ -101,6 +119,11 @@ def agent_decision(
     db: Session = Depends(get_db),
     window_days: int = Query(default=7, ge=1, le=90),
 ):
+    _require_plan_capability(
+        db, user.id, operation="read",
+        scopes=("health.profile.read", "health.records.read", "plan.goals.read", "plan.outcomes.read"),
+        route="decision",
+    )
     context = read_context(db, user)
     insights = context.get("proactive_insights") or build_proactive_insights(context)
     signals = [
@@ -109,7 +132,9 @@ def agent_decision(
         if item.get("code") in PROACTIVE_CODES
     ]
     contract = decide(db, user.id, window_days=window_days, signals=signals)
-    return contract.as_dict()
+    payload = contract.as_dict()
+    db.commit()
+    return payload
 
 
 @router.get("/next-action")
@@ -118,7 +143,14 @@ def agent_next_action(
     db: Session = Depends(get_db),
     window_days: int = Query(default=7, ge=1, le=90),
 ):
-    return next_best_action(db, user.id, window_days=window_days)
+    _require_plan_capability(
+        db, user.id, operation="read",
+        scopes=("health.profile.read", "health.records.read", "plan.goals.read", "plan.outcomes.read"),
+        route="next_action",
+    )
+    payload = next_best_action(db, user.id, window_days=window_days)
+    db.commit()
+    return payload
 
 
 # --------------------------------------------------------------------------- #
@@ -131,9 +163,15 @@ def plan_solve(
     user=Depends(current_user),
     db: Session = Depends(get_db),
 ):
+    _require_plan_capability(
+        db, user.id, operation="read",
+        scopes=("health.profile.read", "health.records.read", "plan.goals.read", "plan.outcomes.read"),
+        route="plan_solve",
+    )
     request = body.to_domain()
     context = _plan_context(db, user)
     payload = simulate(request, context)
+    db.commit()
     return payload
 
 
@@ -147,6 +185,11 @@ def plan_replan_proposal(
     minutes_per_session: int = Query(default=30, ge=10, le=120),
 ):
     """A replan **proposal**: a diff the user must confirm. Writes nothing."""
+    _require_plan_capability(
+        db, user.id, operation="propose",
+        scopes=("health.profile.read", "health.records.read", "plan.goals.read", "plan.outcomes.read", "plan.proposals"),
+        route="plan_replan_proposal",
+    )
     request = PlanRequest(
         goal=goal,  # type: ignore[arg-type]
         days_per_week=days_per_week,
@@ -164,4 +207,5 @@ def plan_replan_proposal(
     )
     if not payload.get("found"):
         raise ApiException(404, "PLAN_NOT_FOUND", "计划不存在")
+    db.commit()
     return payload

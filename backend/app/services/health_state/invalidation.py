@@ -1,4 +1,4 @@
-"""Record-change → state invalidation hook (capability plan §4.5).
+"""Transactional record-change → state and policy-evidence invalidation hook.
 
 The state layer's ``invalidate()`` exists to make edits *visible*: a feature row
 carrying a stale value must be removed the moment its source record changes, or the
@@ -8,11 +8,11 @@ Defining ``invalidate()`` is not enough — it has to be **called**. This module
 one place record mutation paths call, so the rule cannot be forgotten at a new call
 site:
 
-* invalidation is **best-effort**: the user's record edit has already been committed,
-  and a state-layer failure must never turn a successful edit into an error;
+* invalidation shares the source record's transaction, so neither the edit nor its
+  stale evidence can commit on its own;
 * it is **scoped to the domains that changed**, so editing a meal does not throw away
   the motion-metric features;
-* it never writes a record and never calls a model.
+* it never writes a source record and never calls a model.
 """
 
 from __future__ import annotations
@@ -29,6 +29,7 @@ logger = logging.getLogger("healthmate.health_state.invalidation")
 SOURCE_CHECKIN = "checkin"
 SOURCE_DIET = "diet_record"
 SOURCE_EXERCISE = "exercise_record"
+SOURCE_PLAN = "plan"
 SOURCE_GOAL = "goal"
 SOURCE_MOTION = "motion_analysis"
 SOURCE_SAFETY = "safety_event"
@@ -38,71 +39,70 @@ KNOWN_SOURCES = frozenset(
         SOURCE_CHECKIN,
         SOURCE_DIET,
         SOURCE_EXERCISE,
+        SOURCE_PLAN,
         SOURCE_GOAL,
         SOURCE_MOTION,
         SOURCE_SAFETY,
     }
 )
 
+POLICY_SOURCE_TYPES = {
+    SOURCE_CHECKIN: "checkin",
+    SOURCE_DIET: "diet",
+    SOURCE_EXERCISE: "exercise",
+    SOURCE_PLAN: "plan_task",
+}
+
 
 def record_changed(
-    db: Session, user_id: int, sources: str | list[str], *, recompute: bool = True
+    db: Session,
+    user_id: int,
+    sources: str | list[str],
+    *,
+    source_id: str | int | None = None,
+    source_revision: int | None = None,
+    policy_source_type: str | None = None,
+    deleted: bool = False,
+    recompute: bool = True,
 ) -> dict:
     """Invalidate the features derived from ``sources`` after a record change.
 
     Returns the invalidation result (``affected`` / ``deleted_rows`` / ``recomputed``)
-    or an ``{"error": ...}`` dict. Never raises: see the module docstring.
+    and stages policy source invalidation in the same transaction. The caller owns
+    the commit, so a failed invalidation also rolls back the source mutation.
     """
     requested = [sources] if isinstance(sources, str) else list(sources)
     unknown = [item for item in requested if item not in KNOWN_SOURCES]
     if unknown:
-        # A typo would silently invalidate nothing, which is exactly the stale-value
-        # bug this hook exists to prevent. Surface it in the log instead.
-        logger.warning(
-            "record_changed called with unknown source(s) %s for user=%s", unknown, user_id
-        )
-        return {"affected": [], "deleted_rows": 0, "recomputed": False, "unknown": unknown}
-    try:
-        from app.services.health_state import invalidate
+        raise ValueError(f"unknown health-state source(s): {unknown}")
 
-        result = invalidate(db, user_id, requested, recompute=recompute)
-        # Policy observations are source-versioned independently from the
-        # state feature cache.  The shared mutation hook is the safest place to
-        # fan out edits/deletes so no diet, exercise or check-in route can leave
-        # a stale learned episode eligible.  This is deliberately best-effort:
-        # the record mutation has already committed.
-        try:
-            from sqlalchemy import select
-            from app.models import PolicyObservationRef
-            from app.services.policy_learning.outbox import invalidate_source
-            refs = db.execute(select(PolicyObservationRef.source_type, PolicyObservationRef.source_id).where(PolicyObservationRef.user_id == user_id, PolicyObservationRef.source_type.in_(requested), PolicyObservationRef.valid.is_(True))).all()
-            for source_type, source_id in refs:
-                invalidate_source(db, user_id, source_type, str(source_id))
-            if refs:
-                db.commit()
-        except Exception:  # policy invalidation must not break record writes
-            logger.exception("policy invalidation failed for user=%s sources=%s", user_id, requested)
-            db.rollback()
-        logger.info(
-            "state invalidated user=%s sources=%s affected=%s deleted=%s",
+    if source_id is not None and (source_revision is None or source_revision < 1):
+        raise ValueError("source_revision must be a positive integer when source_id is set")
+    if source_id is not None and len(requested) != 1:
+        raise ValueError("source identity is only valid for one source domain")
+
+    # Sessions run with autoflush disabled; flush the just-edited source before
+    # recomputing its derived features or resolving the source revision.
+    db.flush()
+    from app.services.health_state import invalidate
+
+    result = invalidate(db, user_id, requested, recompute=recompute, commit=False)
+    if source_id is not None:
+        source_type = policy_source_type or POLICY_SOURCE_TYPES.get(requested[0])
+        if not source_type:
+            raise ValueError(f"no policy source mapping for {requested[0]}")
+        from app.services.policy_learning.outbox import invalidate_source
+
+        result["policy_invalidation"] = invalidate_source(
+            db,
             user_id,
-            requested,
-            len(result.get("affected", [])),
-            result.get("deleted_rows", 0),
+            source_type,
+            str(source_id),
+            source_revision=source_revision,
+            deleted=deleted,
         )
-        return result
-    except Exception:  # noqa: BLE001 - the record edit is already committed
-        logger.exception("state invalidation failed for user=%s sources=%s", user_id, requested)
-        try:
-            db.rollback()
-        except Exception:  # noqa: BLE001
-            pass
-        return {
-            "affected": [],
-            "deleted_rows": 0,
-            "recomputed": False,
-            "error": "invalidation_failed",
-        }
+    db.flush()
+    return result
 
 
 def active_actions_changed(db: Session, user_id: int) -> dict:
@@ -128,9 +128,11 @@ def active_actions_changed(db: Session, user_id: int) -> dict:
 
 __all__ = [
     "KNOWN_SOURCES",
+    "POLICY_SOURCE_TYPES",
     "SOURCE_CHECKIN",
     "SOURCE_DIET",
     "SOURCE_EXERCISE",
+    "SOURCE_PLAN",
     "SOURCE_GOAL",
     "SOURCE_MOTION",
     "SOURCE_SAFETY",

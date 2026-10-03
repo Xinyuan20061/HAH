@@ -41,7 +41,7 @@ Page({
     goalOptions: ['力量', '增肌', '肌耐力', '平衡与稳定', '核心稳定'],
     cloudMode: api.isCloud(), showDetails: false, detailsHeight: '0px', showGoal: false,
     // V2 时间轴
-    timelineFrames: [], activeFrame: null, brokenImgs: {},
+    timelineFrames: [], activeFrame: null, playableUrl: '', playbackExpiresAt: '', brokenImgs: {},
     // 纠错面板（目录选择 + 自由描述）
     categoryOptions: buildLocalCategoryOptions(),
     showCorrect: false, correctIndex: 0, freeLabel: ''
@@ -235,11 +235,12 @@ Page({
       vm.localOnly = !this.data.consentDeepseek
       this.setData({
         vm, jobStatus: STAGE_LABELS[status] || status, traceInfo: null, traceLoaded: false,
-        timelineFrames: vm.timelineFrames, activeFrame: vm.activeFrame, brokenImgs: {}
+        timelineFrames: vm.timelineFrames, activeFrame: vm.activeFrame, playableUrl: '', playbackExpiresAt: '', brokenImgs: {}
       })
       if (status === 'completed') pending.forget('motion')
       // 结果帧未带 preview_url 时，只读拉一次 /evidence 补齐缩略图（不计费、不调模型）。
       this.fillEvidencePreviews()
+      this.loadPlaybackUrl()
     } catch (e) {
       if (this._unloaded) return
       this.setData({ jobStatus: e.message || '分析未完成，可稍后重试' })
@@ -256,8 +257,20 @@ Page({
   replayFrame() {
     const frame = this.data.activeFrame
     if (!frame) return
+    if (!this.data.playableUrl) return wx.showToast({ title: '视频已不可回放', icon: 'none' })
     const ctx = wx.createVideoContext('motionVideo', this)
     if (ctx && typeof ctx.seek === 'function') ctx.seek(Number(frame.timestamp_ms) / 1000)
+  },
+  async loadPlaybackUrl() {
+    const id = this.data.result && this.data.result.media_id
+    if (!id) return
+    try {
+      const playback = await api.get(`/media/${id}/playback`, { allowCache: false })
+      if (this._unloaded) return
+      this.setData({ playableUrl: playback.playable_url || '', playbackExpiresAt: playback.expires_at || '' })
+    } catch (e) {
+      if (!this._unloaded) this.setData({ playableUrl: '', playbackExpiresAt: '' })
+    }
   },
   // 结果帧已带 preview_url 时直接用；有空缺帧则只读拉一次 /evidence 补齐 frame_id→preview_url。
   // 该 GET 只读、不计费、不调模型；缩略图点击仍只本地选中。失败则降级占位，不阻塞文字讲解。
@@ -272,9 +285,10 @@ Page({
       const merged = mergeEvidencePreviews(frames, evidence)
       if (merged === frames) return
       const cur = this.data.activeFrame
+      const activeFrame = cur ? (merged.find(f => f.id === cur.id) || cur) : (merged[0] || null)
       this.setData({
         timelineFrames: merged,
-        activeFrame: cur ? (merged.find(f => f.id === cur.id) || cur) : (merged[0] || null)
+        activeFrame
       })
     } catch (e) {
       // /evidence 不可用：保留占位，文字讲解照常展示。

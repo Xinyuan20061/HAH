@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.core.time import utc_now
 from app.models import PersonalStrategyUnit
-from app.services.health_state import build_snapshot
+from app.services.health_state import build_snapshot, frozen_state_hash
 
 from .algorithm import Scope, Protocol
 from .templates import get_template, template_hash
@@ -32,7 +32,24 @@ def _context(parameters: dict, snapshot) -> tuple[dict, str]:
 def compile_strategy(db: Session, user_id: int, template_id: str, template_version: str | None = None, parameters: dict | None = None, goal_key: str = "make_plan_sustainable") -> dict:
     parameters = parameters or {}
     template = get_template(template_id, template_version)
-    snapshot = build_snapshot(db, user_id, window_days=7, persist=False)
+    if template_id == "session_duration":
+        allowed_session_minutes = {
+            "session_10m": 10,
+            "session_15m": 15,
+            "session_20m": 20,
+        }
+        variant = str(parameters.get("variant") or "")
+        if variant and variant not in allowed_session_minutes:
+            raise ValueError("INVALID_SESSION_DURATION_VARIANT")
+        if variant:
+            parameters = {**parameters, "session_minutes": allowed_session_minutes[variant]}
+    from app.harness.plugins import health_state_excluded_sources
+
+    snapshot = build_snapshot(
+        db, user_id, window_days=7, persist=False,
+        excluded_sources=health_state_excluded_sources(db, user_id),
+    )
+    state_hash = frozen_state_hash(snapshot)
     context, context_key = _context(parameters, snapshot)
     scope = Scope(user_id, f"{template_id}:{parameters.get('variant', 'default')}", template["template_version"], template["metric_version"], context_key)
     protocol = Protocol(scope, expected_days=template["expected_days"], minimum_days=template["minimum_days"], minimum_coverage=template["minimum_coverage"], execution_target=template["execution_target"], mode=template["mode"], direction=template["direction"], target=template["target"], ambiguity_band=template["ambiguity_band"], changed_variable=template["changed_variable"], aggregation=template.get("aggregation", "paired_median"))
@@ -63,9 +80,9 @@ def compile_strategy(db: Session, user_id: int, template_id: str, template_versi
         context_schema_version="context-v1", context_key=context_key,
         protocol_json=json.dumps(protocol_dict, ensure_ascii=False, sort_keys=True, default=str),
         context_json=json.dumps(context, ensure_ascii=False, sort_keys=True),
-        state_snapshot_hash=snapshot.snapshot_hash, protocol_hash=protocol_hash,
+        state_snapshot_hash=state_hash, protocol_hash=protocol_hash,
         baseline_refs_json="[]", status="needs_information" if missing else "compiled",
     )
     db.add(row)
     db.flush()
-    return {"compiled": not missing, "strategy_unit_id": unit_id, "strategy_id": strategy_id, "template_id": template_id, "template_version": template["template_version"], "protocol_version": template["template_version"], "metric_version": template["metric_version"], "context": context, "context_key": context_key, "protocol_hash": protocol_hash, "state_snapshot_hash": snapshot.snapshot_hash, "missing": missing, "hard_constraints": [item.model_dump() for item in snapshot.hard_constraints()], "protocol": protocol_dict, "template_hash": template_hash(template)}
+    return {"compiled": not missing, "strategy_unit_id": unit_id, "strategy_id": strategy_id, "template_id": template_id, "template_version": template["template_version"], "protocol_version": template["template_version"], "metric_version": template["metric_version"], "context": context, "context_key": context_key, "protocol_hash": protocol_hash, "state_snapshot_hash": state_hash, "missing": missing, "hard_constraints": [item.model_dump() for item in snapshot.hard_constraints()], "protocol": protocol_dict, "template_hash": template_hash(template)}

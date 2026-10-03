@@ -14,6 +14,7 @@ from __future__ import annotations
 from typing import Any
 
 from app.harness.contracts import ToolContext, ToolSpec
+from app.harness.plugins import health_state_excluded_sources
 
 # Read-only state/planning tools are usable by every persona, including
 # the planner, which is not part of the default allowed-agent tuple.
@@ -94,7 +95,10 @@ def _plan_context(context: ToolContext) -> PlanContext:
     snapshot = None
     from app.services.health_state import build_snapshot
 
-    snapshot = build_snapshot(context.db, context.user.id, persist=False)
+    snapshot = build_snapshot(
+        context.db, context.user.id, persist=False,
+        excluded_sources=health_state_excluded_sources(context.db, context.user.id),
+    )
     recovery: list[str] = []
     debt = snapshot.numeric("sleep_debt_7d")
     if debt is not None and debt >= 5:

@@ -391,6 +391,20 @@
   padding: 4rpx 12rpx;
 }
 
+.policy-entry {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  min-height: 72rpx;
+  margin-top: 12rpx;
+  padding: 0 18rpx;
+  border-radius: 14rpx;
+  color: #506336;
+  background: #e9efd9;
+  font-size: 21rpx;
+  font-weight: 650;
+}
+
 .mem-row {
   display: flex;
   align-items: center;

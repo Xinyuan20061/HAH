@@ -9,7 +9,8 @@ from app.api.deps import current_user
 from app.core.database import get_db
 from app.core.streaming import display_tokens
 from app.core.time import utc_iso, utc_now
-from app.models import EvaluationEvent, HealthAgentRun
+from app.models import AgentActionProposal, EvaluationEvent, HealthAgentRun
+from app.schemas.errors import ApiException
 from app.schemas.agent import (
     AgentRequest,
     AgentPlanItemUpdate,
@@ -56,6 +57,7 @@ from app.services.agent.experiments import (
     EXPERIMENT_VERSION,
 )
 from app.harness.personas import list_personas
+from app.harness.plugins import authorize_capability, authorize_tool, record_capability_api_access, record_tool_access
 
 router = APIRouter(prefix="/agent", tags=["health-agent"])
 
@@ -78,6 +80,39 @@ def _contract_evidence(item: dict, data_quality: dict) -> dict:
         "limitations": meta.get("limitations", []),
         "evidence_type": meta.get("evidence_type", "general_guidance"),
     }
+
+
+def _require_plan_capability(
+    db: Session, user_id: int, *, phase: str, scopes: tuple[str, ...],
+    operation: str = "user_action",
+) -> None:
+    result = authorize_capability(db, user_id, "plan_outcome", operation, scopes, phase)
+    record_capability_api_access(
+        db, user_id, "plan_outcome", route=phase,
+        allowed=bool(result.get("allowed")), reason=result.get("reason"),
+    )
+    if result.get("allowed"):
+        return
+    reason = result.get("reason")
+    code = "PLUGIN_DISABLED" if reason == "capability_paused" else "PLUGIN_SCOPE_NOT_GRANTED" if reason == "scope_not_granted" else "PLUGIN_UNAVAILABLE"
+    raise ApiException(409, code, "计划与结果能力未开启或授权范围不足；请在健康能力中检查配置")
+
+
+def _require_health_capability(
+    db: Session, user_id: int, *, operation: str, phase: str,
+    scopes: tuple[str, ...], route: str,
+) -> None:
+    result = authorize_capability(db, user_id, "health_state", operation, scopes, phase)
+    record_capability_api_access(
+        db, user_id, "health_state", route=route,
+        allowed=bool(result.get("allowed")), reason=result.get("reason"),
+    )
+    if result.get("allowed"):
+        return
+    reason = result.get("reason")
+    code = "PLUGIN_SCOPE_NOT_GRANTED" if reason == "scope_not_granted" else "PLUGIN_DISABLED"
+    db.commit()
+    raise ApiException(409, code, "健康状态能力未开启或授权范围不足；请在健康能力中检查配置")
 
 
 def _recent_insight_feedback(db: Session, user_id: int) -> dict:
@@ -105,40 +140,57 @@ def _recent_insight_feedback(db: Session, user_id: int) -> dict:
 
 @router.get("/insights")
 def proactive_insights(user=Depends(current_user), db: Session = Depends(get_db)):
+    _require_health_capability(
+        db, user.id, operation="read", phase="new_work",
+        scopes=("health.profile.read", "health.records.read", "health.goals.read"),
+        route="agent_insights",
+    )
     context = read_context(db, user)
     insights = context.get("proactive_insights") or build_proactive_insights(context)
     recent_feedback = _recent_insight_feedback(db, user.id)
-    current_experiment = active_experiment(db, user.id)
+    plan_history_allowed = authorize_capability(
+        db, user.id, "plan_outcome", "read", "plan.outcomes.read", "new_work",
+    ).get("allowed", False)
+    plan_proposals_allowed = authorize_capability(
+        db, user.id, "plan_outcome", "propose", "plan.proposals", "new_work",
+    ).get("allowed", False)
+    current_experiment = active_experiment(db, user.id) if plan_history_allowed else None
     current_payload = serialize_experiment(db, current_experiment) if current_experiment else None
     insights["experiment_version"] = EXPERIMENT_VERSION
-    insights["active_experiment"] = current_payload
+    if plan_history_allowed:
+        insights["active_experiment"] = current_payload
     for item in insights.get("insights", []):
         item["user_feedback"] = recent_feedback.get(item.get("code"))
-        item["experiment_proposal"] = build_experiment_proposal(item.get("code"))
-        item["proposal_history"] = variant_history(db, user.id, item.get("code"))
+        item["experiment_proposal"] = build_experiment_proposal(item.get("code")) if plan_proposals_allowed else None
+        if plan_history_allowed:
+            item["proposal_history"] = variant_history(db, user.id, item.get("code"))
         item["evidence_contract"] = _contract_evidence(item, insights.get("data_quality", {}))
         item["decision_id"] = (
             current_payload.get("decision_id")
             if current_experiment and current_experiment.insight_code == item.get("code") and current_payload
             else None
         )
-        item["action_timeline"] = experiment_timeline(db, user.id, item.get("code"))
-        item["active_experiment"] = (
-            current_payload if current_experiment and current_experiment.insight_code == item.get("code") else None
-        )
+        if plan_history_allowed:
+            item["action_timeline"] = experiment_timeline(db, user.id, item.get("code"))
+            item["active_experiment"] = (
+                current_payload if current_experiment and current_experiment.insight_code == item.get("code") else None
+            )
     insights["trace"] = {
         "specialist_version": PROACTIVE_VERSION,
         "specialist": "proactive_guardian",
         "routing": "确定性规则扫描 recent_7d/goals/motion_profile",
     }
+    db.commit()
     return insights
 
 
 @router.get("/experiments")
 def experiments(user=Depends(current_user), db: Session = Depends(get_db), limit: int = 10):
+    _require_plan_capability(db, user.id, phase="read_history", scopes=("plan.outcomes.read",))
     if limit < 1 or limit > 50:
         raise HTTPException(status_code=400, detail="limit 必须在 1-50 之间")
     items = list_experiments(db, user.id, limit)
+    db.commit()
     return {
         "version": EXPERIMENT_VERSION,
         "experiments": items,
@@ -153,6 +205,11 @@ def experiment_start(
     user=Depends(current_user),
     db: Session = Depends(get_db),
 ):
+    _require_plan_capability(
+        db, user.id, phase="new_work",
+        scopes=("plan.proposals", "plan.goals.read", "plan.outcomes.read", "health.records.read"),
+        operation="propose",
+    )
     context = read_context(db, user)
     payload = context.get("proactive_insights") or build_proactive_insights(context)
     active_codes = {item.get("code") for item in payload.get("insights", [])}
@@ -176,6 +233,7 @@ def experiment_finish(
     user=Depends(current_user),
     db: Session = Depends(get_db),
 ):
+    _require_plan_capability(db, user.id, phase="close_existing", scopes=("plan.outcomes.read",))
     try:
         result = finish_experiment(db, user.id, experiment_id)
     except RuntimeError as exc:
@@ -193,6 +251,7 @@ def experiment_cancel(
     user=Depends(current_user),
     db: Session = Depends(get_db),
 ):
+    _require_plan_capability(db, user.id, phase="close_existing", scopes=("plan.outcomes.read",))
     result = cancel_experiment(db, user.id, experiment_id)
     if result is None:
         raise HTTPException(status_code=404, detail="微实验不存在")
@@ -206,6 +265,10 @@ def proactive_insight_feedback(
     user=Depends(current_user),
     db: Session = Depends(get_db),
 ):
+    _require_health_capability(
+        db, user.id, operation="user_action", phase="close_existing",
+        scopes=("health.records.read",), route="insight_feedback",
+    )
     if insight_code not in PROACTIVE_CODES:
         raise HTTPException(status_code=404, detail="健康提醒类型不存在")
     context = read_context(db, user)
@@ -268,6 +331,23 @@ def confirm_action_proposal(
     * a bare ``confirmation=true`` cannot authorise ``privacy.account.delete``;
     * repeating the call returns the first result instead of writing twice.
     """
+    proposal = db.scalar(select(AgentActionProposal).where(
+        AgentActionProposal.proposal_id == proposal_id,
+        AgentActionProposal.user_id == user.id,
+    ))
+    # A proposal created before pause/revocation cannot be used as a bypass to
+    # start new work. Closing an existing cycle remains available while paused.
+    if proposal is not None and proposal.status in {"pending", "failed"}:
+        capability = authorize_tool(db, user.id, proposal.action_key)
+        if capability.get("plugin_id") and not capability.get("allowed"):
+            record_tool_access(
+                db, user.id, proposal.action_key, allowed=False, status="blocked",
+                reason=capability.get("reason"),
+            )
+            db.commit()
+            raise ApiException(409, "CAPABILITY_ACTION_BLOCKED", "这项能力已暂停或授权范围已变化；请恢复能力后重新查看操作")
+        if capability.get("plugin_id"):
+            record_tool_access(db, user.id, proposal.action_key, allowed=True, status="approval_required")
     return confirm_proposal(
         db,
         user.id,
@@ -303,17 +383,32 @@ def decision_ledger(
     progress and review joined by decision_id (plan §5). The id is validated
     against the current user; unknown or foreign ids return 404 so the ledger
     is not enumerable."""
+    _require_plan_capability(
+        db,
+        user.id,
+        phase="read_history",
+        scopes=("plan.outcomes.read",),
+        operation="user_action",
+    )
     if len(decision_id) < 4 or len(decision_id) > 64:
         raise HTTPException(status_code=404, detail="决策不存在")
     result = get_decision(db, user.id, decision_id)
     if result is None:
         raise HTTPException(status_code=404, detail="决策不存在")
+    db.commit()
     return result
 
 
 @router.get("/context")
 def context(user=Depends(current_user), db: Session = Depends(get_db)):
-    return read_context(db, user)
+    _require_health_capability(
+        db, user.id, operation="read", phase="new_work",
+        scopes=("health.profile.read", "health.records.read", "health.goals.read"),
+        route="agent_context",
+    )
+    result = read_context(db, user)
+    db.commit()
+    return result
 
 
 @router.get("/stats")
@@ -452,6 +547,40 @@ async def agent_run_retry(
 
 @router.post("/runs/{run_id}/apply-plan")
 def agent_apply(run_id: int, user=Depends(current_user), db: Session = Depends(get_db)):
+    capability = authorize_capability(db, user.id, "plan_outcome", "propose", ("plan.proposals",), "new_work")
+    record_capability_api_access(
+        db, user.id, "plan_outcome", route="apply_plan",
+        allowed=bool(capability.get("allowed")), reason=capability.get("reason"),
+    )
+    if not capability.get("allowed"):
+        reason = capability.get("reason")
+        code = "PLUGIN_DISABLED" if reason == "capability_paused" else "PLUGIN_SCOPE_NOT_GRANTED" if reason == "scope_not_granted" else "PLUGIN_ACTIONS_DISABLED" if reason == "proposals_disabled" else "PLUGIN_UNAVAILABLE"
+        db.commit()
+        raise ApiException(409, code, "计划能力未开启或当前授权范围不足；请在能力中心检查配置")
+    run = db.scalar(select(HealthAgentRun).where(
+        HealthAgentRun.id == run_id,
+        HealthAgentRun.user_id == user.id,
+    ))
+    try:
+        run_context = json.loads(run.context_json or "{}") if run else {}
+        binding = (run_context.get("_capability_bindings") or {}).get("plan_outcome")
+    except (TypeError, ValueError, AttributeError):
+        binding = None
+    installation = capability.get("installation")
+    if (
+        not run
+        or not isinstance(binding, dict)
+        or installation is None
+        or binding.get("installation_id") != installation.id
+        or binding.get("config_version") != installation.config_version
+        or binding.get("manifest_hash") != installation.reviewed_manifest_hash
+    ):
+        record_capability_api_access(
+            db, user.id, "plan_outcome", route="apply_plan",
+            allowed=False, reason="configuration_changed",
+        )
+        db.commit()
+        raise ApiException(409, "PLAN_CAPABILITY_CHANGED", "这份计划基于旧授权配置生成，请按当前配置重新提问后再加入计划")
     result = apply_plan(db, user, run_id)
     if result is None:
         raise HTTPException(status_code=404, detail="Agent run 不存在")
@@ -462,7 +591,10 @@ def agent_apply(run_id: int, user=Depends(current_user), db: Session = Depends(g
 
 @router.get("/plans/current")
 def agent_current_plan(user=Depends(current_user), db: Session = Depends(get_db)):
-    return {"plan": current_plan(db, user.id)}
+    _require_plan_capability(db, user.id, phase="read_history", scopes=("plan.outcomes.read",))
+    plan = current_plan(db, user.id)
+    db.commit()  # persist the desensitized capability-access audit row
+    return {"plan": plan}
 
 
 @router.put("/plans/items/{item_id}")
@@ -472,6 +604,7 @@ def agent_update_item(
     user=Depends(current_user),
     db: Session = Depends(get_db),
 ):
+    _require_plan_capability(db, user.id, phase="close_existing", scopes=("plan.outcomes.read",))
     item = update_plan_item(db, user.id, item_id, body.done)
     if not item:
         raise HTTPException(status_code=404, detail="计划任务不存在")

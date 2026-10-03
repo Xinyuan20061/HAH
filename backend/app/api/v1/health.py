@@ -32,7 +32,12 @@ from app.services.health import (
     today_summary,
     trend_7d,
 )
-from app.services.health_state.invalidation import SOURCE_CHECKIN, record_changed
+from app.services.health_state.invalidation import (
+    SOURCE_CHECKIN,
+    SOURCE_GOAL,
+    SOURCE_PLAN,
+    record_changed,
+)
 from app.services.timeline import add_event
 
 router = APIRouter(prefix="/health", tags=["health"])
@@ -62,6 +67,8 @@ def get_checkin(user=Depends(current_user), db: Session = Depends(get_db)):
         )
     )
     return {
+        "id": item.id if item else None,
+        "version": item.version if item else None,
         "water_ml": item.water_ml if item else 0,
         "sleep_hours": item.sleep_hours if item else 0,
         "weight_kg": item.weight_kg
@@ -81,7 +88,11 @@ def save_checkin(
         select(HealthCheckIn).where(
             HealthCheckIn.user_id == user.id, HealthCheckIn.record_date == d
         )
-    ) or HealthCheckIn(user_id=user.id, record_date=d)
+    )
+    if item is None:
+        item = HealthCheckIn(user_id=user.id, record_date=d)
+    else:
+        item.version += 1
     for k, v in body.model_dump().items():
         setattr(item, k, v)
     db.add(item)
@@ -94,15 +105,15 @@ def save_checkin(
         ref_type="checkin",
         ref_id=item.id,
     )
-    db.commit()
-    db.refresh(item)
     if user.profile and body.weight_kg > 0:
         user.profile.weight_kg = body.weight_kg
         db.add(user.profile)
-        db.commit()
-    # Capability plan §4.5: sleep/weight features derive from check-ins, so an
-    # edited check-in must drop the stale feature rows immediately.
-    invalidated = record_changed(db, user.id, SOURCE_CHECKIN)
+    invalidated = record_changed(
+        db, user.id, SOURCE_CHECKIN,
+        source_id=item.id, source_revision=item.version,
+    )
+    db.commit()
+    db.refresh(item)
     return {
         "ok": True,
         "date": d,
@@ -153,9 +164,14 @@ def save_goals(
         ref_type="health_goals",
         ref_id=item.id,
     )
+    invalidated = record_changed(db, user.id, SOURCE_GOAL)
     db.commit()
     db.refresh(item)
-    return {"ok": True, **get_goal_settings(db, user.id, user.profile)}
+    return {
+        "ok": True,
+        **get_goal_settings(db, user.id, user.profile),
+        "state_invalidated": invalidated.get("affected", []),
+    }
 
 
 def _plan_items(summary):
@@ -515,7 +531,11 @@ def update_plan(
             PlanTaskState.record_date == d,
             PlanTaskState.task_key == task_key,
         )
-    ) or PlanTaskState(user_id=user.id, record_date=d, task_key=task_key)
+    )
+    if item is None:
+        item = PlanTaskState(user_id=user.id, record_date=d, task_key=task_key)
+    else:
+        item.version += 1
     item.done = body.done
     db.add(item)
     db.flush()
@@ -528,8 +548,19 @@ def update_plan(
         ref_type="plan_task",
         ref_id=item.id,
     )
+    invalidated = record_changed(
+        db, user.id, SOURCE_PLAN,
+        source_id=item.id, source_revision=item.version,
+    )
     db.commit()
-    return {"ok": True, "task_key": task_key, "done": body.done}
+    return {
+        "ok": True,
+        "task_key": task_key,
+        "done": body.done,
+        "id": item.id,
+        "version": item.version,
+        "state_invalidated": invalidated.get("affected", []),
+    }
 
 
 @router.post("/plan/today/custom")
@@ -563,6 +594,10 @@ def create_custom_plan(
         ref_type="plan_task",
         ref_id=item.id,
     )
+    invalidated = record_changed(
+        db, user.id, SOURCE_PLAN,
+        source_id=item.id, source_revision=item.version,
+    )
     db.commit()
     return {
         "ok": True,
@@ -573,6 +608,7 @@ def create_custom_plan(
             "desc": item.description or "",
             "done": False,
         },
+        "state_invalidated": invalidated.get("affected", []),
     }
 
 
@@ -594,9 +630,20 @@ def delete_custom_plan(
     )
     if not item:
         raise HTTPException(404, "计划不存在")
+    source_revision = item.version
+    source_id = item.id
     db.delete(item)
+    db.flush()
+    invalidated = record_changed(
+        db, user.id, SOURCE_PLAN,
+        source_id=source_id, source_revision=source_revision, deleted=True,
+    )
     db.commit()
-    return {"ok": True, "task_key": task_key}
+    return {
+        "ok": True,
+        "task_key": task_key,
+        "state_invalidated": invalidated.get("affected", []),
+    }
 
 
 @router.post("/goals/dynamic/evaluate")

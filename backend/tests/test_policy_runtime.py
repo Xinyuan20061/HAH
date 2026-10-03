@@ -20,8 +20,50 @@ def _force_compiled(migrated_engine, user_id, payload):
         db.commit()
 
 
+def _enable_personal_policy(api):
+    installations = api.get("/api/v1/harness/installations").json()["installations"]
+    current = next((row for row in installations if row["plugin_id"] == "personal_policy"), None)
+    config = {
+        "goal": "execution_pattern",
+        "data_scopes": [
+            "policy.goals.read", "policy.execution.read", "policy.outcomes.read",
+            "health.profile.read", "health.records.read",
+        ],
+        "allow_action_proposals": True,
+    }
+    if current is None:
+        response = api.post(
+            "/api/v1/harness/installations",
+            json={"plugin_id": "personal_policy", "config": config},
+            headers={"Idempotency-Key": "policy-install-runtime"},
+        )
+        assert response.status_code == 200, response.text
+        current = response.json()["installation"]
+    else:
+        response = api.patch(
+            f"/api/v1/harness/installations/{current['installation_id']}",
+            json={"config_version": current["config_version"], "config": config},
+            headers={"Idempotency-Key": "policy-config-runtime"},
+        )
+        assert response.status_code == 200, response.text
+        current = response.json()["installation"]
+    preview = api.post(
+        f"/api/v1/harness/installations/{current['installation_id']}/preview",
+        json={"config_version": current["config_version"]},
+        headers={"Idempotency-Key": "policy-preview-runtime"},
+    )
+    assert preview.status_code == 200, preview.text
+    resumed = api.post(
+        f"/api/v1/harness/installations/{current['installation_id']}/resume",
+        json={"config_version": current["config_version"]},
+        headers={"Idempotency-Key": "policy-resume-runtime"},
+    )
+    assert resumed.status_code == 200, resumed.text
+
+
 def test_active_legacy_experiment_blocks_policy_start(api, migrated_engine):
-    compiled = api.post("/api/v1/policy/compile", json={"template_id": "session_duration", "parameters": {"variant": "short"}}).json()
+    _enable_personal_policy(api)
+    compiled = api.post("/api/v1/policy/compile", json={"template_id": "session_duration", "parameters": {"variant": "session_15m"}}).json()
     _force_compiled(migrated_engine, api.user_id, compiled)
     with Session(migrated_engine) as db:
         db.add(AgentMicroExperiment(user_id=api.user_id, decision_id=uuid4().hex, insight_code="x", title="x", primary_metric="x", start_date="2026-10-01", end_date="2026-10-07", status="active"))

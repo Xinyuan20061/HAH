@@ -85,6 +85,7 @@
         </view>
         <view class="policy-note">{{policyDecision.explanation}}</view>
       </block>
+      <view class="policy-entry" bindtap="goPolicy"><text>打开个人策略全流程</text><text>›</text></view>
     </view>
 
     <!-- 区块 2：我现在处于什么状态（Health State） -->

@@ -55,6 +55,7 @@ from app.models import (
     PolicyDomainGeneration,
     PolicyLearningControl,
     HarnessPluginInstallation,
+    HarnessCapabilityAudit,
 )
 from app.services.storage import get_storage
 from fastapi import HTTPException
@@ -99,6 +100,7 @@ TABLES = [
     ("policy_domain_generations", PolicyDomainGeneration),
     ("policy_learning_controls", PolicyLearningControl),
     ("harness_plugin_installations", HarnessPluginInstallation),
+    ("harness_capability_audits", HarnessCapabilityAudit),
     # Kept only so users upgrading from v0.7 can still export/delete legacy rows.
     ("legacy_motion_jobs", MotionAnalysisJob),
 ]
@@ -158,6 +160,7 @@ def export_preview(db: Session, user_id: int):
             "media metadata",
             "chat history",
             "personal policy protocol, evidence, adjudication and learning audit",
+            "Harness capability configuration and desensitized usage audit",
         ],
         "excludes": [
             "API Key 明文",
@@ -296,6 +299,7 @@ def delete_account_data(db: Session, user_id: int):
         PolicyActiveSlot,
         PolicyDomainGeneration,
         PolicyLearningControl,
+        HarnessCapabilityAudit,
         HarnessPluginInstallation,
         PersonalStrategyUnit,
         AgentActionAudit,

@@ -83,10 +83,14 @@
           <view wx:if="{{msg.trace}}" class="trace-card content-reveal">
             <view class="trace-head">
               <view class="trace-icon"><image src="/assets/icons/spark.png" mode="aspectFit"/></view>
-              <view><view class="trace-kicker">为什么这样建议</view><view class="trace-owner">由{{msg.trace.specialistLabel}}整理</view></view>
+              <view><view class="trace-kicker">为什么这样建议</view><view class="trace-owner">由{{msg.trace.specialistLabel}}整理 · {{msg.trace.responseStyle}}</view></view>
             </view>
+            <view wx:if="{{msg.trace.basis.length}}" class="trace-detail"><view class="trace-detail-label">本次依据</view><view class="trace-reasons"><text wx:for="{{msg.trace.basis}}" wx:key="*this">{{item}}</text></view></view>
             <view wx:if="{{msg.trace.hasReasons}}" class="trace-reasons"><text wx:for="{{msg.trace.reasons}}" wx:key="*this">{{item}}</text></view>
-            <view wx:else class="trace-default">已结合你的最近记录、健康目标和安全边界；涉及计划的操作仍由你确认。</view>
+            <view wx:if="{{msg.trace.limitations.length}}" class="trace-limitations"><view class="trace-detail-label">限制与缺口</view><view wx:for="{{msg.trace.limitations}}" wx:key="*this">{{item}}</view></view>
+            <view wx:if="{{msg.trace.alternatives.length}}" class="trace-alternatives"><view class="trace-detail-label">也可以考虑</view><view wx:for="{{msg.trace.alternatives}}" wx:for-item="alternative" wx:key="title"><text>{{alternative.title}}</text><view>{{alternative.reason}}</view></view></view>
+            <view wx:if="{{msg.trace.estimatedLoad}}" class="trace-load">计划负担预估：{{msg.trace.estimatedLoad}}</view>
+            <view wx:if="{{!msg.trace.hasReasons&&!msg.trace.basis.length&&!msg.trace.limitations.length}}" class="trace-default">涉及计划或记录的操作仍需你确认。</view>
           </view>
 
           <view wx:if="{{msg.agentPlan&&msg.planAdjustment}}" class="adjustment-card content-reveal">

@@ -67,6 +67,27 @@ def snapshot_hash(values: dict[str, StateValue], window_days: int) -> str:
     return hashlib.sha256(material.encode("utf-8")).hexdigest()
 
 
+def frozen_state_hash(snapshot: SnapshotModel) -> str:
+    """Hash the feature snapshot plus its safety constraints and data gaps.
+
+    The compact display hash remains value-focused; actions that require a
+    confirm-time compare-and-swap use this stronger digest so a changed hard
+    constraint cannot hide behind unchanged feature values.
+    """
+    material = {
+        "snapshot_hash": snapshot.snapshot_hash,
+        "version": snapshot.version,
+        "window_days": snapshot.window_days,
+        "constraints": sorted(
+            (item.model_dump(mode="json") for item in snapshot.constraints),
+            key=lambda item: (item["key"], item["severity"], item["source"]),
+        ),
+        "missingness": dict(sorted(snapshot.missingness.items())),
+    }
+    encoded = json.dumps(material, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+
+
 def input_hash_for(definition_sources: tuple[str, ...], days: list[dict]) -> str:
     """Digest of the raw inputs a feature read, used for cheap recompute checks."""
     material = json.dumps(
@@ -78,46 +99,57 @@ def input_hash_for(definition_sources: tuple[str, ...], days: list[dict]) -> str
     return hashlib.sha256(material.encode("utf-8")).hexdigest()
 
 
-def _missingness(days: list[dict]) -> dict[str, int]:
+def _missingness(
+    days: list[dict], excluded_sources: frozenset[str] = frozenset()
+) -> dict[str, int]:
     total = len(days)
-    keys = ("checkin", "diet", "exercise", "plan")
+    keys = tuple(
+        key
+        for key in ("checkin", "diet", "exercise", "plan")
+        if key not in excluded_sources
+    )
     return {
         key: total - sum(1 for row in days if row.get("observed", {}).get(key))
         for key in keys
     }
 
 
-def _active_actions(db: Session, user_id: int) -> list[str]:
+def _active_actions(
+    db: Session, user_id: int, *, include_proposals: bool = True,
+    include_experiments: bool = True,
+) -> list[str]:
     """Phenomena that are currently open and must not be duplicated."""
     from app.models import AgentActionProposal, AgentMicroExperiment, HealthGoalAdjustment
 
     out: list[str] = []
-    experiment = db.scalar(
-        select(AgentMicroExperiment).where(
-            AgentMicroExperiment.user_id == user_id,
-            AgentMicroExperiment.status == "active",
+    if include_experiments:
+        experiment = db.scalar(
+            select(AgentMicroExperiment).where(
+                AgentMicroExperiment.user_id == user_id,
+                AgentMicroExperiment.status == "active",
+            )
         )
-    )
-    if experiment is not None:
-        out.append(f"experiment:{experiment.insight_code}")
-    pending = db.scalars(
-        select(AgentActionProposal)
-        .where(
-            AgentActionProposal.user_id == user_id,
-            AgentActionProposal.status.in_(("pending", "executing")),
-        )
-        .limit(10)
-    ).all()
-    out.extend(f"proposal:{row.action_key}" for row in pending)
-    adjustments = db.scalars(
-        select(HealthGoalAdjustment)
-        .where(
-            HealthGoalAdjustment.user_id == user_id,
-            HealthGoalAdjustment.status == "pending",
-        )
-        .limit(10)
-    ).all()
-    out.extend(f"goal_adjustment:{row.metric}" for row in adjustments)
+        if experiment is not None:
+            out.append(f"experiment:{experiment.insight_code}")
+    if include_proposals:
+        pending = db.scalars(
+            select(AgentActionProposal)
+            .where(
+                AgentActionProposal.user_id == user_id,
+                AgentActionProposal.status.in_(("pending", "executing")),
+            )
+            .limit(10)
+        ).all()
+        out.extend(f"proposal:{row.action_key}" for row in pending)
+        adjustments = db.scalars(
+            select(HealthGoalAdjustment)
+            .where(
+                HealthGoalAdjustment.user_id == user_id,
+                HealthGoalAdjustment.status == "pending",
+            )
+            .limit(10)
+        ).all()
+        out.extend(f"goal_adjustment:{row.metric}" for row in adjustments)
     return sorted(set(out))
 
 
@@ -128,10 +160,16 @@ def build_snapshot(
     window_days: int = DEFAULT_WINDOW_DAYS,
     end: date | None = None,
     persist: bool = True,
+    commit: bool = True,
+    excluded_sources: set[str] | None = None,
 ) -> SnapshotModel:
-    ctx = FeatureContext(db=db, user_id=user_id, window_days=window_days, end=end)
+    excluded = frozenset(excluded_sources or ())
+    ctx = FeatureContext(
+        db=db, user_id=user_id, window_days=window_days, end=end,
+        excluded_sources=excluded,
+    )
     values = compute_all(ctx)
-    constraints = build_constraints(db, user_id, ctx, values)
+    constraints = build_constraints(db, user_id, ctx, values, excluded_sources=set(excluded))
     digest = snapshot_hash(values, window_days)
     snapshot = SnapshotModel(
         version=STATE_VERSION,
@@ -139,17 +177,29 @@ def build_snapshot(
         window_days=window_days,
         values=values,
         constraints=constraints,
-        missingness=_missingness(ctx.days),
-        active_actions=_active_actions(db, user_id),
+        missingness=_missingness(ctx.days, excluded),
+        active_actions=(
+            [] if {"plan", "experiment"}.intersection(excluded)
+            else _active_actions(
+                db, user_id,
+                include_proposals="plan_proposals" not in excluded,
+                include_experiments="experiment" not in excluded,
+            )
+        ),
         snapshot_hash=digest,
     )
     if persist:
-        persist_snapshot(db, user_id, snapshot, ctx.days)
+        persist_snapshot(db, user_id, snapshot, ctx.days, commit=commit)
     return snapshot
 
 
 def persist_snapshot(
-    db: Session, user_id: int, snapshot: SnapshotModel, days: list[dict]
+    db: Session,
+    user_id: int,
+    snapshot: SnapshotModel,
+    days: list[dict],
+    *,
+    commit: bool = True,
 ) -> HealthStateSnapshot:
     """Upsert feature rows and append the frozen snapshot."""
     existing = {
@@ -217,8 +267,10 @@ def persist_snapshot(
         active_actions_json=json.dumps(snapshot.active_actions, ensure_ascii=False),
     )
     db.add(record)
-    db.commit()
-    db.refresh(record)
+    db.flush()
+    if commit:
+        db.commit()
+        db.refresh(record)
     return record
 
 
@@ -261,7 +313,12 @@ def load_snapshot(row: HealthStateSnapshot) -> SnapshotModel:
 
 
 def invalidate(
-    db: Session, user_id: int, sources: list[str], *, recompute: bool = True
+    db: Session,
+    user_id: int,
+    sources: list[str],
+    *,
+    recompute: bool = True,
+    commit: bool = True,
 ) -> dict:
     """Mark affected features stale and (optionally) recompute them (§4.5).
 
@@ -280,11 +337,14 @@ def invalidate(
     ).all()
     for row in rows:
         db.delete(row)
-    db.commit()
+    db.flush()
     result = {"affected": affected, "deleted_rows": len(rows), "recomputed": False}
     if recompute:
-        build_snapshot(db, user_id)
+        build_snapshot(db, user_id, commit=False)
         result["recomputed"] = True
+    db.flush()
+    if commit:
+        db.commit()
     return result
 
 

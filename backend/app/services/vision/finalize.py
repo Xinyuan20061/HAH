@@ -16,6 +16,7 @@ from app.core.time import utc_now
 from app.models import DietRecord, FoodAnalysisSession
 from app.schemas.errors import ApiException
 from app.services.evaluation import record_metric
+from app.services.health_state.invalidation import SOURCE_DIET, record_changed
 from app.services.timeline import add_event
 
 
@@ -199,6 +200,13 @@ def finalize_food_analysis(
             "vision_feedback",
             True,
             {"corrected": corrected, "meal_type": chosen_meal},
+        )
+        record_changed(
+            db,
+            user_id,
+            SOURCE_DIET,
+            source_id=record.id,
+            source_revision=record.version,
         )
         db.flush()
         return {

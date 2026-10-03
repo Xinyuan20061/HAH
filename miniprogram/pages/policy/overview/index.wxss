@@ -1,0 +1,3 @@
+@import "../shared.wxss";
+.policy-progress{margin-bottom:16rpx}
+.policy-list-sub.policy-warning{color:#805b25;background:#f7f1e2;padding:9rpx 12rpx;border-radius:10rpx}

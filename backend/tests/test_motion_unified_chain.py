@@ -425,7 +425,8 @@ def test_t01_local_squat_stands_without_cloud(migrated_engine, api, monkeypatch)
     # Reps + quality score kept for the matched exercise.
     metrics = view["result"]["metrics"]
     assert any(m["id"] == "reps" and m["value"] == 3 for m in metrics)
-    assert view["result"]["capabilities"]["quality_score"] == "available"
+    assert view["result"]["capabilities"]["quality_score"] == "unavailable"
+    assert view["result"]["capability"]["reason_code"] == "NO_VALIDATED_SCORER"
     assert view["result"]["capabilities"]["repetitions"] == "available"
 
 
@@ -571,7 +572,8 @@ def test_full_chain_recognized_caches_and_polling_no_rebill(migrated_engine, api
     rec = view["result"]["recognition"]
     assert rec["state"] == "identified" and rec["canonical_id"] == "squat"
     assert rec["review_status"] == "used"
-    assert view["result"]["capabilities"]["quality_score"] == "available"
+    assert view["result"]["capabilities"]["quality_score"] == "unavailable"
+    assert view["result"]["capability"]["reason_code"] == "NO_VALIDATED_SCORER"
     assert any(m["id"] == "reps" and m["value"] == 3 for m in view["result"]["metrics"])
     assert view["result"]["summary"]["source"] == "visual_coach"
 

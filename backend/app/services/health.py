@@ -45,30 +45,45 @@ def get_goal_settings(db: Session, user_id: int, profile: HealthProfile | None =
     }
 
 
-def today_summary(db: Session, user_id: int, profile: HealthProfile | None):
+def today_summary(
+    db: Session,
+    user_id: int,
+    profile: HealthProfile | None,
+    *,
+    include_plan: bool = True,
+    include_goal_targets: bool = True,
+):
     from app.services.health_data import daily_facts, display_daily
 
     today = business_today()
-    row = display_daily(daily_facts(db, user_id, today, today)[0])
-    goals = get_goal_settings(db, user_id, profile)
-    return {
+    row = display_daily(
+        daily_facts(db, user_id, today, today, include_plan=include_plan)[0]
+    )
+    goals = get_goal_settings(db, user_id, profile) if include_goal_targets else {}
+    summary = {
         "calories": round(float(row["calories"]), 1),
-        "calorie_target": goals["calorie_target"],
         "protein": round(float(row["protein"]), 1),
-        "protein_target": goals["protein_target"],
         "exercise_min": int(row["exercise_min"]),
-        "exercise_target": goals["exercise_target"],
         "burned": round(float(row["exercise_calories"]), 1),
         "water_ml": int(row["water_ml"]),
-        "water_target": goals["water_target"],
         "sleep_hours": float(row["sleep_hours"]),
-        "sleep_target": goals["sleep_target"],
         "weight_kg": float(row["weight_kg"] or (profile.weight_kg if profile else 0)),
         "steps": int(row["steps"]),
-        "steps_target": goals["steps_target"],
         "mood": row.get("mood") or "normal",
         "observed": row.get("observed", {}),
     }
+    if include_goal_targets:
+        summary.update(
+            {
+                "calorie_target": goals["calorie_target"],
+                "protein_target": goals["protein_target"],
+                "exercise_target": goals["exercise_target"],
+                "water_target": goals["water_target"],
+                "sleep_target": goals["sleep_target"],
+                "steps_target": goals["steps_target"],
+            }
+        )
+    return summary
 
 
 def trend_7d(db: Session, user_id: int):

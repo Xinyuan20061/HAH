@@ -29,7 +29,9 @@ class StrategyCompileRequest(StrictModel):
 
 class SourcePoint(StrictModel):
     slot: int = Field(ge=0, le=28)
-    value: float
+    # Deprecated compatibility field. Trusted source values are resolved by the
+    # server and this value is never used as evidence.
+    value: float | None = None
     source_type: str = Field(min_length=1, max_length=48)
     source_id: str = Field(min_length=1, max_length=96)
     source_revision: int = Field(ge=1)
@@ -37,6 +39,28 @@ class SourcePoint(StrictModel):
     metric_version: str = Field(min_length=1, max_length=40)
     confirmed: bool = True
     endpoint: Literal["baseline", "followup"] = "followup"
+
+
+class ObservationRefInput(StrictModel):
+    """Client may select an owned source, but cannot submit its value."""
+
+    endpoint: Literal["baseline", "followup"] = "followup"
+    slot: int = Field(ge=0, le=28)
+    source_type: str = Field(min_length=1, max_length=48)
+    source_id: str = Field(min_length=1, max_length=96)
+    source_revision: int = Field(ge=1)
+    metric_version: str = Field(min_length=1, max_length=40)
+
+
+class SelfReportInput(StrictModel):
+    """Explicitly self-reported measurement, never represented as a source record."""
+
+    endpoint: Literal["baseline", "followup"] = "followup"
+    slot: int = Field(ge=0, le=28)
+    source_id: str = Field(min_length=1, max_length=96)
+    observed_at: datetime
+    metric_version: str = Field(min_length=1, max_length=40)
+    value: float
 
 
 class ExecutionReportRequest(StrictModel):
@@ -51,6 +75,11 @@ class ExecutionReportRequest(StrictModel):
 class ObservationRequest(StrictModel):
     episode_version: int = Field(ge=1)
     points: list[SourcePoint] = Field(default_factory=list, max_length=56)
+
+    # New contract: the client submits only source references. The server fills
+    # observed_at, metric version and value from the owned source row.
+    refs: list[ObservationRefInput] = Field(default_factory=list, max_length=56)
+    self_reports: list[SelfReportInput] = Field(default_factory=list, max_length=56)
 
 
 class EpisodeStartRequest(StrictModel):

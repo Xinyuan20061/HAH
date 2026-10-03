@@ -135,11 +135,12 @@ def add_diet(body: DietIn, user=Depends(current_user), db: Session = Depends(get
         ref_id=record.id,
         occurred_at=record.recorded_at,
     )
+    invalidated = record_changed(
+        db, user.id, SOURCE_DIET,
+        source_id=record.id, source_revision=record.version,
+    )
     db.commit()
     db.refresh(record)
-    # Capability plan §4.5: the persisted features derived from diet records are now
-    # stale and are removed before anything reads them again.
-    invalidated = record_changed(db, user.id, SOURCE_DIET)
     view = _view(record)
     view.state_invalidated = list(invalidated.get("affected", []))
     return view
@@ -258,6 +259,7 @@ def patch_diet(
     for field, value in submitted.items():
         if field not in {"version", "updated_at"}:
             setattr(record, field, value)
+    record.version = submitted["version"]
     # Compare-and-set: a stale version affects 0 rows and never overwrites a
     # change made in another page (spec §5.4).
     result = db.execute(
@@ -308,9 +310,12 @@ def patch_diet(
         True,
         {"changed_fields": changed_fields, "record_id": record_id},
     )
+    invalidated = record_changed(
+        db, user.id, SOURCE_DIET,
+        source_id=record.id, source_revision=record.version,
+    )
     db.commit()
     db.refresh(record)
-    invalidated = record_changed(db, user.id, SOURCE_DIET)
     view = _view(record)
     view.state_invalidated = list(invalidated.get("affected", []))
     return view
@@ -365,9 +370,14 @@ def delete_diet(
         ref_type="diet_deleted",
         ref_id=record.id,
     )
+    source_revision = record.version
     db.delete(record)
+    db.flush()
+    invalidated = record_changed(
+        db, user.id, SOURCE_DIET,
+        source_id=record_id, source_revision=source_revision, deleted=True,
+    )
     db.commit()
-    invalidated = record_changed(db, user.id, SOURCE_DIET)
     return {
         "ok": True,
         "record_id": record_id,
@@ -392,9 +402,12 @@ def add_exercise(
         ref_id=x.id,
         occurred_at=x.recorded_at,
     )
+    record_changed(
+        db, user.id, SOURCE_EXERCISE,
+        source_id=x.id, source_revision=x.version,
+    )
     db.commit()
     db.refresh(x)
-    record_changed(db, user.id, SOURCE_EXERCISE)
     return x
 
 
@@ -414,6 +427,7 @@ def delete_exercise(
 ):
     x = db.get(ExerciseRecord, record_id)
     if x and x.user_id == user.id:
+        source_revision = x.version
         add_event(
             db,
             user.id,
@@ -424,8 +438,12 @@ def delete_exercise(
             ref_id=x.id,
         )
         db.delete(x)
+        db.flush()
+        record_changed(
+            db, user.id, SOURCE_EXERCISE,
+            source_id=record_id, source_revision=source_revision, deleted=True,
+        )
         db.commit()
-        record_changed(db, user.id, SOURCE_EXERCISE)
     else:
         raise ApiException(404, "EXERCISE_RECORD_NOT_FOUND", "运动记录不存在")
     return {"ok": True}

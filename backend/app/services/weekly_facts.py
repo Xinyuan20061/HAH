@@ -42,21 +42,29 @@ def _completion(rows, metric, target):
 
 
 def build_weekly_facts(
-    user, db: Session, days: int = 7, end_date=None, persist: bool = True
+    user, db: Session, days: int = 7, end_date=None, persist: bool = True,
+    include_plan: bool = True, include_goal_targets: bool = True,
 ):
     end = end_date or business_today()
     start = end - timedelta(days=days - 1)
     prev_end = start - timedelta(days=1)
     prev_start = prev_end - timedelta(days=days - 1)
-    rows = daily_facts(db, user.id, start, end)
-    prev = daily_facts(db, user.id, prev_start, prev_end)
-    goals = get_goal_settings(db, user.id, user.profile)
+    rows = daily_facts(db, user.id, start, end, include_plan=include_plan)
+    prev = daily_facts(db, user.id, prev_start, prev_end, include_plan=include_plan)
+    goals = (
+        get_goal_settings(db, user.id, user.profile) if include_goal_targets else {}
+    )
     averages = {k: _avg(rows, k) for k in METRICS}
     previous_averages = {k: _avg(prev, k) for k in METRICS}
     changes = {k: _delta(averages[k], previous_averages[k]) for k in METRICS}
-    completion = {
-        k: _completion(rows, k, goals[target]) for k, (_, target) in METRICS.items()
-    }
+    completion = (
+        {
+            k: _completion(rows, k, goals[target])
+            for k, (_, target) in METRICS.items()
+        }
+        if include_goal_targets
+        else {}
+    )
     coverage = {
         "checkin_days": sum(1 for x in rows if x["observed"]["checkin"]),
         "diet_days": sum(1 for x in rows if x["observed"]["diet"]),
@@ -127,18 +135,31 @@ def programmatic_highlights(facts):
     c = facts["changes"]
     g = facts["goals"]
     out = []
-    if a["sleep_hours"] is not None and a["sleep_hours"] >= g["sleep_target"] * 0.9:
+    if (
+        g.get("sleep_target") is not None
+        and a["sleep_hours"] is not None
+        and a["sleep_hours"] >= g["sleep_target"] * 0.9
+    ):
         out.append("有记录日期的平均睡眠接近个人目标")
     if (
-        a["exercise_min"] is not None
+        g.get("exercise_target") is not None
+        and a["exercise_min"] is not None
         and a["exercise_min"] >= g["exercise_target"] * 0.8
     ):
         out.append("有记录日期的运动时长接近个人目标")
     if c["exercise_min"] is not None and c["exercise_min"] >= 5:
         out.append(f"运动日均较上一周期增加 {c['exercise_min']} 分钟")
-    if a["water_ml"] is not None and a["water_ml"] < g["water_target"] * 0.75:
+    if (
+        g.get("water_target") is not None
+        and a["water_ml"] is not None
+        and a["water_ml"] < g["water_target"] * 0.75
+    ):
         out.append("有记录日期的饮水完成度仍有提升空间")
-    if a["protein"] is not None and a["protein"] < g["protein_target"] * 0.7:
+    if (
+        g.get("protein_target") is not None
+        and a["protein"] is not None
+        and a["protein"] < g["protein_target"] * 0.7
+    ):
         out.append("有记录日期的蛋白质摄入可更规律")
     if not out:
         out.append("当前数据更适合先观察稳定性，而不是追求单项极值")
