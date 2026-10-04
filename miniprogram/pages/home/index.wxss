@@ -42,6 +42,8 @@
 .voice-button.working {opacity:.46;}
 .voice-button-press {opacity:.72;transform:scale(.94);}
 .voice-status {margin-top:16rpx;color:#506336;font-size:21rpx;font-weight:700;}
+.route-test-button {margin-top:12rpx;padding:12rpx 20rpx;border:1rpx solid #eeeee6;border-radius:20rpx;color:#506336;background:#fff;font-size:20rpx;font-weight:700;transition:opacity .16s ease-out;}
+.route-test-button.disabled {opacity:.42;}
 /* 「状态与下一步」入口：次要入口，不抢角色舞台与语音区的主视线 */
 .state-entry {display:flex;align-items:center;justify-content:space-between;margin-top:24rpx;padding:24rpx;border-radius:22rpx;background:#fff;border:1rpx solid #eeeee6;}
 .state-entry-text {min-width:0;}

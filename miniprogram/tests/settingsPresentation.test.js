@@ -61,3 +61,11 @@ test('gym honours the settings voice autoplay preference', () => {
   assert.match(script, /healthmate_voice_autoplay/)
   assert.match(script, /if \(this\._voiceAutoplay\) this\.speak\(reply\)/)
 })
+
+test('capability page can focus the plan permission required by a companion request', () => {
+  const script = read('pages/settings/capabilities/index.js')
+  const view = read('pages/settings/capabilities/index.wxml')
+  assert.match(script, /options\.focus === 'plan_outcome'/)
+  assert.match(script, /#capability-\$\{this\.data\.focusPluginId\}/)
+  assert.match(view, /id="capability-\{\{plugin\.plugin_id\}\}"/)
+})

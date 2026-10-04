@@ -28,11 +28,15 @@ const ACTIVITY_STATUS = {
   success: '已经准备好',
   error: '先暂停一下'
 }
+const AUTO_NAVIGATION_FALLBACK_MS = 1600
+const PLAN_HANDOFF_VERSION = 'healthmate.plan-handoff.v1'
+const PLAN_ROUTE_TEST_PROMPT = '给我制定一个计划'
 
 // The server sends semantic targets, never page URLs. Keeping the mapping here
 // makes model/provider text unable to navigate to an arbitrary destination.
 const NAVIGATION_TARGETS = {
   plan_preview: { route: '/pages/plan/index', label: '查看计划草案' },
+  capability_setup: { route: '/pages/settings/capabilities/index?focus=plan_outcome', label: '开启计划能力' },
   records: { route: '/pages/records/index', label: '打开记录' },
   workout: { route: '/pages/workout/index', label: '打开训练' },
   health_state: { route: '/pages/state/index', label: '查看状态' }
@@ -70,9 +74,65 @@ function safeRunId(value) {
   return Number.isInteger(runId) && runId > 0 ? runId : null
 }
 
+function structuredPlanFallback(result) {
+  const runId = safeRunId(result && result.run_id)
+  const plan = result && result.plan
+  const items = plan && Array.isArray(plan.items) ? plan.items : []
+  if (!runId || result.intent !== 'plan' || String(result.safety_level || 'normal') !== 'normal') return null
+  const actorId = result.agent && result.agent.id === 'xiaokang' ? 'xiaokang' : 'xiaojian'
+  if (!items.length) {
+    return {
+      activity: 'presenting',
+      action: {
+        target: 'capability_setup',
+        label: NAVIGATION_TARGETS.capability_setup.label,
+        route: NAVIGATION_TARGETS.capability_setup.route,
+        runId,
+        actorId
+      },
+      autoNavigate: false
+    }
+  }
+  return {
+    activity: 'planning',
+    action: {
+      target: 'plan_preview',
+      label: NAVIGATION_TARGETS.plan_preview.label,
+      route: NAVIGATION_TARGETS.plan_preview.route,
+      runId,
+      actorId
+    },
+    autoNavigate: true
+  }
+}
+
+function persistPlanHandoff(result, action) {
+  if (!action || action.target !== 'plan_preview') return
+  const runId = safeRunId(action.runId)
+  const plan = result && result.plan
+  if (!runId || !plan || !Array.isArray(plan.items) || !plan.items.length) return
+  try {
+    wx.setStorageSync(`healthmate_plan_preview_handoff:${runId}`, {
+      version: PLAN_HANDOFF_VERSION,
+      savedAt: Date.now(),
+      reply: String(result.reply || ''),
+      presentation: { actor: action.actorId === 'xiaokang' ? 'xiaokang' : 'xiaojian' },
+      plan_preview: {
+        run_id: runId,
+        status: 'draft',
+        read_only: true,
+        title: String(plan.title || '本周健康计划'),
+        items: plan.items.slice(0, 10),
+        write: { status: 'not_applied', automatic: false, confirmation_required: true }
+      }
+    })
+  } catch (error) {}
+}
+
 function normalizePresentation(result) {
+  const fallback = structuredPlanFallback(result)
   const directive = firstDirective(result)
-  if (!directive) return { activity: 'speaking', action: null, autoNavigate: false }
+  if (!directive) return fallback || { activity: 'speaking', action: null, autoNavigate: false }
   const navigation = directive.navigation && typeof directive.navigation === 'object'
     ? directive.navigation
     : directive.handoff && typeof directive.handoff === 'object'
@@ -83,7 +143,7 @@ function normalizePresentation(result) {
   const cue = String(directive.cue || directive.activity || '')
   const cueActivity = CUE_ACTIVITY[cue] || cue
   const activity = CHARACTER_ACTIVITIES.has(cueActivity) ? cueActivity : 'speaking'
-  if (!destination) return { activity, action: null, autoNavigate: false }
+  if (!destination) return fallback || { activity, action: null, autoNavigate: false }
 
   const params = navigation.params && typeof navigation.params === 'object' ? navigation.params : {}
   const runId = safeRunId(params.run_id)
@@ -95,7 +155,7 @@ function normalizePresentation(result) {
       && write.automatic === false
       && write.confirmation_required === true
     if (!runId || runId !== responseRunId || !validDraftBoundary) {
-      return { activity, action: null, autoNavigate: false }
+      return fallback || { activity, action: null, autoNavigate: false }
     }
   }
   const action = {
@@ -171,6 +231,7 @@ Page({
   onUnload() {
     this._unloaded = true
     this.clearCharacterTimer()
+    this.clearPendingNavigation()
     if (this._audio) this._audio.destroy()
     if (this._recorder && this.data.recording) this._recorder.stop()
   },
@@ -197,7 +258,7 @@ Page({
     wx.setStorageSync('healthmate_agent_id', activeCompanion.id)
     const tabBar = typeof this.getTabBar === 'function' && this.getTabBar()
     if (tabBar && typeof tabBar.syncCompanion === 'function') tabBar.syncCompanion(activeCompanion.id)
-    this._pendingNavigation = null
+    this.clearPendingNavigation()
     this.setData({ activeCompanion, response: null, voiceStatus: '按住说话', characterActivity: 'idle', characterStatus: '等你开口' })
   },
 
@@ -253,7 +314,7 @@ Page({
     if (!this._recorder || this.data.recording || this.data.voiceWorking) return
     this._voiceCancelled = false
     this.setData({ recording: true, response: null, voiceStatus: '正在听' })
-    this._pendingNavigation = null
+    this.clearPendingNavigation()
     this.setCharacterActivity('listening', '正在听')
     this._recorder.start({ duration: 30000, sampleRate: 16000, numberOfChannels: 1, encodeBitRate: 48000, format: 'mp3' })
   },
@@ -282,34 +343,68 @@ Page({
       })
       const text = String(transcript && transcript.text || '').trim()
       if (!text) throw new Error('没有听清，再说一次吧')
-      const result = await api.postLong('/agent/respond', {
-        message: text,
-        agent_id: this.data.activeCompanion.id,
-        channel: 'voice'
+      await this.submitAgentMessage(text, {
+        channel: 'voice',
+        voiceStatus: '继续说',
+        autoplay: this._voiceAutoplay
       })
-      const reply = String(result && result.reply || '我听到了，我们继续。')
-      const presentation = normalizePresentation(result)
-      const response = {
-        heard: text,
-        reply,
-        runId: result && result.run_id,
-        action: presentation.action
-      }
-      this._pendingNavigation = presentation.autoNavigate ? presentation.action : null
-      if (!this._unloaded) {
-        this.setData({ response, voiceStatus: '继续说', voiceWorking: false })
-        this.setCharacterActivity(
-          presentation.activity,
-          ACTIVITY_STATUS[presentation.activity] || ACTIVITY_STATUS.speaking
-        )
-      }
-      if (this._voiceAutoplay) this.speak(reply)
     } catch (error) {
       if (!this._unloaded) {
         this.setData({ voiceWorking: false, voiceStatus: '再试一次' })
         this.setCharacterActivity('error', '需要再试一次', 900)
         wx.showToast({ title: error.message || '语音交互暂时不可用', icon: 'none' })
       }
+    }
+  },
+
+  async submitAgentMessage(text, options) {
+    const settings = options || {}
+    const result = await api.postLong('/agent/respond', {
+      message: text,
+      agent_id: this.data.activeCompanion.id,
+      channel: settings.channel === 'text' ? 'text' : 'voice'
+    })
+    if (this._unloaded) return null
+
+    const reply = String(result && result.reply || '我听到了，我们继续。')
+    const presentation = normalizePresentation(result)
+    const response = {
+      heard: text,
+      reply,
+      runId: result && result.run_id,
+      action: presentation.action
+    }
+    persistPlanHandoff(result, presentation.action)
+    this.queuePendingNavigation(presentation.autoNavigate ? presentation.action : null)
+    this.setData({
+      response,
+      voiceStatus: settings.voiceStatus || '继续说',
+      voiceWorking: false
+    })
+    this.setCharacterActivity(
+      presentation.activity,
+      ACTIVITY_STATUS[presentation.activity] || ACTIVITY_STATUS.speaking
+    )
+    if (settings.autoplay) this.speak(reply)
+    return result
+  },
+
+  async testPlanRouting() {
+    if (this.data.recording || this.data.voiceWorking) return
+    this.clearPendingNavigation()
+    this.setData({ response: null, voiceWorking: true, voiceStatus: '正在测试计划路由' })
+    this.setCharacterActivity('thinking', '正在理解')
+    try {
+      await this.submitAgentMessage(PLAN_ROUTE_TEST_PROMPT, {
+        channel: 'voice',
+        voiceStatus: '决策已返回',
+        autoplay: false
+      })
+    } catch (error) {
+      if (this._unloaded) return
+      this.setData({ voiceWorking: false, voiceStatus: '测试失败' })
+      this.setCharacterActivity('error', '需要再试一次', 900)
+      wx.showToast({ title: error.message || '计划路由暂时不可用', icon: 'none' })
     }
   },
 
@@ -373,13 +468,35 @@ Page({
     if (this.data.response && this.data.response.reply) this.speak(this.data.response.reply)
   },
 
+  clearPendingNavigation() {
+    if (this._autoNavigationTimer) clearTimeout(this._autoNavigationTimer)
+    this._autoNavigationTimer = null
+    this._pendingNavigation = null
+  },
+
+  queuePendingNavigation(action) {
+    this.clearPendingNavigation()
+    if (!action) return
+    this._pendingNavigation = action
+    this._autoNavigationTimer = setTimeout(() => {
+      this._autoNavigationTimer = null
+      this.completePendingNavigation()
+    }, AUTO_NAVIGATION_FALLBACK_MS)
+  },
+
+  completePendingNavigation() {
+    const pending = this._pendingNavigation
+    if (!pending || this._unloaded) return
+    this.clearPendingNavigation()
+    this.setCharacterActivity('idle', '等你开口')
+    this.navigateAction(pending)
+  },
+
   onCharacterClipComplete(e) {
     const activity = e.detail && e.detail.activity
     const pending = this._pendingNavigation
     if (pending && activity === this.data.characterActivity) {
-      this._pendingNavigation = null
-      this.setCharacterActivity('idle', '等你开口')
-      this.navigateAction(pending)
+      this.completePendingNavigation()
       return
     }
     if (activity === 'planning' || activity === 'presenting' || activity === 'success' || activity === 'error') {
@@ -404,7 +521,7 @@ Page({
     const response = this.data.response
     const action = response && response.action
     if (!action) return
-    this._pendingNavigation = null
+    this.clearPendingNavigation()
     this.navigateAction(action)
   }
 })

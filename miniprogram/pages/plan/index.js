@@ -10,9 +10,29 @@ const PREVIEW_ACTORS = {
   xiaokang: { id: 'xiaokang', name: '小康', icon: '/assets/characters/xiaokang-portrait-v1.png' }
 }
 const REVIEW_TOKEN_TICK_MS = 22
+const PLAN_HANDOFF_VERSION = 'healthmate.plan-handoff.v1'
+const PLAN_HANDOFF_MAX_AGE_MS = 15 * 60 * 1000
 
 function displayTokens(text) {
   return String(text || '').match(/[\u3400-\u4dbf\u4e00-\u9fff]|[A-Za-z0-9]+(?:[._:/+-][A-Za-z0-9]+)*|\s+|./g) || []
+}
+
+function handoffStorageKey(runId) {
+  return `healthmate_plan_preview_handoff:${runId}`
+}
+
+function readPlanHandoff(runId) {
+  try {
+    const value = wx.getStorageSync(handoffStorageKey(runId))
+    const preview = value && value.plan_preview
+    const fresh = Number(value && value.savedAt) > 0 && Date.now() - Number(value.savedAt) <= PLAN_HANDOFF_MAX_AGE_MS
+    if (value && value.version === PLAN_HANDOFF_VERSION && fresh && Number(preview && preview.run_id) === runId) return value
+  } catch (error) {}
+  return null
+}
+
+function clearPlanHandoff(runId) {
+  try { wx.removeStorageSync(handoffStorageKey(runId)) } catch (error) {}
 }
 
 Page({
@@ -76,9 +96,16 @@ Page({
     if (!runId || this.data.previewLoading) return
     this.setData({ previewLoading: true, previewError: '', previewReplyText: '', previewReplyStreaming: false })
     try {
-      const detail = await api.get(`/agent/runs/${runId}`, { allowCache: false })
+      const handoff = readPlanHandoff(runId)
+      let detail
+      try {
+        detail = await api.get(`/agent/runs/${runId}`, { allowCache: false })
+      } catch (requestError) {
+        if (!handoff) throw requestError
+        detail = handoff
+      }
       if (this._unloaded) return
-      const preview = detail && detail.plan_preview
+      const preview = detail && detail.plan_preview || handoff && handoff.plan_preview
       if (!preview || !Array.isArray(preview.items) || !preview.items.length) {
         throw new Error('这份计划草案已失效，请回到健身房重新告诉我你的目标')
       }
@@ -100,9 +127,9 @@ Page({
           categoryLabel: PREVIEW_CATEGORY_LABELS[item.category] || '健康'
         }
       })
-      const actorId = detail.presentation && detail.presentation.actor
+      const actorId = detail.presentation && detail.presentation.actor || handoff && handoff.presentation && handoff.presentation.actor
       const previewActor = PREVIEW_ACTORS[actorId] || this.data.previewActor
-      const reply = String(detail.reply || '我整理了一版计划，你先看看。').trim()
+      const reply = String(detail.reply || handoff && handoff.reply || '我整理了一版计划，你先看看。').trim()
       this.setData({
         preview: { ...preview, items },
         previewActor,
@@ -140,6 +167,7 @@ Page({
   },
   dismissAppliedPreview() {
     this.clearPreviewTimers()
+    clearPlanHandoff(this.data.previewRunId)
     this.setData({ previewMode: false, preview: null, previewExpanded: false })
   },
   confirmPreview() {
@@ -168,6 +196,7 @@ Page({
         'preview.write.confirmation_required': false,
         applyingPreview: false
       })
+      clearPlanHandoff(this.data.previewRunId)
       wx.showToast({ title: '计划已加入', icon: 'success' })
       this.loadToday()
       this.loadActivity()

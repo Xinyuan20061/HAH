@@ -5,7 +5,7 @@ const ACTIVITIES = new Set([
 
 const POSE_BY_ACTIVITY = {
   idle: 0,
-  listening: 1,
+  listening: 0,
   thinking: 0,
   planning: 2,
   speaking: 1,
@@ -36,6 +36,10 @@ function safeActivity(activity) {
   return ACTIVITIES.has(activity) ? activity : 'idle'
 }
 
+function keepsIdleMotion(activity) {
+  return activity === 'idle' || activity === 'listening'
+}
+
 Component({
   properties: {
     agentId: { type: String, value: 'xiaojian' },
@@ -46,6 +50,7 @@ Component({
     safeAgentId: 'xiaojian',
     previousAgentId: 'xiaojian',
     safeActivity: 'idle',
+    keepsIdleMotion: true,
     poseIndex: 0,
     previousPoseIndex: 0,
     swapToken: 'a',
@@ -92,6 +97,7 @@ Component({
       const common = {
         safeAgentId: nextAgent,
         safeActivity: nextActivity,
+        keepsIdleMotion: keepsIdleMotion(nextActivity),
         poseIndex: nextPose,
         imageFailed: false,
         showVoiceWave: nextActivity === 'listening' || nextActivity === 'speaking',

@@ -24,6 +24,7 @@ class NavigationTarget(str, Enum):
     """
 
     PLAN_PREVIEW = "plan_preview"
+    CAPABILITY_SETUP = "capability_setup"
     RECORDS = "records"
     WORKOUT = "workout"
     HEALTH_STATE = "health_state"
@@ -92,6 +93,12 @@ def build_presentation(
         target = NavigationTarget.PLAN_PREVIEW
         mode = "after_animation"
         params = {"run_id": int(run_id)}
+    elif intent == "plan" and not safety_blocked:
+        # A plan request without a reviewed structured draft is normally a
+        # capability boundary. Expose a deterministic setup action instead of
+        # leaving the user with an unexplained text-only answer.
+        target = NavigationTarget.CAPABILITY_SETUP
+        mode = "on_user_action"
     elif (
         specialist == "coach"
         and intent == "exercise_knowledge"

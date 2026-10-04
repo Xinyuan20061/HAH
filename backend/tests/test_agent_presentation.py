@@ -73,6 +73,23 @@ def test_safety_presentation_has_no_navigation_even_if_result_contains_plan():
     assert view["write"]["automatic"] is False
 
 
+def test_plan_without_reviewed_draft_routes_to_capability_setup():
+    view = build_presentation(
+        intent="plan",
+        specialist="planner",
+        agent_id="xiaokang",
+        run_id=12,
+        result={"safety_level": "normal", "plan": None, "actions": []},
+    )
+    assert view["actor"] == "xiaokang"
+    assert view["navigation"] == {
+        "target": NavigationTarget.CAPABILITY_SETUP.value,
+        "mode": "on_user_action",
+        "params": {},
+    }
+    assert view["write"]["automatic"] is False
+
+
 def test_plan_preview_eligibility_rejects_wrong_intent_and_safety_state():
     assert is_plan_result_eligible("plan", {"plan": PLAN}) is True
     assert is_plan_result_eligible("general", {"plan": PLAN}) is False

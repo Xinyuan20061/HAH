@@ -173,7 +173,7 @@ def plugins(user=Depends(current_user), db: Session = Depends(get_db)):
     """User-facing capability catalog; technical tool names remain metadata."""
     return {
         "plugins": list_plugins(db, user.id),
-        "principle": "能力只读取本人授权数据；行动必须经过用户确认；能力可随时暂停和撤销。",
+        "principle": "能力只读取本人授权数据；行动必须经过用户确认；能力可随时关闭和撤销。",
     }
 
 
@@ -213,8 +213,8 @@ def create_installation(
         row = HarnessPluginInstallation(
             user_id=user.id, plugin_id=manifest.plugin_id, plugin_version=manifest.version,
             enabled=False, config_json=json.dumps(config, ensure_ascii=False, sort_keys=True),
-            # The current manifest is recorded as reviewed only on explicit
-            # resume after this exact config has been previewed.
+            # The current manifest is recorded as reviewed only after the user
+            # explicitly confirms and enables this exact configuration.
             config_version=1, reviewed_manifest_hash="",
             last_error="", enabled_at=None,
         )
@@ -272,7 +272,7 @@ def patch_installation(
             config_json=json.dumps(config, ensure_ascii=False, sort_keys=True),
             config_version=body.config_version + 1,
             # Any material configuration write revokes the active session. The
-            # new settings become effective only after preview and explicit resume.
+            # new settings become effective only after explicit user confirmation.
             enabled=False,
             disabled_at=now,
             updated_at=now,
@@ -288,7 +288,7 @@ def patch_installation(
         write_audit(
             db, user_id=user.id, plugin_id=row.plugin_id, installation_id=row.id,
             event_type="configured", idempotency_key=key, request_hash=request_hash,
-            config_version=row.config_version, detail={"changed": sorted(body.config), "requires_preview_and_consent": True}, response=result,
+            config_version=row.config_version, detail={"changed": sorted(body.config), "requires_explicit_consent": True}, response=result,
         )
         db.commit()
         return result
@@ -364,15 +364,6 @@ def _set_installation_state(
         row = _owned_installation(db, user.id, installation_id)
         _check_version(row, body.config_version)
         manifest = get_plugin(row.plugin_id)
-        if enabled:
-            prior_preview = db.scalar(select(HarnessCapabilityAudit.id).where(
-                HarnessCapabilityAudit.user_id == user.id,
-                HarnessCapabilityAudit.installation_id == row.id,
-                HarnessCapabilityAudit.event_type == "previewed",
-                HarnessCapabilityAudit.config_version == row.config_version,
-            ).limit(1))
-            if prior_preview is None:
-                raise ApiException(409, "CAPABILITY_PREVIEW_REQUIRED", "请先预览当前配置，再明确授权开启")
         now = utc_now()
         changed = db.execute(update(HarnessPluginInstallation).where(
             HarnessPluginInstallation.id == row.id,
@@ -473,7 +464,7 @@ def installation_audit(installation_id: int, user=Depends(current_user), db: Ses
 
 @router.post("/plugins/{plugin_id}/enable")
 def enable_plugin(plugin_id: str, body: PluginEnableRequest, user=Depends(current_user), db: Session = Depends(get_db)):
-    raise ApiException(409, "CAPABILITY_FLOW_REQUIRED", "请在健康能力页面完成配置预览和明确授权后再开启")
+    raise ApiException(409, "CAPABILITY_FLOW_REQUIRED", "请在健康能力页面确认授权范围后开启")
 
 
 @router.post("/plugins/{plugin_id}/disable")

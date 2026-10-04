@@ -110,17 +110,17 @@
 
 .idle-sprite-sheet {
   display: block;
-  width: 1024rpx;
+  width: 2048rpx;
   height: 384rpx;
   max-width: none;
 }
 
 .idle-curl-sheet {
-  animation: xiaojianCurlFrames 1.8s steps(1,end) infinite;
+  animation: xiaojianCurlFrames 1.6s steps(1,end) infinite;
 }
 
 .idle-read-sheet {
-  animation: xiaokangReadFrames 3.2s steps(1,end) infinite;
+  animation: xiaokangReadFrames 2.4s steps(1,end) infinite;
 }
 
 .pose-0 .sprite-sheet { transform: translateX(0); }
@@ -210,6 +210,15 @@
   padding: 0 16rpx;
   border-radius: 28rpx;
   background: #111613;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(4rpx) scale(.96);
+  transition: opacity .2s ease-out, transform .2s ease-out;
+}
+
+.character-wave.is-visible {
+  opacity: 1;
+  transform: translateY(0) scale(1);
 }
 
 .character-wave view {
@@ -218,7 +227,10 @@
   border-radius: 8rpx;
   background: #c4e267;
   animation: waveTalk .72s ease-in-out infinite;
+  animation-play-state: paused;
 }
+
+.character-wave.is-visible view { animation-play-state: running; }
 
 .character-wave view:nth-child(2) { animation-delay: .12s; }
 .character-wave view:nth-child(3) { animation-delay: .24s; }
@@ -265,19 +277,25 @@
 }
 
 @keyframes xiaojianCurlFrames {
-  0%,20% { transform: translateX(0); }
-  25%,45% { transform: translateX(-256rpx); }
-  50%,70% { transform: translateX(-512rpx); }
-  75%,95% { transform: translateX(-768rpx); }
-  100% { transform: translateX(0); }
+  0% { transform: translateX(0); }
+  12.5% { transform: translateX(-256rpx); }
+  25% { transform: translateX(-512rpx); }
+  37.5% { transform: translateX(-768rpx); }
+  50% { transform: translateX(-1024rpx); }
+  62.5% { transform: translateX(-1280rpx); }
+  75% { transform: translateX(-1536rpx); }
+  87.5%,100% { transform: translateX(-1792rpx); }
 }
 
 @keyframes xiaokangReadFrames {
-  0%,35% { transform: translateX(0); }
-  40%,50% { transform: translateX(-256rpx); }
-  55%,65% { transform: translateX(-512rpx); }
-  70%,94% { transform: translateX(-768rpx); }
-  100% { transform: translateX(0); }
+  0% { transform: translateX(0); }
+  12.5% { transform: translateX(-256rpx); }
+  25% { transform: translateX(-512rpx); }
+  37.5% { transform: translateX(-768rpx); }
+  50% { transform: translateX(-1024rpx); }
+  62.5% { transform: translateX(-1280rpx); }
+  75% { transform: translateX(-1536rpx); }
+  87.5%,100% { transform: translateX(-1792rpx); }
 }
 
 @keyframes characterThink {

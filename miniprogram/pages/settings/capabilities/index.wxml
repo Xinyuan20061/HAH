@@ -4,26 +4,26 @@
   <view class="capability-head">
     <view class="eyebrow">YOUR HEALTH CAPABILITIES</view>
     <view class="page-title">健康能力</view>
-    <view class="intro">把想要的帮助方式调成适合你的样子。每项能力的目标与表达偏好只在对应场景生效，不会互相覆盖；先看它会用什么、会怎么回答，再决定是否授权。</view>
+    <view class="intro">把想要的帮助方式调成适合你的样子。每项能力只使用你明确允许的数据，可以随时开启或关闭。</view>
   </view>
 
   <view wx:if="{{loading}}" class="state-card"><view class="state-spinner"></view><view class="state-title">正在读取健康能力</view></view>
   <view wx:elif="{{error}}" class="state-card state-card-error"><view class="grow"><view class="state-title">能力列表没有加载出来</view><view class="state-desc">{{error}}</view></view><button class="retry-btn tappable" bindtap="retry" hover-class="tap-btn">重试</button></view>
   <view wx:else>
-    <view wx:for="{{plugins}}" wx:for-item="plugin" wx:key="plugin_id" class="capability-card {{plugin.enabled?'enabled':'paused'}}">
+    <view id="capability-{{plugin.plugin_id}}" wx:for="{{plugins}}" wx:for-item="plugin" wx:key="plugin_id" class="capability-card {{plugin.enabled?'enabled':'paused'}}">
       <view class="capability-top">
         <view class="capability-mark">{{plugin.enabled?'✓':plugin.installation_id?'·':'+'}}</view>
         <view class="grow"><view class="capability-title">{{plugin.title}}</view><view class="capability-summary">{{plugin.summary}}</view></view>
-        <view class="state-pill {{plugin.enabled?'state-on':''}}">{{plugin.enabled?'使用中':plugin.manifest_reconsent_required?'需重新确认':plugin.installation_id?'已暂停':'未授权'}}</view>
+        <view class="state-pill {{plugin.enabled?'state-on':''}}">{{plugin.enabled?'使用中':plugin.manifest_reconsent_required?'需重新确认':plugin.installation_id?'已关闭':'未开启'}}</view>
       </view>
       <view class="capability-value">{{plugin.user_value}}</view>
       <view class="privacy-note">{{plugin.privacy_summary}}</view>
       <view class="manifest-note">审核版本 {{plugin.version}} · 不执行用户上传代码</view>
 
       <view class="card-actions">
-        <button class="secondary-btn tappable" data-plugin="{{plugin.plugin_id}}" bindtap="openConfig" hover-class="tap">{{plugin.expanded?'收起配置':'自定义与预览'}}</button>
-        <button wx:if="{{plugin.enabled}}" class="pause-btn tappable" data-plugin="{{plugin.plugin_id}}" bindtap="toggle" loading="{{busy===plugin.plugin_id}}" hover-class="tap">暂停</button>
-        <button wx:elif="{{plugin.installation_id}}" class="enable-btn tappable" data-plugin="{{plugin.plugin_id}}" bindtap="toggle" disabled="{{!plugin.previewed}}" loading="{{busy===plugin.plugin_id}}" hover-class="tap-btn">{{plugin.previewed?'确认开启':'先预览再开启'}}</button>
+        <button class="secondary-btn tappable" data-plugin="{{plugin.plugin_id}}" bindtap="openConfig" hover-class="tap">{{plugin.expanded?'收起设置':'设置'}}</button>
+        <button wx:if="{{plugin.enabled}}" class="pause-btn tappable" data-plugin="{{plugin.plugin_id}}" bindtap="toggle" loading="{{busy===plugin.plugin_id}}" hover-class="tap">关闭</button>
+        <button wx:else class="enable-btn tappable" data-plugin="{{plugin.plugin_id}}" bindtap="toggle" loading="{{busy===plugin.plugin_id}}" hover-class="tap-btn">开启</button>
       </view>
 
       <view wx:if="{{plugin.expanded}}" class="config-panel">
@@ -59,18 +59,10 @@
         </view>
         <view wx:else class="setting-desc proposal-unavailable">这项能力只提供只读建议，不提出行动申请。</view>
 
-        <button class="preview-btn tappable" data-plugin="{{plugin.plugin_id}}" bindtap="preview" loading="{{busy===plugin.plugin_id+':preview'}}" hover-class="tap-btn">{{plugin.previewed?'重新预览当前配置':'试运行预览'}}</button>
-        <view wx:if="{{plugin.preview}}" class="preview-card">
-          <view class="preview-label">合成示例 · 未读取你的个人数据</view>
-          <view class="preview-line"><text>示例输入</text><view>{{plugin.preview.input_example}}</view></view>
-          <view class="preview-line"><text>可能的输出</text><view>{{plugin.preview.output_example}}</view></view>
-          <view class="preview-disclaimer">{{plugin.preview.disclaimer}}</view>
-        </view>
-        <view wx:if="{{!plugin.installation_id}}" class="draft-note">预览后仍需你明确授权；此时不会读取个人数据。</view>
-        <button wx:if="{{plugin.previewed&&!plugin.enabled}}" class="enable-wide tappable" data-plugin="{{plugin.plugin_id}}" bindtap="toggle" loading="{{busy===plugin.plugin_id}}" hover-class="tap-btn">确认授权并开启</button>
+        <button wx:if="{{!plugin.enabled}}" class="enable-wide tappable" data-plugin="{{plugin.plugin_id}}" bindtap="toggle" loading="{{busy===plugin.plugin_id}}" hover-class="tap-btn">开启这项能力</button>
         <view wx:if="{{plugin.enabled}}" class="enabled-note">已开启 · 仍按上方授权范围工作；所有写入仍需你确认。<text wx:if="{{plugin.last_run_at}}"> 最近使用：{{plugin.last_run_at}}</text></view>
         <view wx:if="{{plugin.last_error}}" class="error-note">{{plugin.last_error}}</view>
-        <view wx:elif="{{plugin.installation_id}}" class="paused-note">已暂停 · 历史记录保留，可查看、停止周期或导出。</view>
+        <view wx:elif="{{plugin.installation_id}}" class="paused-note">已关闭 · 历史记录保留，可随时重新开启。</view>
 
         <view class="management-row">
           <view class="audit-link tappable" data-plugin="{{plugin.plugin_id}}" bindtap="showAudit">{{plugin.show_audit?'收起使用记录':'查看使用记录'}}</view>

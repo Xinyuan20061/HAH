@@ -37,7 +37,12 @@ async function idempotentWrite(pluginId, operation, identity, payload, send) {
 }
 
 Page({
-  data: { loading: true, error: '', plugins: [], busy: '' },
+  data: { loading: true, error: '', plugins: [], busy: '', focusPluginId: '' },
+
+  onLoad(options = {}) {
+    const focusPluginId = options.focus === 'plan_outcome' ? 'plan_outcome' : ''
+    this.setData({ focusPluginId })
+  },
 
   onShow() { this.load() },
 
@@ -47,13 +52,15 @@ Page({
       await api.ensureToken()
       const result = await api.get('/harness/plugin-catalog', { allowCache: false })
       const plugins = (result && result.plugins || []).map(item => decorate(Object.assign({}, item, {
-        expanded: false,
-        previewed: false,
+        expanded: item.plugin_id === this.data.focusPluginId,
         config_dirty: !!item.manifest_reconsent_required,
-        preview: null,
         audit: null
       })))
-      this.setData({ loading: false, plugins })
+      this.setData({ loading: false, plugins }, () => {
+        if (!this.data.focusPluginId || this._focusedOnce) return
+        this._focusedOnce = true
+        setTimeout(() => wx.pageScrollTo({ selector: `#capability-${this.data.focusPluginId}`, duration: 240 }), 80)
+      })
     } catch (error) {
       this.setData({ loading: false, error: error.message || '健康能力暂时无法读取' })
     }
@@ -76,9 +83,9 @@ Page({
     const plugin = this.data.plugins[index]
     if (plugin.enabled && !plugin.expanded) {
       const confirmed = await new Promise(resolve => wx.showModal({
-        title: '先暂停再调整',
-        content: '调整授权范围或回答方式前，会先暂停这项能力；尚未确认的行动申请会失效。更改后需重新预览并确认开启。',
-        confirmText: '暂停并调整', cancelText: '暂不调整',
+        title: '先关闭再调整',
+        content: '调整授权范围或回答方式前，会先关闭这项能力；尚未确认的行动申请会失效。完成设置后可直接重新开启。',
+        confirmText: '关闭并调整', cancelText: '暂不调整',
         success: result => resolve(!!result.confirm), fail: () => resolve(false)
       }))
       if (!confirmed) return
@@ -87,9 +94,9 @@ Page({
         const result = await idempotentWrite(pluginId, 'pause', `${plugin.installation_id}:${plugin.config_version}`, payload, headers =>
           api.post(`/harness/installations/${plugin.installation_id}/pause`, payload, headers)
         )
-        this._replacePlugin(pluginId, Object.assign({}, result.installation, { previewed: false, config_dirty: false, preview: null }))
+        this._replacePlugin(pluginId, Object.assign({}, result.installation, { config_dirty: false }))
       } catch (error) {
-        wx.showToast({ title: error.message || '暂停失败', icon: 'none' })
+        wx.showToast({ title: error.message || '关闭失败', icon: 'none' })
         return
       }
     }
@@ -101,15 +108,13 @@ Page({
     const scopeId = e.currentTarget.dataset.scope
     const plugin = this.data.plugins[this._index(pluginId)]
     if (!plugin) return
-    if (plugin.enabled) { wx.showToast({ title: '请先暂停能力，再调整授权范围', icon: 'none' }); return }
+    if (plugin.enabled) { wx.showToast({ title: '请先关闭能力，再调整授权范围', icon: 'none' }); return }
     const scopes = new Set(plugin.config.data_scopes || [])
     if (scopes.has(scopeId)) scopes.delete(scopeId)
     else scopes.add(scopeId)
     this._replacePlugin(pluginId, {
       config: Object.assign({}, plugin.config, { data_scopes: Array.from(scopes) }),
-      config_dirty: true,
-      previewed: false,
-      preview: null
+      config_dirty: true
     })
   },
 
@@ -119,12 +124,10 @@ Page({
     const value = e.currentTarget.dataset.value
     const plugin = this.data.plugins[this._index(pluginId)]
     if (!plugin || !field) return
-    if (plugin.enabled) { wx.showToast({ title: '请先暂停能力，再调整回答方式', icon: 'none' }); return }
+    if (plugin.enabled) { wx.showToast({ title: '请先关闭能力，再调整回答方式', icon: 'none' }); return }
     this._replacePlugin(pluginId, {
       config: Object.assign({}, plugin.config, { [field]: value }),
-      config_dirty: true,
-      previewed: false,
-      preview: null
+      config_dirty: true
     })
   },
 
@@ -132,19 +135,17 @@ Page({
     const pluginId = e.currentTarget.dataset.plugin
     const plugin = this.data.plugins[this._index(pluginId)]
     if (!plugin) return
-    if (plugin.enabled) { wx.showToast({ title: '请先暂停能力，再更改行动授权', icon: 'none' }); return }
+    if (plugin.enabled) { wx.showToast({ title: '请先关闭能力，再更改行动授权', icon: 'none' }); return }
     this._replacePlugin(pluginId, {
       config: Object.assign({}, plugin.config, { allow_action_proposals: !plugin.config.allow_action_proposals }),
-      config_dirty: true,
-      previewed: false,
-      preview: null
+      config_dirty: true
     })
   },
 
   async _saveConfig(pluginId) {
     let plugin = this.data.plugins[this._index(pluginId)]
     if (!plugin) throw new Error('能力信息已更新，请刷新后重试')
-    if (plugin.enabled && plugin.config_dirty) throw new Error('请先暂停能力，再保存新配置')
+    if (plugin.enabled && plugin.config_dirty) throw new Error('请先关闭能力，再保存新配置')
     if (!plugin.installation_id) {
       const payload = {
         plugin_id: plugin.plugin_id,
@@ -154,7 +155,7 @@ Page({
         api.post('/harness/installations', payload, headers)
       )
       plugin = created.installation
-      this._replacePlugin(pluginId, Object.assign({}, plugin, { expanded: true, previewed: false, config_dirty: false, preview: null }))
+      this._replacePlugin(pluginId, Object.assign({}, plugin, { expanded: true, config_dirty: false }))
       return plugin
     }
     if (!plugin.config_dirty) return plugin
@@ -166,24 +167,33 @@ Page({
       api.patch(`/harness/installations/${plugin.installation_id}`, payload, headers)
     )
     plugin = saved.installation
-    this._replacePlugin(pluginId, Object.assign({}, plugin, { expanded: true, previewed: false, config_dirty: false, preview: null }))
+    this._replacePlugin(pluginId, Object.assign({}, plugin, { expanded: true, config_dirty: false }))
     return plugin
   },
 
-  async preview(e) {
-    const pluginId = e.currentTarget.dataset.plugin
-    if (!pluginId || this.data.busy) return
-    this.setData({ busy: `${pluginId}:preview` })
+  async _resumeDirect(pluginId, plugin) {
+    const payload = { config_version: plugin.config_version }
+    const resume = () => idempotentWrite(
+      pluginId,
+      'resume',
+      `${plugin.installation_id}:${plugin.config_version}`,
+      payload,
+      headers => api.post(`/harness/installations/${plugin.installation_id}/resume`, payload, headers)
+    )
     try {
-      const installation = await this._saveConfig(pluginId)
-      const payload = { config_version: installation.config_version }
-      const result = await idempotentWrite(pluginId, 'preview', `${installation.installation_id}:${installation.config_version}`, payload, headers =>
-        api.post(`/harness/installations/${installation.installation_id}/preview`, payload, headers)
-      )
-      this._replacePlugin(pluginId, { previewed: true, preview: result, busy: '' })
+      return await resume()
     } catch (error) {
-      this.setData({ busy: '' })
-      wx.showToast({ title: error.message || '暂时无法预览', icon: 'none' })
+      if (error.code !== 'CAPABILITY_PREVIEW_REQUIRED') throw error
+      // Compatibility only for an older deployed backend. It records no personal
+      // data and has no UI; current backends never enter this branch.
+      await idempotentWrite(
+        pluginId,
+        'legacy-enable-bridge',
+        `${plugin.installation_id}:${plugin.config_version}`,
+        payload,
+        headers => api.post(`/harness/installations/${plugin.installation_id}/preview`, payload, headers)
+      )
+      return resume()
     }
   },
 
@@ -193,9 +203,9 @@ Page({
     if (!plugin || this.data.busy) return
     if (plugin.enabled) {
       const confirmed = await new Promise(resolve => wx.showModal({
-        title: '暂停这项能力？',
-        content: '暂停后不再开展新的读取和建议，未确认的行动申请会失效；已有历史仍可查看，进行中的周期仍可记录或停止。',
-        confirmText: '暂停', cancelText: '继续开启',
+        title: '关闭这项能力？',
+        content: '关闭后不再开展新的读取和建议，未确认的行动申请会失效；已有历史仍会保留。',
+        confirmText: '关闭', cancelText: '继续使用',
         success: result => resolve(!!result.confirm), fail: () => resolve(false)
       }))
       if (!confirmed) return
@@ -205,20 +215,15 @@ Page({
         const result = await idempotentWrite(pluginId, 'pause', `${plugin.installation_id}:${plugin.config_version}`, payload, headers =>
           api.post(`/harness/installations/${plugin.installation_id}/pause`, payload, headers)
         )
-        this._replacePlugin(pluginId, Object.assign({}, result.installation, { expanded: plugin.expanded, previewed: false, config_dirty: false }))
+        this._replacePlugin(pluginId, Object.assign({}, result.installation, { expanded: plugin.expanded, config_dirty: false }))
       } catch (error) {
         this.setData({ busy: '' })
-        wx.showToast({ title: error.message || '暂停失败', icon: 'none' })
+        wx.showToast({ title: error.message || '关闭失败', icon: 'none' })
       }
       this.setData({ busy: '' })
       return
     }
 
-    if (!plugin.previewed) {
-      wx.showToast({ title: '请先查看配置预览', icon: 'none' })
-      this._replacePlugin(pluginId, { expanded: true })
-      return
-    }
     const sourceLabels = plugin.data_scopes.filter(item => (plugin.config.data_scopes || []).includes(item.id)).map(item => item.label)
     const goal = plugin.config_schema.goals.find(item => item.id === plugin.config.goal)
     const style = plugin.config_schema.output_styles.find(item => item.id === plugin.config.output_style)
@@ -227,26 +232,17 @@ Page({
     const proposalNote = plugin.config.allow_action_proposals ? '它也可以提出待你确认的行动申请。' : '它不会提出行动申请。'
     const confirmed = await new Promise(resolve => wx.showModal({
       title: '确认开启这项能力',
-      content: `优先目标：${goal ? goal.label : '按需帮助'}；触发：${trigger ? trigger.label : '你提出相关问题时'}；回答方式：${style ? style.label : '清晰自然'}；提醒：${notification ? notification.label : '不额外提示'}。授权使用：${sourceLabels.join('、') || '不读取个人数据'}。${proposalNote}你可随时暂停或删除配置。`,
+      content: `优先目标：${goal ? goal.label : '按需帮助'}；触发：${trigger ? trigger.label : '你提出相关问题时'}；回答方式：${style ? style.label : '清晰自然'}；提醒：${notification ? notification.label : '不额外提示'}。授权使用：${sourceLabels.join('、') || '不读取个人数据'}。${proposalNote}你可随时关闭或删除配置。`,
       confirmText: '确认开启', cancelText: '再看看',
       success: result => resolve(!!result.confirm), fail: () => resolve(false)
     }))
     if (!confirmed) return
     this.setData({ busy: pluginId })
     try {
+      const expanded = plugin.expanded
       plugin = await this._saveConfig(pluginId)
-      // Saving a changed config invalidates the earlier preview; require a new
-      // preview for exactly the version being authorized.
-      if (!plugin.previewed) {
-        this.setData({ busy: '' })
-        wx.showToast({ title: '配置有变化，请重新预览后开启', icon: 'none' })
-        return
-      }
-      const payload = { config_version: plugin.config_version }
-      const result = await idempotentWrite(pluginId, 'resume', `${plugin.installation_id}:${plugin.config_version}`, payload, headers =>
-        api.post(`/harness/installations/${plugin.installation_id}/resume`, payload, headers)
-      )
-      this._replacePlugin(pluginId, Object.assign({}, result.installation, { expanded: plugin.expanded, previewed: false, config_dirty: false }))
+      const result = await this._resumeDirect(pluginId, plugin)
+      this._replacePlugin(pluginId, Object.assign({}, result.installation, { expanded, config_dirty: false }))
       wx.showToast({ title: '已按此配置开启', icon: 'success' })
     } catch (error) {
       wx.showToast({ title: error.message || '开启失败', icon: 'none' })
@@ -270,8 +266,8 @@ Page({
         'plan.simulate': '模拟计划', 'decision.contract': '比较行动选项'
       }
       const eventLabels = {
-        configured: '配置已保存', previewed: '已完成合成预览', resumed: '已明确授权开启',
-        paused: '能力已暂停', deleted: '能力配置已删除', tool_access: '读取了已授权数据',
+        configured: '配置已保存', previewed: '曾查看配置预览', resumed: '已明确授权开启',
+        paused: '能力已关闭', deleted: '能力配置已删除', tool_access: '读取了已授权数据',
         tool_blocked: '授权范围拦截了一次读取',
         api_access: '访问了已授权的数据', api_blocked: '当前配置拦截了一项能力操作',
         context_access: '已授权数据用于本次助手回答',
@@ -299,7 +295,7 @@ Page({
     const plugin = this.data.plugins[this._index(e.currentTarget.dataset.plugin)]
     if (!plugin || this.data.busy) return
     if (!plugin.installation_id) {
-      this._replacePlugin(plugin.plugin_id, { expanded: false, preview: null, previewed: false })
+      this._replacePlugin(plugin.plugin_id, { expanded: false })
       return
     }
     const confirmed = await new Promise(resolve => wx.showModal({
@@ -316,7 +312,7 @@ Page({
         api.del(`/harness/installations/${plugin.installation_id}?config_version=${plugin.config_version}`, {}, headers)
       )
       const catalog = await api.get('/harness/plugin-catalog', { allowCache: false })
-      const reset = (catalog.plugins || []).map(item => decorate(Object.assign({}, item, { expanded: false, previewed: false, config_dirty: false, preview: null, audit: null })))
+      const reset = (catalog.plugins || []).map(item => decorate(Object.assign({}, item, { expanded: false, config_dirty: false, audit: null })))
       this.setData({ plugins: reset, busy: '' })
       wx.showToast({ title: '配置已删除', icon: 'success' })
     } catch (error) {

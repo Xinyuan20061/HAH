@@ -389,8 +389,9 @@ def set_plugin_enabled(
 ) -> dict[str, Any]:
     """Trusted service/bootstrap helper; never exposed as a user API.
 
-    User-facing changes must use the versioned preview/consent endpoints. This
-    helper remains for controlled service setup and test fixture impersonation.
+    User-facing changes must use the versioned configuration and explicit-consent
+    endpoints. This helper remains for controlled service setup and test fixture
+    impersonation.
     """
     manifest = get_plugin(plugin_id)
     row = _installation(db, user_id, plugin_id)

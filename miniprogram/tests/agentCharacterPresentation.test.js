@@ -27,11 +27,14 @@ test('gym renders the full-body companion as a reusable semantic state machine',
   assert.match(component, /const POSE_BY_ACTIVITY/)
   assert.match(component, /previousPoseIndex/)
   assert.match(component, /transitioning: true/)
+  assert.match(component, /listening:\s*0/)
+  assert.match(component, /function keepsIdleMotion\(activity\)/)
+  assert.match(component, /activity === 'idle' \|\| activity === 'listening'/)
   assert.match(component, /xiaokang/)
   assert.match(componentView, /\/assets\/characters\/xiaojian-pixel-poses-v1\.png/)
   assert.match(componentView, /\/assets\/characters\/xiaokang-pixel-poses-v1\.png/)
-  assert.match(componentView, /\/assets\/characters\/xiaojian-idle-curl-v1\.png/)
-  assert.match(componentView, /\/assets\/characters\/xiaokang-idle-read-v1\.png/)
+  assert.match(componentView, /\/assets\/characters\/xiaojian-idle-curl-v3\.png/)
+  assert.match(componentView, /\/assets\/characters\/xiaokang-idle-read-v5\.png/)
   assert.match(componentView, /\/assets\/characters\/xiaojian-gym-scene-v3\.png/)
   assert.match(componentView, /\/assets\/characters\/xiaokang-wellness-scene-v2\.png/)
   assert.match(componentView, /\/assets\/icons\/agent-xiaojian\.png/)
@@ -56,6 +59,7 @@ test('character motion uses WebView-safe transform and opacity clips', () => {
 })
 
 test('character stage stays visually quiet while listening', () => {
+  const component = read('components/agent-character/index.js')
   const view = read('components/agent-character/index.wxml')
   const css = read('components/agent-character/index.wxss')
 
@@ -63,15 +67,21 @@ test('character stage stays visually quiet while listening', () => {
   assert.doesNotMatch(css, /\.character-aura|\.aura-back|\.aura-front/, '不应保留废弃的光环样式')
   assert.doesNotMatch(css, /\.is-listening\s+\.sprite-motion\s*\{[^}]*animation/s, '语音输入时角色本体不应循环晃动')
   assert.doesNotMatch(css, /@keyframes\s+characterListen/, '不应保留倾听横移关键帧')
-  assert.match(view, /showVoiceWave/, '倾听状态仍应保留克制的语音波形反馈')
+  assert.match(component, /keepsIdleMotion:\s*keepsIdleMotion\(nextActivity\)/)
+  assert.match(view, /idle-sprite-motion \{\{keepsIdleMotion\?'is-visible':''\}\}/, '聆听应继续复用静息图集')
+  assert.match(view, /sprite-motion \{\{keepsIdleMotion\?'':'is-visible'\}\}/, '聆听时不应切换到另一套姿态图')
+  assert.doesNotMatch(view, /wx:if="\{\{showVoiceWave\}\}"/, '语音波形应常驻并用透明度过渡，避免挂载闪现')
+  assert.match(view, /character-wave \{\{showVoiceWave\?'is-visible':''\}\}/, '倾听状态仍应保留克制的语音波形反馈')
+  assert.match(css, /\.character-wave\s*\{[^}]*opacity:\s*0;[^}]*transition:\s*opacity \.2s ease-out, transform \.2s ease-out;/s)
+  assert.match(css, /\.character-wave\.is-visible\s*\{[^}]*opacity:\s*1;/s)
 })
 
 test('idle companions inhabit distinct scenes with grounded frame animation', () => {
   const view = read('components/agent-character/index.wxml')
   const css = read('components/agent-character/index.wxss')
   const assets = [
-    ['xiaojian-idle-curl-v1.png', 1024, 384, true],
-    ['xiaokang-idle-read-v1.png', 1024, 384, true],
+    ['xiaojian-idle-curl-v3.png', 2048, 384, true],
+    ['xiaokang-idle-read-v5.png', 2048, 384, true],
     ['xiaojian-gym-scene-v3.png', 768, 512, false],
     ['xiaokang-wellness-scene-v2.png', 768, 512, false]
   ]
@@ -88,6 +98,26 @@ test('idle companions inhabit distinct scenes with grounded frame animation', ()
   assert.match(css, /\.character-scene\.scene-active\s*\{[^}]*opacity:\s*1/s)
   assert.match(css, /\.idle-curl-sheet\s*\{[^}]*xiaojianCurlFrames/s)
   assert.match(css, /\.idle-read-sheet\s*\{[^}]*xiaokangReadFrames/s)
+  assert.match(css, /\.idle-sprite-sheet\s*\{[^}]*width:\s*2048rpx;[^}]*height:\s*384rpx;/s)
+  assert.match(css, /\.idle-curl-sheet\s*\{[^}]*1\.6s\s+steps\(1,end\)/s)
+  assert.match(css, /\.idle-read-sheet\s*\{[^}]*2\.4s\s+steps\(1,end\)/s)
+  for (const offset of [
+    'translateX(0)',
+    'translateX(-256rpx)',
+    'translateX(-512rpx)',
+    'translateX(-768rpx)',
+    'translateX(-1024rpx)',
+    'translateX(-1280rpx)',
+    'translateX(-1536rpx)',
+    'translateX(-1792rpx)'
+  ]) {
+    assert.ok(css.includes(offset), `静息图集缺少帧位移 ${offset}`)
+  }
+  const idleFramesCss = css.slice(
+    css.indexOf('@keyframes xiaojianCurlFrames'),
+    css.indexOf('@keyframes characterThink')
+  )
+  assert.doesNotMatch(idleFramesCss, /translateY\(|translate\(/, '静息动画只能水平切帧，不能再触发纵向像素取整抖动')
   assert.doesNotMatch(css, /\.is-idle\s+\.sprite-motion\s*\{[^}]*animation/s, '空闲动作应逐帧播放，不应让整个角色漂移')
   assert.doesNotMatch(css, /\.character-floor\s*\{[^}]*animation/s, '接触阴影应固定，避免角色像悬浮在场景上')
 })
@@ -125,10 +155,26 @@ test('gym consumes trusted presentation directives instead of guessing intent fr
   assert.match(script, /navigation\.mode === 'after_animation'/)
   assert.match(script, /plan_preview:\s*\{\s*route:\s*'\/pages\/plan\/index'/)
   assert.match(script, /mode=preview&run_id=/)
+  assert.match(script, /function structuredPlanFallback/)
+  assert.match(script, /result\.intent !== 'plan'/)
+  assert.match(script, /AUTO_NAVIGATION_FALLBACK_MS/)
+  assert.match(script, /queuePendingNavigation/)
+  assert.match(script, /completePendingNavigation/)
+  assert.match(script, /capability_setup/)
   assert.match(script, /const NAVIGATION_TARGETS/)
   assert.doesNotMatch(script, /function nextAction/)
   assert.doesNotMatch(script, /result\.ui_directive|result\.ui_directives/)
   assert.doesNotMatch(script, /\/记录\|饮食|\/训练\|动作/, '不得通过回复文案正则猜测路由')
+})
+
+test('gym keeps a short-lived structured handoff for backend version skew', () => {
+  const home = read('pages/home/index.js')
+  const plan = read('pages/plan/index.js')
+  assert.match(home, /healthmate\.plan-handoff\.v1/)
+  assert.match(home, /persistPlanHandoff\(result, presentation\.action\)/)
+  assert.match(plan, /readPlanHandoff\(runId\)/)
+  assert.match(plan, /PLAN_HANDOFF_MAX_AGE_MS/)
+  assert.match(plan, /clearPlanHandoff\(this\.data\.previewRunId\)/)
 })
 
 test('gym never writes a generated plan and keeps preview confirmation explicit', () => {
@@ -138,6 +184,26 @@ test('gym never writes a generated plan and keeps preview confirmation explicit'
   assert.doesNotMatch(script, /api\.(?:post|put|patch|del)\([^\n]*plan/, '健身房不得直接写入计划')
   assert.match(view, /草案确认后才会加入计划/)
   assert.match(view, /bindtap="runResponseAction"/)
+})
+
+test('gym exposes a voice-free plan routing probe through the real agent decision pipeline', () => {
+  const script = read('pages/home/index.js')
+  const view = read('pages/home/index.wxml')
+  const css = read('pages/home/index.wxss')
+
+  assert.match(view, /bindtap="testPlanRouting"/)
+  assert.match(view, />测试计划路由<\/view>/)
+  assert.match(view, /route-test-button tappable/)
+  assert.match(view, /hover-class="tap" hover-start-time="0" hover-stay-time="80"/)
+  assert.match(script, /const PLAN_ROUTE_TEST_PROMPT = '给我制定一个计划'/)
+  assert.match(script, /async submitAgentMessage\(text, options\)/)
+  assert.match(script, /await this\.submitAgentMessage\(PLAN_ROUTE_TEST_PROMPT,\s*\{\s*channel: 'voice'/s)
+  assert.match(script, /persistPlanHandoff\(result, presentation\.action\)/)
+  assert.match(script, /queuePendingNavigation\(presentation\.autoNavigate \? presentation\.action : null\)/)
+  const testHandler = script.match(/async testPlanRouting\(\)\s*\{[\s\S]*?\n  \},\n\n  async speak/) || []
+  assert.ok(testHandler[0], '缺少计划路由测试处理器')
+  assert.doesNotMatch(testHandler[0], /navigateAction\(/, '测试按钮不得绕过智能体决策直接跳页')
+  assert.match(css, /\.route-test-button\s*\{[^}]*transition:opacity \.16s ease-out;/s)
 })
 
 test('new gym controls keep the tap feedback triad', () => {

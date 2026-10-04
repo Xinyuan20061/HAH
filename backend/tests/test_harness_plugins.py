@@ -23,12 +23,6 @@ def _install_personal_policy(api, *, allow_actions=False, suffix="test"):
     )
     assert created.status_code == 200, created.text
     installation = created.json()["installation"]
-    preview = api.post(
-        f"/api/v1/harness/installations/{installation['installation_id']}/preview",
-        json={"config_version": installation["config_version"]},
-        headers={"Idempotency-Key": f"preview-{suffix}"},
-    )
-    assert preview.status_code == 200, preview.text
     resumed = api.post(
         f"/api/v1/harness/installations/{installation['installation_id']}/resume",
         json={"config_version": installation["config_version"]},
@@ -46,12 +40,6 @@ def _install_configured_plugin(api, plugin_id, config, suffix):
     )
     assert created.status_code == 200, created.text
     installation = created.json()["installation"]
-    preview = api.post(
-        f"/api/v1/harness/installations/{installation['installation_id']}/preview",
-        json={"config_version": installation["config_version"]},
-        headers={"Idempotency-Key": f"preview-{suffix}"},
-    )
-    assert preview.status_code == 200, preview.text
     resumed = api.post(
         f"/api/v1/harness/installations/{installation['installation_id']}/resume",
         json={"config_version": installation["config_version"]},
