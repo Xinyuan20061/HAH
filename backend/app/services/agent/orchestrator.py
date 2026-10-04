@@ -21,6 +21,11 @@ from app.services.agent.run_stages import (
     TurnBudget,
     worker_stage,
 )
+from app.services.agent.presentation import (
+    build_plan_preview,
+    build_presentation,
+    is_plan_result_eligible,
+)
 from app.services.agent.specialists import (
     SPECIALIST_VERSION,
     build_coordinator_system,
@@ -329,6 +334,9 @@ async def respond(
     tool_context.state["budget"] = budget
     from app.harness.plugins import authorize_capability, response_preferences
     user_presentation = response_preferences(db, user.id)
+    response_style = str(user_presentation.get("style") or "balanced")
+    if response_style not in {"balanced", "concise", "evidence_first"}:
+        response_style = "balanced"
     presentation_styles = {
         "balanced": "清晰自然，先给结论并简要交代依据、限制和下一步",
         "concise": "简短直接，但保留安全提醒、关键依据和不确定性",
@@ -701,6 +709,16 @@ async def respond(
     if intent == "plan" and not plan_proposal_authorized:
         explanation["limitations"].append("尚未授权计划行动申请，因此本次不提供一键写入计划。")
     result["decision_explanation"] = explanation
+    # Presentation is derived after safety review and plan sanitisation.  Any
+    # similarly named field emitted by a provider is overwritten here, so the
+    # model cannot choose routes or claim that a write already happened.
+    result["presentation"] = build_presentation(
+        intent=intent,
+        specialist=specialist,
+        agent_id=persona.id,
+        run_id=run.id,
+        result=result,
+    )
     elapsed = (time.perf_counter() - started) * 1000
     run.intent = intent
     stored_context = dict(context) if isinstance(context, dict) else {}
@@ -787,6 +805,21 @@ def get_run_view(db: Session, user_id: int, run_id: int) -> dict | None:
         .where(HealthAgentRunStage.run_id == run.id)
         .order_by(HealthAgentRunStage.id)
     ).all()
+    preview_eligible = (
+        run.status == "completed"
+        and is_plan_result_eligible(run.intent or "", result)
+    )
+    plan_was_applied = db.scalar(
+        select(HealthPlan.id).where(
+            HealthPlan.user_id == user_id,
+            HealthPlan.source_run_id == run.id,
+        )
+    ) is not None
+    plan_preview = (
+        build_plan_preview(run.id, result, applied=plan_was_applied)
+        if preview_eligible
+        else None
+    )
     return {
         "run_id": run.id,
         "status": run.status,
@@ -808,6 +841,15 @@ def get_run_view(db: Session, user_id: int, run_id: int) -> dict | None:
         ],
         "reply": result.get("reply"),
         "actions": result.get("actions") or [],
+        # A preview is reconstructed from the already-sanitised stored result.
+        # It is deliberately read-only; applying it remains a separate,
+        # confirmation-gated action endpoint.
+        "plan_preview": plan_preview,
+        "presentation": (
+            result.get("presentation")
+            if isinstance(result.get("presentation"), dict)
+            else None
+        ),
         # ``resumable`` tells the client whether offering a retry is honest.
         "resumable": run.status in RETRYABLE_STATUSES,
         "cancellable": run.status in CANCELLABLE_STATUSES,
@@ -987,6 +1029,8 @@ def apply_plan(db: Session, user, run_id: int, confirmed: bool = True):
         data = json.loads(run.result_json or "{}")
     except Exception:
         data = {}
+    if run.status != "completed" or not is_plan_result_eligible(run.intent or "", data):
+        return {"already_applied": False, "plan": None}
     plan_data = _sanitize_plan(data)
     if not plan_data:
         return {"already_applied": False, "plan": None}

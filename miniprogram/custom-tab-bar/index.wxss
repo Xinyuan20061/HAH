@@ -6,8 +6,11 @@
 .tab-backdrop.on {opacity:1;pointer-events:auto;}
 .tab-shell {position:fixed;left:24rpx;right:24rpx;bottom:calc(12rpx + env(safe-area-inset-bottom));z-index:210;display:flex;flex-direction:row;align-items:flex-end;justify-content:space-around;height:104rpx;padding:8rpx 20rpx;box-sizing:border-box;border:1rpx solid #eeeee6;border-radius:32rpx;background:rgba(255,255,255,.98);box-shadow:0 12rpx 40rpx rgba(17,22,19,.12);}
 .tab-side {display:flex;flex:0 0 160rpx;flex-direction:column;align-items:center;justify-content:center;width:160rpx;height:88rpx;color:#8e9389;font-size:19rpx;line-height:1;}
+.tab-companion {display:flex;flex-direction:column;align-items:center;justify-content:center;}
 .tab-side image {display:block;width:46rpx;height:46rpx;margin-bottom:8rpx;}
 .tab-side.selected {color:#111613;font-weight:700;}
+.tab-companion.companion-swap-a {animation:companionTabInA .22s ease-out both;}
+.tab-companion.companion-swap-b {animation:companionTabInB .22s ease-out both;}
 .dashboard-slot {display:flex;flex:0 0 160rpx;flex-direction:column;align-items:center;justify-content:center;width:160rpx;height:88rpx;color:#8e9389;font-size:19rpx;line-height:1;}
 .dashboard-button {display:flex;align-items:center;justify-content:center;width:46rpx;min-width:46rpx;max-width:46rpx;height:46rpx;min-height:46rpx;max-height:46rpx;margin-bottom:8rpx;background:transparent;box-shadow:none;transform:translateY(0) scale(1);transition:transform .28s cubic-bezier(.2,.8,.2,1),box-shadow .2s ease-out;}
 .dashboard-button image {display:block;width:46rpx;height:46rpx;transition:transform .24s cubic-bezier(.2,.8,.2,1);}
@@ -38,3 +41,5 @@
 .quick-item {display:flex;flex-direction:column;align-items:center;width:25%;padding:16rpx 0;color:#5f665f;font-size:20rpx;}
 .quick-orb {display:flex;align-items:center;justify-content:center;width:72rpx;min-width:72rpx;max-width:72rpx;height:72rpx;min-height:72rpx;max-height:72rpx;margin-bottom:8rpx;background:#e9efd9;}
 .quick-orb image {display:block;width:40rpx;height:40rpx;}
+@keyframes companionTabInA {from {opacity:0;transform:translateY(4rpx);}to {opacity:1;transform:translateY(0);}}
+@keyframes companionTabInB {from {opacity:0;transform:translateY(4rpx);}to {opacity:1;transform:translateY(0);}}

@@ -83,7 +83,10 @@ Page({
 
   onShow() {
     const tabBar = typeof this.getTabBar === 'function' && this.getTabBar()
-    if (tabBar) tabBar.setData({ selected: 2, wheelOpen: false, quickOpen: false })
+    if (tabBar) {
+      tabBar.setData({ selected: 2, wheelOpen: false, quickOpen: false })
+      if (typeof tabBar.syncCompanion === 'function') tabBar.syncCompanion()
+    }
     const prompt = wx.getStorageSync('healthmate_insight_prompt')
     if (prompt) {
       wx.removeStorageSync('healthmate_insight_prompt')

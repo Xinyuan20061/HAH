@@ -1,6 +1,6 @@
 <include src="/components/page-transition/first-paint.wxml"/>
 <page-transition/>
-<view class="page plan-page ui-page-content">
+<view class="page plan-page ui-page-content {{previewMode?'has-agent-review':''}}">
   <view class="title">计划</view>
   <view class="subtitle plan-intro">把每天完成的一点点，留成整年的节奏。</view>
 
@@ -61,4 +61,49 @@
   <view class="week-link tappable" bindtap="toggleWeek" hover-class="tap" hover-start-time="0" hover-stay-time="80"><text>{{showWeek?'收起本周':'查看本周计划'}}</text><image class="ui-chevron {{showWeek?'open':''}}" src="/assets/icons/chevron.png" mode="aspectFit"/></view>
   <view wx:if="{{showWeek&&agentPlan}}" class="week-panel"><view class="row space"><view class="task-title">{{agentPlan.title}}</view><text>{{agentPlan.done_count}} / {{agentPlan.items.length}}</text></view><view class="week-task {{item.done?'done':''}} tappable" wx:for="{{agentPlan.items}}" wx:key="id" bindtap="toggleAgent" data-id="{{item.id}}" data-done="{{item.done}}" hover-class="tap" hover-start-time="0" hover-stay-time="80"><view class="check"><image wx:if="{{item.done}}" src="/assets/icons/check.png" mode="aspectFit"/><text wx:else>{{index+1}}</text></view><view class="grow"><view class="task-title">{{item.title}}</view><view class="muted task-desc">{{item.planned_date}}</view></view></view></view>
   <view class="notice">不适时请暂停训练。</view>
+
+  <view wx:if="{{previewMode}}" class="agent-review-float {{previewExpanded?'expanded':''}}">
+    <view class="agent-review-panel" aria-hidden="{{!previewExpanded}}">
+      <view class="review-head">
+        <view class="review-avatar"><image src="{{previewActor.icon}}" mode="aspectFit" fade-in="{{false}}"/></view>
+        <view class="review-identity"><view class="review-name">{{previewActor.name}}</view><view class="review-role">计划草案</view></view>
+        <view class="preview-badge">{{preview&&preview.write.status==='applied'?'已确认':'待审阅'}}</view>
+      </view>
+
+      <view wx:if="{{previewLoading}}" class="preview-loading">
+        <view class="preview-loading-dot"></view><view class="preview-loading-dot"></view><view class="preview-loading-dot"></view>
+      </view>
+      <view wx:elif="{{previewError}}" class="preview-error">
+        <text>{{previewError}}</text>
+        <view class="preview-retry tappable" bindtap="retryPreview" hover-class="tap" hover-start-time="0" hover-stay-time="80">重试</view>
+      </view>
+      <block wx:elif="{{preview}}">
+        <view class="review-bubble">
+          <view class="review-reply">{{previewReplyText}}<text wx:if="{{previewReplyStreaming}}" class="review-cursor"></text></view>
+          <view class="preview-title">{{preview.title || '本周健康计划'}}</view>
+        </view>
+        <scroll-view scroll-y class="preview-list" show-scrollbar="{{false}}">
+          <view class="preview-item" wx:for="{{preview.items}}" wx:key="key">
+            <view class="preview-day">{{item.dayLabel}}</view>
+            <view class="preview-copy">
+              <view class="preview-item-title">{{item.title}}</view>
+              <view wx:if="{{item.description}}" class="preview-item-desc">{{item.description}}</view>
+            </view>
+            <view class="preview-category">{{item.categoryLabel}}</view>
+          </view>
+        </scroll-view>
+        <view class="preview-note">{{preview.write.status === 'applied' ? '已加入计划' : '尚未写入'}}</view>
+        <view wx:if="{{preview.write.status !== 'applied'}}" class="preview-actions">
+          <button class="preview-secondary tappable" bindtap="deferPreview" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">暂不加入</button>
+          <button class="preview-primary tappable" bindtap="confirmPreview" loading="{{applyingPreview}}" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">确认加入</button>
+        </view>
+        <view wx:else class="preview-applied tappable" bindtap="dismissAppliedPreview" hover-class="tap" hover-start-time="0" hover-stay-time="80"><text>✓</text><text>已加入，继续查看计划</text></view>
+      </block>
+    </view>
+
+    <view class="agent-review-trigger ui-fixed-circle tappable {{previewExpanded?'open':''}}" bindtap="togglePreviewFloating" hover-class="tap" hover-start-time="0" hover-stay-time="80" aria-label="{{previewExpanded?'收起计划审阅':'展开计划审阅'}}">
+      <image src="{{previewActor.icon}}" mode="aspectFit" fade-in="{{false}}"/>
+      <view wx:if="{{!previewExpanded}}" class="review-unread-dot"></view>
+    </view>
+  </view>
 </view>

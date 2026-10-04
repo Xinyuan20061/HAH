@@ -61,6 +61,8 @@ Page({
   chooseCompanion(e) {
     const companion = e.currentTarget.dataset.id === 'xiaokang' ? 'xiaokang' : 'xiaojian'
     wx.setStorageSync('healthmate_agent_id', companion)
+    const tabBar = typeof this.getTabBar === 'function' && this.getTabBar()
+    if (tabBar && typeof tabBar.syncCompanion === 'function') tabBar.syncCompanion(companion)
     this.setData({ companion, isXiaojian: companion === 'xiaojian', isXiaokang: companion === 'xiaokang' })
   },
 

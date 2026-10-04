@@ -19,8 +19,10 @@
 </view>
 
 <view class="tab-shell">
-  <view class="tab-side tappable {{selected===0?'selected':''}}" data-key="gym" bindtap="switchPrimary" hover-class="tap" hover-start-time="0" hover-stay-time="80">
-    <image src="{{selected===0?'/assets/tabbar/gym-active.png':'/assets/tabbar/gym.png'}}" mode="aspectFit"/><text>健身房</text>
+  <view class="tab-side tappable {{selected===0?'selected':''}}" data-key="companion" bindtap="switchPrimary" hover-class="tap" hover-start-time="0" hover-stay-time="80">
+    <view class="tab-companion companion-swap-{{companionSwapToken}}">
+      <image src="{{selected===0?companionActiveIcon:companionIcon}}" mode="aspectFit" fade-in="{{false}}"/><text>{{companionLabel}}</text>
+    </view>
   </view>
   <view class="dashboard-slot tappable {{wheelOpen?'open':''}}" bindtap="toggleWheel" hover-class="tap" hover-start-time="0" hover-stay-time="80" aria-label="打开仪表盘">
     <view class="dashboard-button fixed-circle {{wheelOpen?'open':''}}">

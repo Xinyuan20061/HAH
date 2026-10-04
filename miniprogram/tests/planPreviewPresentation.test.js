@@ -1,0 +1,50 @@
+'use strict'
+const { test } = require('node:test')
+const assert = require('node:assert/strict')
+const fs = require('node:fs')
+const path = require('node:path')
+
+const root = path.join(__dirname, '..')
+const read = file => fs.readFileSync(path.join(root, file), 'utf8')
+
+test('plan preview is fetched as a read-only draft and only applied after confirmation', () => {
+  const js = read('pages/plan/index.js')
+  const view = read('pages/plan/index.wxml')
+  assert.match(js, /\/agent\/runs\/\$\{runId\}/)
+  assert.match(js, /detail\.plan_preview/)
+  assert.match(view, /尚未写入/)
+  assert.match(view, /preview\.write\.status === 'applied'/)
+  assert.match(view, /preview\.write\.status !== 'applied'/)
+  assert.match(view, /bindtap="confirmPreview"/)
+  assert.match(js, /wx\.showModal\(/)
+  assert.match(js, /result\.confirm/) 
+  assert.match(js, /\/apply-plan/)
+  assert.ok(js.indexOf('result.confirm') < js.indexOf('/apply-plan'), '写入调用必须位于明确确认之后')
+  assert.match(js, /preview\.read_only === true/)
+  assert.match(js, /write\.automatic === false/)
+  assert.match(js, /this\._confirmPreviewOpen/)
+})
+
+test('plan preview lives in a collapsible companion review window', () => {
+  const js = read('pages/plan/index.js')
+  const view = read('pages/plan/index.wxml')
+  const style = read('pages/plan/index.wxss')
+
+  assert.match(view, /class="agent-review-float \{\{previewExpanded\?'expanded':''\}\}"/)
+  assert.match(view, /src="\{\{previewActor\.icon\}\}"/)
+  assert.match(view, /bindtap="togglePreviewFloating"/)
+  assert.match(view, /\{\{previewReplyText\}\}/)
+  assert.match(js, /detail\.reply/)
+  assert.match(js, /function displayTokens/)
+  assert.match(js, /previewExpanded: !this\.data\.previewExpanded/)
+  assert.match(style, /\.agent-review-float\{position:fixed/)
+})
+
+test('plan review motion only transitions transform and opacity', () => {
+  const style = read('pages/plan/index.wxss')
+  assert.match(style, /\.agent-review-panel\{[^}]*opacity:0;transform:translateY\(16rpx\) scale\(\.98\)/)
+  assert.match(style, /transition:opacity \.24s ease-out,transform \.3s/)
+  assert.match(style, /@keyframes previewDot/)
+  assert.match(style, /@keyframes reviewBlink/)
+  assert.doesNotMatch(style, /transition[^;]*(?:color|font-size|font-weight|visibility)/)
+})

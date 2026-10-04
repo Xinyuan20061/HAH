@@ -1,0 +1,52 @@
+<view class="agent-character is-{{safeActivity}}" aria-label="{{ariaLabel}}">
+  <view class="sprite-preload" aria-hidden="true">
+    <image src="/assets/characters/xiaojian-pixel-poses-v1.png" mode="scaleToFill" fade-in="{{false}}"/>
+    <image src="/assets/characters/xiaokang-pixel-poses-v1.png" mode="scaleToFill" fade-in="{{false}}"/>
+    <image src="/assets/characters/xiaojian-idle-curl-v1.png" mode="scaleToFill" fade-in="{{false}}"/>
+    <image src="/assets/characters/xiaokang-idle-read-v1.png" mode="scaleToFill" fade-in="{{false}}"/>
+    <image src="/assets/characters/xiaojian-gym-scene-v3.png" mode="aspectFill" fade-in="{{false}}"/>
+    <image src="/assets/characters/xiaokang-wellness-scene-v2.png" mode="aspectFill" fade-in="{{false}}"/>
+  </view>
+  <image class="character-scene {{safeAgentId==='xiaojian'?'scene-active':''}}" src="/assets/characters/xiaojian-gym-scene-v3.png" mode="aspectFill" fade-in="{{false}}" aria-hidden="true"/>
+  <image class="character-scene {{safeAgentId==='xiaokang'?'scene-active':''}}" src="/assets/characters/xiaokang-wellness-scene-v2.png" mode="aspectFill" fade-in="{{false}}" aria-hidden="true"/>
+  <view class="character-figure {{imageFailed?'fallback':''}}">
+    <block wx:if="{{imageFailed}}">
+      <image wx:if="{{safeAgentId==='xiaokang'}}" class="fallback-image" src="/assets/icons/agent-xiaokang.png" mode="aspectFit" fade-in="{{false}}"/>
+      <image wx:else class="fallback-image" src="/assets/icons/agent-xiaojian.png" mode="aspectFit" fade-in="{{false}}"/>
+    </block>
+
+    <block wx:else>
+      <view class="idle-sprite-motion {{safeActivity==='idle'?'is-visible':''}}">
+        <view class="idle-sprite-window">
+          <view class="idle-agent-layer {{safeAgentId==='xiaojian'?'is-visible':''}}">
+            <image class="idle-sprite-sheet idle-curl-sheet" src="/assets/characters/xiaojian-idle-curl-v1.png" mode="scaleToFill" fade-in="{{false}}" binderror="onFrameError"/>
+          </view>
+          <view class="idle-agent-layer {{safeAgentId==='xiaokang'?'is-visible':''}}">
+            <image class="idle-sprite-sheet idle-read-sheet" src="/assets/characters/xiaokang-idle-read-v1.png" mode="scaleToFill" fade-in="{{false}}" binderror="onFrameError"/>
+          </view>
+        </view>
+      </view>
+
+      <view class="sprite-motion {{safeActivity==='idle'?'':'is-visible'}}">
+        <view class="sprite-window">
+          <view wx:if="{{transitioning}}" class="sprite-layer sprite-previous swap-{{swapToken}} pose-{{previousPoseIndex}}">
+            <image wx:if="{{previousAgentId==='xiaokang'}}" class="sprite-sheet" src="/assets/characters/xiaokang-pixel-poses-v1.png" mode="scaleToFill" fade-in="{{false}}" binderror="onFrameError"/>
+            <image wx:else class="sprite-sheet" src="/assets/characters/xiaojian-pixel-poses-v1.png" mode="scaleToFill" fade-in="{{false}}" binderror="onFrameError"/>
+          </view>
+          <view class="sprite-layer sprite-current swap-{{swapToken}} pose-{{poseIndex}}">
+            <image wx:if="{{safeAgentId==='xiaokang'}}" class="sprite-sheet" src="/assets/characters/xiaokang-pixel-poses-v1.png" mode="scaleToFill" fade-in="{{false}}" binderror="onFrameError"/>
+            <image wx:else class="sprite-sheet" src="/assets/characters/xiaojian-pixel-poses-v1.png" mode="scaleToFill" fade-in="{{false}}" binderror="onFrameError"/>
+          </view>
+        </view>
+      </view>
+    </block>
+  </view>
+
+  <view wx:if="{{showVoiceWave}}" class="character-wave" aria-hidden="true">
+    <view></view><view></view><view></view><view></view>
+  </view>
+  <view wx:if="{{safeActivity==='thinking'}}" class="thinking-spark" aria-hidden="true">
+    <view></view><view></view><view></view>
+  </view>
+  <view class="character-floor floor-{{safeAgentId}}"></view>
+</view>

@@ -2,9 +2,41 @@ const api = require('../../utils/request')
 const { ensureLogin } = require('../../utils/auth')
 
 const COMPANIONS = [
-  { id: 'xiaojian', name: '小健', role: '训练搭子', greeting: '今天别给自己找借口。', icon: '/assets/icons/agent-xiaojian.png' },
-  { id: 'xiaokang', name: '小康', role: '养生搭子', greeting: '先听听身体，再慢慢开始。', icon: '/assets/icons/agent-xiaokang.png' }
+  { id: 'xiaojian', name: '小健', space: '健身房', icon: '/assets/characters/xiaojian-portrait-v1.png' },
+  { id: 'xiaokang', name: '小康', space: '养生馆', icon: '/assets/characters/xiaokang-portrait-v1.png' }
 ]
+
+const CHARACTER_ACTIVITIES = new Set([
+  'idle', 'listening', 'thinking', 'planning',
+  'speaking', 'presenting', 'success', 'error'
+])
+
+const CUE_ACTIVITY = {
+  'plan.compose': 'planning',
+  'answer.present': 'presenting',
+  'workout.guide': 'presenting',
+  'safety.pause': 'error'
+}
+
+const ACTIVITY_STATUS = {
+  idle: '等你开口',
+  listening: '正在听',
+  thinking: '正在理解',
+  planning: '正在整理草案',
+  speaking: '正在回应',
+  presenting: '正在展示',
+  success: '已经准备好',
+  error: '先暂停一下'
+}
+
+// The server sends semantic targets, never page URLs. Keeping the mapping here
+// makes model/provider text unable to navigate to an arbitrary destination.
+const NAVIGATION_TARGETS = {
+  plan_preview: { route: '/pages/plan/index', label: '查看计划草案' },
+  records: { route: '/pages/records/index', label: '打开记录' },
+  workout: { route: '/pages/workout/index', label: '打开训练' },
+  health_state: { route: '/pages/state/index', label: '查看状态' }
+}
 
 function weekFallback() {
   const labels = ['日', '一', '二', '三', '四', '五', '六']
@@ -26,11 +58,72 @@ function normalizeStreak(streak) {
   }
 }
 
-function nextAction(text, result) {
-  if (result && result.plan) return { label: '确认并查看计划', route: '/pages/plan/index', kind: 'plan' }
-  if (/记录|饮食|早餐|午餐|晚餐|热量|卡路里/.test(text)) return { label: '打开记录', route: '/pages/records/index', kind: 'route' }
-  if (/训练|动作|健身|怎么练/.test(text)) return { label: '打开训练', route: '/pages/workout/index', kind: 'route' }
-  return null
+function firstDirective(result) {
+  if (!result || typeof result !== 'object') return null
+  const presentation = result.presentation
+  if (!presentation || typeof presentation !== 'object') return null
+  return presentation.version === 'healthmate.presentation.v1' ? presentation : null
+}
+
+function safeRunId(value) {
+  const runId = Number(value)
+  return Number.isInteger(runId) && runId > 0 ? runId : null
+}
+
+function normalizePresentation(result) {
+  const directive = firstDirective(result)
+  if (!directive) return { activity: 'speaking', action: null, autoNavigate: false }
+  const navigation = directive.navigation && typeof directive.navigation === 'object'
+    ? directive.navigation
+    : directive.handoff && typeof directive.handoff === 'object'
+      ? directive.handoff
+      : {}
+  const target = String(navigation.target || directive.target || '')
+  const destination = NAVIGATION_TARGETS[target]
+  const cue = String(directive.cue || directive.activity || '')
+  const cueActivity = CUE_ACTIVITY[cue] || cue
+  const activity = CHARACTER_ACTIVITIES.has(cueActivity) ? cueActivity : 'speaking'
+  if (!destination) return { activity, action: null, autoNavigate: false }
+
+  const params = navigation.params && typeof navigation.params === 'object' ? navigation.params : {}
+  const runId = safeRunId(params.run_id)
+  const responseRunId = safeRunId(result.run_id)
+  // A plan destination without an owned run cannot be a real preview.
+  if (target === 'plan_preview') {
+    const write = directive.write || {}
+    const validDraftBoundary = write.status === 'not_applied'
+      && write.automatic === false
+      && write.confirmation_required === true
+    if (!runId || runId !== responseRunId || !validDraftBoundary) {
+      return { activity, action: null, autoNavigate: false }
+    }
+  }
+  const action = {
+    target,
+    label: destination.label,
+    route: destination.route,
+    runId,
+    actorId: directive.actor === 'xiaokang' ? 'xiaokang' : 'xiaojian'
+  }
+  return {
+    activity,
+    action,
+    autoNavigate: navigation.mode === 'after_animation'
+  }
+}
+
+function safeActionUrl(action) {
+  if (!action || !NAVIGATION_TARGETS[action.target]) return ''
+  const destination = NAVIGATION_TARGETS[action.target]
+  if (action.target === 'plan_preview') {
+    const runId = safeRunId(action.runId)
+    if (!runId) return ''
+    const actorId = action.actorId === 'xiaokang' ? 'xiaokang' : 'xiaojian'
+    // Preview is explicitly read-only. The plan screen owns the later manual
+    // confirmation; the gym never calls an apply/write endpoint.
+    return `${destination.route}?mode=preview&run_id=${runId}&agent_id=${actorId}`
+  }
+  return destination.route
 }
 
 Page({
@@ -44,6 +137,8 @@ Page({
     recording: false,
     voiceWorking: false,
     voiceStatus: '按住说话',
+    characterActivity: 'idle',
+    characterStatus: '等你开口',
     response: null
   },
 
@@ -60,9 +155,12 @@ Page({
 
   onShow() {
     const tabBar = typeof this.getTabBar === 'function' && this.getTabBar()
-    if (tabBar) tabBar.setData({ selected: 0, wheelOpen: false, quickOpen: false })
     const saved = wx.getStorageSync('healthmate_agent_id')
     const activeCompanion = COMPANIONS.find(item => item.id === saved) || COMPANIONS[0]
+    if (tabBar) {
+      tabBar.setData({ selected: 0, wheelOpen: false, quickOpen: false })
+      if (typeof tabBar.syncCompanion === 'function') tabBar.syncCompanion(activeCompanion.id)
+    }
     this._voiceAutoplay = wx.getStorageSync('healthmate_voice_autoplay') !== false
     if (activeCompanion.id !== this.data.activeCompanion.id) {
       this.setData({ activeCompanion, response: null, voiceStatus: '按住说话' })
@@ -72,6 +170,7 @@ Page({
 
   onUnload() {
     this._unloaded = true
+    this.clearCharacterTimer()
     if (this._audio) this._audio.destroy()
     if (this._recorder && this.data.recording) this._recorder.stop()
   },
@@ -96,29 +195,56 @@ Page({
     const activeCompanion = COMPANIONS.find(item => item.id === e.currentTarget.dataset.id)
     if (!activeCompanion) return
     wx.setStorageSync('healthmate_agent_id', activeCompanion.id)
-    this.setData({ activeCompanion, response: null, voiceStatus: '按住说话' })
+    const tabBar = typeof this.getTabBar === 'function' && this.getTabBar()
+    if (tabBar && typeof tabBar.syncCompanion === 'function') tabBar.syncCompanion(activeCompanion.id)
+    this._pendingNavigation = null
+    this.setData({ activeCompanion, response: null, voiceStatus: '按住说话', characterActivity: 'idle', characterStatus: '等你开口' })
+  },
+
+  clearCharacterTimer() {
+    if (this._characterTimer) clearTimeout(this._characterTimer)
+    this._characterTimer = null
+  },
+
+  setCharacterActivity(activity, status, settleToIdle) {
+    const next = CHARACTER_ACTIVITIES.has(activity) ? activity : 'idle'
+    this.clearCharacterTimer()
+    this.setData({ characterActivity: next, characterStatus: status || '' })
+    if (!settleToIdle) return
+    this._characterTimer = setTimeout(() => {
+      this._characterTimer = null
+      if (!this._unloaded && this.data.characterActivity === next) {
+        this.setData({ characterActivity: 'idle', characterStatus: '等你开口' })
+      }
+    }, settleToIdle)
   },
 
   initVoice() {
     if (!wx.getRecorderManager) return
     this._recorder = wx.getRecorderManager()
-    this._recorder.onStart(() => this.setData({ recording: true, voiceStatus: '松开发送' }))
+    this._recorder.onStart(() => {
+      this.setData({ recording: true, voiceStatus: '松开发送' })
+      this.setCharacterActivity('listening', '正在听')
+    })
     this._recorder.onStop(result => {
       if (this._unloaded) return
       this.setData({ recording: false })
       if (this._voiceCancelled) {
         this._voiceCancelled = false
         this.setData({ voiceStatus: '按住说话' })
+        this.setCharacterActivity('idle', '等你开口')
         return
       }
       if (!result.tempFilePath || Number(result.duration || 0) < 420) {
         this.setData({ voiceStatus: '再按久一点' })
+        this.setCharacterActivity('idle', '等你开口')
         return
       }
       this.handleVoice(result.tempFilePath)
     })
     this._recorder.onError(() => {
       this.setData({ recording: false, voiceWorking: false, voiceStatus: '麦克风不可用' })
+      this.setCharacterActivity('error', '没有听见', 900)
       wx.showToast({ title: '请允许使用麦克风', icon: 'none' })
     })
   },
@@ -127,6 +253,8 @@ Page({
     if (!this._recorder || this.data.recording || this.data.voiceWorking) return
     this._voiceCancelled = false
     this.setData({ recording: true, response: null, voiceStatus: '正在听' })
+    this._pendingNavigation = null
+    this.setCharacterActivity('listening', '正在听')
     this._recorder.start({ duration: 30000, sampleRate: 16000, numberOfChannels: 1, encodeBitRate: 48000, format: 'mp3' })
   },
 
@@ -141,6 +269,7 @@ Page({
 
   async handleVoice(filePath) {
     this.setData({ voiceWorking: true, voiceStatus: '正在理解' })
+    this.setCharacterActivity('thinking', '正在理解')
     try {
       const audioBase64 = await new Promise((resolve, reject) => {
         wx.getFileSystemManager().readFile({ filePath, encoding: 'base64', success: result => resolve(result.data), fail: reject })
@@ -159,19 +288,26 @@ Page({
         channel: 'voice'
       })
       const reply = String(result && result.reply || '我听到了，我们继续。')
+      const presentation = normalizePresentation(result)
       const response = {
         heard: text,
         reply,
-        plan: result && result.plan || null,
         runId: result && result.run_id,
-        action: nextAction(text, result),
-        applied: false
+        action: presentation.action
       }
-      if (!this._unloaded) this.setData({ response, voiceStatus: '继续说', voiceWorking: false })
+      this._pendingNavigation = presentation.autoNavigate ? presentation.action : null
+      if (!this._unloaded) {
+        this.setData({ response, voiceStatus: '继续说', voiceWorking: false })
+        this.setCharacterActivity(
+          presentation.activity,
+          ACTIVITY_STATUS[presentation.activity] || ACTIVITY_STATUS.speaking
+        )
+      }
       if (this._voiceAutoplay) this.speak(reply)
     } catch (error) {
       if (!this._unloaded) {
         this.setData({ voiceWorking: false, voiceStatus: '再试一次' })
+        this.setCharacterActivity('error', '需要再试一次', 900)
         wx.showToast({ title: error.message || '语音交互暂时不可用', icon: 'none' })
       }
     }
@@ -179,6 +315,8 @@ Page({
 
   async speak(text) {
     if (!text || this._unloaded) return
+    const keepsTaskMotion = ['planning', 'presenting', 'success', 'error'].includes(this.data.characterActivity)
+    if (!keepsTaskMotion) this.setCharacterActivity('speaking', '正在回应')
     try {
       const result = await api.postLong('/harness/voice/synthesize', {
         agent_id: this.data.activeCompanion.id,
@@ -190,9 +328,15 @@ Page({
       if (!segments && result.audio_base64) {
         segments = [{ index: 0, audio_base64: result.audio_base64, content_type: result.content_type || 'audio/mpeg' }]
       }
-      if (!segments || !segments.length) return
+      if (!segments || !segments.length) {
+        if (!keepsTaskMotion) this.setCharacterActivity('idle', '等你开口')
+        return
+      }
       await this.playSegments(segments)
-    } catch (error) {}
+      if (!keepsTaskMotion && !this._unloaded) this.setCharacterActivity('idle', '等你开口')
+    } catch (error) {
+      if (!keepsTaskMotion && !this._unloaded) this.setCharacterActivity('idle', '等你开口')
+    }
   },
 
   // Write each MP3 segment to its OWN file and chain playback. If a later segment
@@ -229,24 +373,38 @@ Page({
     if (this.data.response && this.data.response.reply) this.speak(this.data.response.reply)
   },
 
+  onCharacterClipComplete(e) {
+    const activity = e.detail && e.detail.activity
+    const pending = this._pendingNavigation
+    if (pending && activity === this.data.characterActivity) {
+      this._pendingNavigation = null
+      this.setCharacterActivity('idle', '等你开口')
+      this.navigateAction(pending)
+      return
+    }
+    if (activity === 'planning' || activity === 'presenting' || activity === 'success' || activity === 'error') {
+      this.setCharacterActivity('idle', '等你开口')
+    }
+  },
+
   goState() {
     wx.navigateTo({ url: '/pages/state/index' })
   },
 
-  async runResponseAction() {
+  navigateAction(action) {
+    const url = safeActionUrl(action)
+    if (!url) return
+    wx.navigateTo({
+      url,
+      fail: () => wx.showToast({ title: '页面暂时打不开', icon: 'none' })
+    })
+  },
+
+  runResponseAction() {
     const response = this.data.response
     const action = response && response.action
     if (!action) return
-    if (action.kind === 'plan' && response.runId && !response.applied) {
-      try {
-        await api.post(`/agent/runs/${response.runId}/apply-plan`, {})
-        this.setData({ 'response.applied': true })
-        wx.showToast({ title: '已加入本周计划' })
-      } catch (error) {
-        wx.showToast({ title: error.message || '计划暂时没有保存', icon: 'none' })
-        return
-      }
-    }
-    wx.navigateTo({ url: action.route })
+    this._pendingNavigation = null
+    this.navigateAction(action)
   }
 })

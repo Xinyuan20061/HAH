@@ -11,38 +11,29 @@
 .week-core {width:24rpx;height:24rpx;box-sizing:border-box;border:2rpx solid rgba(255,255,255,.42);border-radius:50%;background:rgba(255,255,255,.14);}
 .week-day.done {color:#fff;font-weight:700;}
 .week-day.done .week-core {border-color:#c4e267;background:#c4e267;box-shadow:0 0 0 4rpx rgba(196,226,103,.18);}
-/* 「状态与下一步」入口：次要入口，不抢英雄区与语音区的主视线 */
-.state-entry {display:flex;align-items:center;justify-content:space-between;margin-top:24rpx;padding:24rpx;border-radius:22rpx;background:#fff;border:1rpx solid #eeeee6;}
-.state-entry-text {min-width:0;}
-.state-entry-title {font-size:28rpx;font-weight:700;color:#111613;}
-.state-entry-sub {margin-top:8rpx;font-size:21rpx;color:#5f665f;}
-.state-entry-arrow {flex:none;margin-left:16rpx;font-size:28rpx;color:#506336;}
 .companion-switch {display:flex;gap:16rpx;margin-top:24rpx;}
-.companion-choice {display:flex;align-items:center;gap:12rpx;flex:1;padding:12rpx 16rpx;box-sizing:border-box;border-radius:20rpx;background:#fff;box-shadow:0 8rpx 26rpx rgba(17,22,19,.035);}
+.companion-choice {display:flex;align-items:center;gap:12rpx;flex:1;padding:8rpx 16rpx;box-sizing:border-box;border-radius:20rpx;background:#fff;box-shadow:0 8rpx 26rpx rgba(17,22,19,.035);transition:opacity .16s ease-out;}
 .companion-choice.selected {background:#e9efd9;}
-.companion-choice image {display:block;width:52rpx;height:52rpx;flex:none;}
-.choice-name {font-size:24rpx;font-weight:720;line-height:1.2;}
-.choice-role {margin-top:4rpx;color:#5f665f;font-size:18rpx;line-height:1.2;}
-.companion-stage {position:relative;display:flex;flex-direction:column;align-items:center;min-height:480rpx;margin-top:24rpx;padding:40rpx 32rpx 32rpx;box-sizing:border-box;overflow:hidden;border-radius:32rpx;background:#fff;box-shadow:0 8rpx 26rpx rgba(17,22,19,.035);}
-.stage-orbit {position:absolute;border:2rpx solid #eeeee6;border-radius:50%;pointer-events:none;}
-.orbit-one {top:-140rpx;width:520rpx;height:520rpx;}
-.orbit-two {top:-76rpx;width:392rpx;height:392rpx;border-color:#e9efd9;}
-.companion-avatar {position:relative;z-index:2;width:136rpx;min-width:136rpx;max-width:136rpx;height:136rpx;min-height:136rpx;max-height:136rpx;box-shadow:0 12rpx 32rpx rgba(17,22,19,.1);}
-.companion-avatar image {display:block;width:100%;height:100%;}
-.companion-name {position:relative;z-index:2;margin-top:20rpx;font-size:36rpx;font-weight:760;}
-.companion-greeting {position:relative;z-index:2;margin-top:4rpx;color:#5f665f;font-size:22rpx;}
-.agent-thinking {position:relative;z-index:2;display:flex;align-items:center;gap:8rpx;height:56rpx;margin-top:24rpx;}
-.agent-thinking view {width:8rpx;height:8rpx;border-radius:50%;background:#506336;animation:agentThink 1s ease-in-out infinite;}
-.agent-thinking view:nth-child(2) {animation-delay:.12s;}
-.agent-thinking view:nth-child(3) {animation-delay:.24s;}
-.voice-response {position:relative;z-index:2;width:100%;margin-top:24rpx;padding-top:20rpx;border-top:1rpx solid #eeeee6;animation:responseIn .34s cubic-bezier(.2,.8,.2,1);}
+.choice-portrait {width:72rpx;min-width:72rpx;height:72rpx;overflow:hidden;border-radius:18rpx;background:#f7f7f2;transition:opacity .2s ease-out,transform .24s cubic-bezier(.2,.8,.2,1);}
+.choice-portrait image {display:block;width:100%;height:100%;}
+.companion-choice.selected .choice-portrait {transform:translateY(-4rpx) scale(1.04);}
+.choice-name {font-size:26rpx;font-weight:720;line-height:1.2;transition:opacity .2s ease-out,transform .24s cubic-bezier(.2,.8,.2,1);}
+.companion-choice.selected .choice-name {transform:translateX(4rpx);}
+.companion-stage {position:relative;min-height:560rpx;margin-top:24rpx;padding:24rpx;box-sizing:border-box;overflow:hidden;border-radius:32rpx;background:#fff;box-shadow:0 8rpx 26rpx rgba(17,22,19,.035);}
+.stage-head {position:relative;z-index:3;display:flex;align-items:flex-start;justify-content:space-between;gap:16rpx;}
+.companion-name {font-size:36rpx;font-weight:760;line-height:1.2;}
+.activity-pill {display:flex;align-items:center;gap:8rpx;flex:none;padding:8rpx 12rpx;border-radius:20rpx;color:#506336;background:#e9efd9;font-size:18rpx;font-weight:700;}
+.activity-dot {width:8rpx;height:8rpx;border-radius:50%;background:#506336;}
+.stage-character {display:block;width:100%;margin-top:16rpx;}
+.voice-response {position:relative;width:100%;margin-top:24rpx;padding:24rpx;box-sizing:border-box;border-radius:22rpx;background:#fff;box-shadow:0 8rpx 26rpx rgba(17,22,19,.035);animation:responseIn .34s cubic-bezier(.2,.8,.2,1);}
 .heard-text {color:#5f665f;font-size:19rpx;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .reply-row {display:flex;align-items:flex-start;gap:16rpx;margin-top:8rpx;}
 .reply-text {flex:1;min-width:0;font-size:24rpx;line-height:1.6;}
 .replay-button {display:flex;align-items:center;justify-content:center;width:48rpx;min-width:48rpx;max-width:48rpx;height:48rpx;min-height:48rpx;max-height:48rpx;background:#e9efd9;}
 .replay-button image {display:block;width:28rpx;height:28rpx;}
 .response-action {margin-top:16rpx;padding:16rpx 20rpx;border-radius:18rpx;color:#111613;background:#c4e267;text-align:center;font-size:22rpx;font-weight:720;}
-.voice-zone {position:relative;display:flex;flex-direction:column;align-items:center;margin-top:32rpx;}
+.draft-boundary {margin-top:12rpx;color:#5f665f;text-align:center;font-size:18rpx;}
+.voice-zone {position:relative;z-index:4;display:flex;flex-direction:column;align-items:center;margin-top:-56rpx;}
 .voice-ring {position:absolute;top:-12rpx;width:200rpx;height:200rpx;box-sizing:border-box;border:2rpx solid #e9efd9;border-radius:50%;opacity:.72;}
 .voice-ring.recording {animation:voiceRing 1.2s ease-out infinite;}
 .voice-button {position:relative;z-index:2;display:flex;align-items:center;justify-content:center;width:176rpx;min-width:176rpx;max-width:176rpx;height:176rpx;min-height:176rpx;max-height:176rpx;background:#c4e267;box-shadow:0 16rpx 40rpx rgba(17,22,19,.16);transition:opacity .16s ease-out,transform .2s cubic-bezier(.2,.8,.2,1);}
@@ -51,16 +42,25 @@
 .voice-button.working {opacity:.46;}
 .voice-button-press {opacity:.72;transform:scale(.94);}
 .voice-status {margin-top:16rpx;color:#506336;font-size:21rpx;font-weight:700;}
+/* 「状态与下一步」入口：次要入口，不抢角色舞台与语音区的主视线 */
+.state-entry {display:flex;align-items:center;justify-content:space-between;margin-top:24rpx;padding:24rpx;border-radius:22rpx;background:#fff;border:1rpx solid #eeeee6;}
+.state-entry-text {min-width:0;}
+.state-entry-title {font-size:28rpx;font-weight:700;color:#111613;}
+.state-entry-sub {margin-top:8rpx;font-size:21rpx;color:#5f665f;}
+.state-entry-arrow {flex:none;margin-left:16rpx;font-size:28rpx;color:#506336;}
 .skeleton {position:relative;overflow:hidden;border-radius:24rpx;background:#eeeee6;}
 .skeleton::after {content:'';position:absolute;left:0;top:0;right:0;bottom:0;transform:translateX(-100%);background:linear-gradient(90deg,transparent,rgba(255,255,255,.55),transparent);animation:shine 1.35s infinite;}
 .skeleton-head {height:190rpx;}
-.skeleton-stage {height:520rpx;margin-top:24rpx;}
+.skeleton-stage {height:560rpx;margin-top:24rpx;}
 .skeleton-voice {width:176rpx;height:176rpx;margin:32rpx auto 0;border-radius:50%;}
 .load-error {margin-top:140rpx;padding:48rpx 32rpx;border-radius:24rpx;text-align:center;background:#fff;}
 .error-title {font-size:28rpx;font-weight:700;}
 .error-copy {margin-top:12rpx;color:#5f665f;font-size:21rpx;line-height:1.6;}
 .load-error button {width:240rpx;margin-top:32rpx;border:0;border-radius:18rpx;color:#111613;background:#c4e267;font-size:24rpx;}
-@keyframes agentThink {0%,60%,100% {opacity:.28;transform:translateY(0);}30% {opacity:1;transform:translateY(-8rpx);}}
 @keyframes voiceRing {0% {opacity:.72;transform:scale(.88);}100% {opacity:0;transform:scale(1.18);}}
 @keyframes responseIn {from {opacity:0;transform:translateY(12rpx);}to {opacity:1;transform:translateY(0);}}
 @keyframes shine {to {transform:translateX(100%);}}
+@keyframes spaceTitleInA {from {opacity:0;transform:translateY(8rpx);}to {opacity:1;transform:translateY(0);}}
+@keyframes spaceTitleInB {from {opacity:0;transform:translateY(8rpx);}to {opacity:1;transform:translateY(0);}}
+.space-title.space-xiaojian {animation:spaceTitleInA .24s ease-out both;}
+.space-title.space-xiaokang {animation:spaceTitleInB .24s ease-out both;}

@@ -1,0 +1,324 @@
+.agent-character {
+  position: relative;
+  width: 100%;
+  height: 456rpx;
+  overflow: hidden;
+  border-radius: 24rpx;
+  background: #f7f7f2;
+}
+
+.sprite-preload {
+  position: absolute;
+  left: -8rpx;
+  top: -8rpx;
+  width: 4rpx;
+  height: 4rpx;
+  opacity: 0;
+}
+
+.sprite-preload image {
+  display: block;
+  width: 4rpx;
+  height: 4rpx;
+}
+
+.character-scene {
+  position: absolute;
+  z-index: 0;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  transition: opacity .24s ease-out;
+}
+
+.character-scene.scene-active {
+  opacity: 1;
+}
+
+.character-figure {
+  position: absolute;
+  z-index: 2;
+  left: 50%;
+  bottom: 24rpx;
+  width: 256rpx;
+  height: 384rpx;
+  transform: translateX(-50%);
+}
+
+.sprite-motion,
+.idle-sprite-motion,
+.idle-sprite-window,
+.idle-agent-layer,
+.sprite-window,
+.sprite-layer {
+  width: 100%;
+  height: 100%;
+}
+
+.sprite-motion,
+.idle-sprite-motion {
+  position: absolute;
+  left: 0;
+  top: 0;
+  opacity: 0;
+  transition: opacity .2s ease-out;
+}
+
+.sprite-motion.is-visible,
+.idle-sprite-motion.is-visible {
+  opacity: 1;
+}
+
+.sprite-motion {
+  transform-origin: 50% 96%;
+}
+
+.sprite-window,
+.idle-sprite-window {
+  position: relative;
+  overflow: hidden;
+}
+
+.idle-agent-layer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition: opacity .2s ease-out;
+}
+
+.idle-agent-layer.is-visible {
+  opacity: 1;
+}
+
+.sprite-layer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  overflow: hidden;
+}
+
+.sprite-sheet {
+  display: block;
+  width: 1024rpx;
+  height: 384rpx;
+  max-width: none;
+}
+
+.idle-sprite-sheet {
+  display: block;
+  width: 1024rpx;
+  height: 384rpx;
+  max-width: none;
+}
+
+.idle-curl-sheet {
+  animation: xiaojianCurlFrames 1.8s steps(1,end) infinite;
+}
+
+.idle-read-sheet {
+  animation: xiaokangReadFrames 3.2s steps(1,end) infinite;
+}
+
+.pose-0 .sprite-sheet { transform: translateX(0); }
+.pose-1 .sprite-sheet { transform: translateX(-256rpx); }
+.pose-2 .sprite-sheet { transform: translateX(-512rpx); }
+.pose-3 .sprite-sheet { transform: translateX(-768rpx); }
+
+.sprite-previous.swap-a {
+  animation: spriteExitA .2s ease-out both;
+}
+
+.sprite-previous.swap-b {
+  animation: spriteExitB .2s ease-out both;
+}
+
+.sprite-current.swap-a {
+  animation: spriteEnterA .22s cubic-bezier(.2,.8,.2,1) both;
+}
+
+.sprite-current.swap-b {
+  animation: spriteEnterB .22s cubic-bezier(.2,.8,.2,1) both;
+}
+
+.character-figure.fallback {
+  bottom: 128rpx;
+  width: 160rpx;
+  height: 160rpx;
+}
+
+.fallback-image {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.is-thinking .sprite-motion {
+  animation: characterThink 1.3s ease-in-out infinite;
+}
+
+.is-planning .sprite-motion {
+  animation: characterPlan 1.08s cubic-bezier(.2,.8,.2,1) both;
+}
+
+.is-speaking .sprite-motion {
+  animation: characterSpeak .88s ease-in-out infinite;
+}
+
+.is-presenting .sprite-motion {
+  animation: characterPresent .82s cubic-bezier(.2,.8,.2,1) both;
+}
+
+.is-success .sprite-motion {
+  animation: characterSuccess .68s cubic-bezier(.2,.8,.2,1) both;
+}
+
+.is-error .sprite-motion {
+  animation: characterError .68s ease-out both;
+}
+
+.character-floor {
+  position: absolute;
+  z-index: 1;
+  left: 50%;
+  bottom: 20rpx;
+  width: 192rpx;
+  height: 12rpx;
+  border-radius: 50%;
+  background: rgba(17,22,19,.16);
+  opacity: .28;
+  transform: translateX(-50%);
+}
+
+.character-floor.floor-xiaokang {
+  width: 240rpx;
+  opacity: .22;
+}
+
+.character-wave {
+  position: absolute;
+  z-index: 5;
+  right: 32rpx;
+  top: 88rpx;
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  height: 56rpx;
+  padding: 0 16rpx;
+  border-radius: 28rpx;
+  background: #111613;
+}
+
+.character-wave view {
+  width: 8rpx;
+  height: 24rpx;
+  border-radius: 8rpx;
+  background: #c4e267;
+  animation: waveTalk .72s ease-in-out infinite;
+}
+
+.character-wave view:nth-child(2) { animation-delay: .12s; }
+.character-wave view:nth-child(3) { animation-delay: .24s; }
+.character-wave view:nth-child(4) { animation-delay: .36s; }
+
+.thinking-spark {
+  position: absolute;
+  z-index: 5;
+  right: 56rpx;
+  top: 80rpx;
+  display: flex;
+  gap: 8rpx;
+}
+
+.thinking-spark view {
+  width: 12rpx;
+  height: 12rpx;
+  border-radius: 50%;
+  background: #506336;
+  animation: sparkThink 1s ease-in-out infinite;
+}
+
+.thinking-spark view:nth-child(2) { animation-delay: .12s; }
+.thinking-spark view:nth-child(3) { animation-delay: .24s; }
+
+@keyframes spriteEnterA {
+  from { opacity: 0; transform: translateY(8rpx); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes spriteEnterB {
+  from { opacity: 0; transform: translateY(8rpx); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes spriteExitA {
+  from { opacity: 1; transform: translateY(0); }
+  to { opacity: 0; transform: translateY(-4rpx); }
+}
+
+@keyframes spriteExitB {
+  from { opacity: 1; transform: translateY(0); }
+  to { opacity: 0; transform: translateY(-4rpx); }
+}
+
+@keyframes xiaojianCurlFrames {
+  0%,20% { transform: translateX(0); }
+  25%,45% { transform: translateX(-256rpx); }
+  50%,70% { transform: translateX(-512rpx); }
+  75%,95% { transform: translateX(-768rpx); }
+  100% { transform: translateX(0); }
+}
+
+@keyframes xiaokangReadFrames {
+  0%,35% { transform: translateX(0); }
+  40%,50% { transform: translateX(-256rpx); }
+  55%,65% { transform: translateX(-512rpx); }
+  70%,94% { transform: translateX(-768rpx); }
+  100% { transform: translateX(0); }
+}
+
+@keyframes characterThink {
+  0%,100% { transform: translateY(0); }
+  50% { transform: translateY(-8rpx); }
+}
+
+@keyframes characterPlan {
+  0% { opacity: .84; transform: translateY(8rpx); }
+  34% { opacity: 1; transform: translateY(0); }
+  68% { transform: translateX(-4rpx); }
+  100% { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes characterSpeak {
+  0%,100% { transform: translateY(0); }
+  50% { transform: translateY(-4rpx); }
+}
+
+@keyframes characterPresent {
+  0% { opacity: .86; transform: translateX(-8rpx); }
+  100% { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes characterSuccess {
+  0%,100% { transform: translateY(0); }
+  45% { transform: translateY(-12rpx); }
+}
+
+@keyframes characterError {
+  0%,100% { transform: translateX(0); }
+  35% { transform: translateX(-4rpx); }
+  70% { transform: translateX(4rpx); }
+}
+
+@keyframes waveTalk {
+  0%,100% { opacity: .5; transform: scaleY(.45); }
+  50% { opacity: 1; transform: scaleY(1); }
+}
+
+@keyframes sparkThink {
+  0%,60%,100% { opacity: .28; transform: translateY(0); }
+  30% { opacity: 1; transform: translateY(-8rpx); }
+}

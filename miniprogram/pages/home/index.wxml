@@ -11,38 +11,39 @@
       </view>
       <block wx:else>
         <view class="gym-head">
-          <view><view class="date-label">{{dateLabel}}</view><view class="gym-title">健身房</view></view>
+          <view><view class="date-label">{{dateLabel}}</view><view class="gym-title space-title space-{{activeCompanion.id}}">{{activeCompanion.space}}</view></view>
           <view class="streak-mark"><text class="streak-number">{{streak.current||0}}</text><text>天</text></view>
         </view>
         <view class="week-strip">
           <view class="week-day {{item.done?'done':''}}" wx:for="{{streak.last7}}" wx:key="date"><view class="week-core"></view><text>{{item.label}}</text></view>
         </view>
-        <!-- 方案 §14 第 7 条「跨模态闭环」的入口：建议 → 状态 → 做过之后的变化 -->
-        <view class="state-entry tappable" bindtap="goState" hover-class="tap-card" hover-start-time="0" hover-stay-time="80">
-          <view class="state-entry-text"><view class="state-entry-title">状态与下一步</view><view class="state-entry-sub">建议、依据、上次做完的变化</view></view>
-          <view class="state-entry-arrow">→</view>
-        </view>
         <view class="companion-switch">
           <view class="companion-choice tappable {{item.id===activeCompanion.id?'selected':''}}" wx:for="{{companions}}" wx:key="id" data-id="{{item.id}}" bindtap="selectCompanion" hover-class="tap" hover-start-time="0" hover-stay-time="80">
-            <image src="{{item.icon}}" mode="aspectFit"/><view><view class="choice-name">{{item.name}}</view><view class="choice-role">{{item.role}}</view></view>
+            <view class="choice-portrait"><image src="{{item.icon}}" mode="aspectFit" fade-in="{{false}}"/></view><view class="choice-name">{{item.name}}</view>
           </view>
         </view>
         <view class="companion-stage">
-          <view class="stage-orbit orbit-one"></view><view class="stage-orbit orbit-two"></view>
-          <view class="companion-avatar ui-fixed-circle"><image src="{{activeCompanion.icon}}" mode="aspectFit"/></view>
-          <view class="companion-name">{{activeCompanion.name}}</view>
-          <view class="companion-greeting">{{activeCompanion.greeting}}</view>
-          <view wx:if="{{voiceWorking}}" class="agent-thinking"><view></view><view></view><view></view></view>
-          <view wx:if="{{response}}" class="voice-response">
-            <view class="heard-text">“{{response.heard}}”</view>
-            <view class="reply-row"><view class="reply-text">{{response.reply}}</view><view class="replay-button ui-fixed-circle tappable" bindtap="replay" hover-class="tap" hover-start-time="0" hover-stay-time="80" aria-label="重新播放"><image src="/assets/icons/speaker.png" mode="aspectFit"/></view></view>
-            <view wx:if="{{response.action}}" class="response-action tappable" bindtap="runResponseAction" hover-class="tap" hover-start-time="0" hover-stay-time="80">{{response.applied?'查看计划':response.action.label}}</view>
+          <view class="stage-head">
+            <view class="companion-name">{{activeCompanion.name}}</view>
+            <view class="activity-pill"><view class="activity-dot"></view><text>{{characterStatus}}</text></view>
           </view>
+          <agent-character class="stage-character" agent-id="{{activeCompanion.id}}" activity="{{characterActivity}}" bindclipcomplete="onCharacterClipComplete"/>
         </view>
         <view class="voice-zone">
           <view class="voice-ring {{recording?'recording':''}}"></view>
           <view class="voice-button ui-fixed-circle tappable {{recording?'recording':''}} {{voiceWorking?'working':''}}" bindtouchstart="startVoice" bindtouchend="stopVoice" bindtouchcancel="cancelVoice" hover-class="voice-button-press" hover-start-time="0" hover-stay-time="80" aria-label="按住与健康伙伴说话"><image src="/assets/icons/mic.png" mode="aspectFit"/></view>
           <view class="voice-status">{{voiceStatus}}</view>
+        </view>
+        <view wx:if="{{response}}" class="voice-response">
+          <view class="heard-text">“{{response.heard}}”</view>
+          <view class="reply-row"><view class="reply-text">{{response.reply}}</view><view class="replay-button ui-fixed-circle tappable" bindtap="replay" hover-class="tap" hover-start-time="0" hover-stay-time="80" aria-label="重新播放"><image src="/assets/icons/speaker.png" mode="aspectFit"/></view></view>
+          <view wx:if="{{response.action}}" class="response-action tappable" bindtap="runResponseAction" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">{{response.action.label}}</view>
+          <view wx:if="{{response.action.target==='plan_preview'}}" class="draft-boundary">草案确认后才会加入计划</view>
+        </view>
+        <!-- 方案 §14 第 7 条「跨模态闭环」的入口：建议 → 状态 → 做过之后的变化 -->
+        <view class="state-entry tappable" bindtap="goState" hover-class="tap-card" hover-start-time="0" hover-stay-time="80">
+          <view class="state-entry-text"><view class="state-entry-title">状态与下一步</view><view class="state-entry-sub">建议、依据、上次做完的变化</view></view>
+          <view class="state-entry-arrow">→</view>
         </view>
       </block>
     </view>

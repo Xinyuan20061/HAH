@@ -9,15 +9,56 @@ const QUICK_ITEMS = [
   { key: 'profile', label: '身体档案', icon: '/assets/icons/profile-card.png', route: '/pages/profile/edit' }
 ]
 
+const COMPANION_TABS = {
+  xiaojian: {
+    id: 'xiaojian',
+    label: '健身房',
+    icon: '/assets/tabbar/gym.png',
+    activeIcon: '/assets/tabbar/gym-active.png'
+  },
+  xiaokang: {
+    id: 'xiaokang',
+    label: '养生馆',
+    icon: '/assets/tabbar/wellness-space.png',
+    activeIcon: '/assets/tabbar/wellness-space-active.png'
+  }
+}
+
 Component({
   data: {
     selected: 0,
     wheelOpen: false,
     quickOpen: false,
-    quickItems: QUICK_ITEMS
+    quickItems: QUICK_ITEMS,
+    companionId: 'xiaojian',
+    companionLabel: '健身房',
+    companionIcon: COMPANION_TABS.xiaojian.icon,
+    companionActiveIcon: COMPANION_TABS.xiaojian.activeIcon,
+    companionSwapToken: 'a'
+  },
+
+  lifetimes: {
+    attached() { this.syncCompanion() }
+  },
+
+  pageLifetimes: {
+    show() { this.syncCompanion() }
   },
 
   methods: {
+    syncCompanion(agentId) {
+      const saved = agentId || wx.getStorageSync('healthmate_agent_id')
+      const next = COMPANION_TABS[saved] || COMPANION_TABS.xiaojian
+      const changed = next.id !== this.data.companionId
+      this.setData({
+        companionId: next.id,
+        companionLabel: next.label,
+        companionIcon: next.icon,
+        companionActiveIcon: next.activeIcon,
+        companionSwapToken: changed ? (this.data.companionSwapToken === 'a' ? 'b' : 'a') : this.data.companionSwapToken
+      })
+    },
+
     switchPrimary(e) {
       const key = e.currentTarget.dataset.key
       const url = key === 'steward' ? '/pages/chat/index' : '/pages/home/index'

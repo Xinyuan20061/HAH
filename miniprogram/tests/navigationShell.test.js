@@ -14,7 +14,11 @@ test('bottom shell exposes gym, dashboard launcher and steward only', () => {
 
   assert.equal(app.tabBar.custom, true)
   assert.deepEqual(app.tabBar.list.map(item => item.text), ['健身房', '小管家'])
-  for (const label of ['健身房', '仪表盘', '小管家']) assert.match(view, new RegExp(label))
+  for (const label of ['仪表盘', '小管家']) assert.match(view, new RegExp(label))
+  for (const label of ['健身房', '养生馆']) assert.match(script, new RegExp(label))
+  assert.match(view, /\{\{companionLabel\}\}/)
+  assert.match(script, /healthmate_agent_id/)
+  assert.match(script, /syncCompanion/)
   for (const action of ['records', 'plan', 'profile', 'settings', 'quick']) assert.match(view, new RegExp(`data-action="${action}"`))
   for (const label of ['记录', '计划', '我的', '设置', '快速开始']) assert.match(view, new RegExp(label))
   const actionOrder = [...view.matchAll(/data-action="([^"]+)"/g)].map(match => match[1])
@@ -31,9 +35,23 @@ test('bottom shell exposes gym, dashboard launcher and steward only', () => {
   assert.match(style, /\.wheel-menu\.open \.wheel-quick \{[^}]*translate\(0,-200rpx\)/)
   assert.match(style, /transition-delay:\.24s/)
 
-  for (const name of ['gym', 'gym-active', 'dashboard', 'dashboard-active', 'steward', 'steward-active']) {
+  for (const name of ['gym', 'gym-active', 'wellness-space', 'wellness-space-active', 'dashboard', 'dashboard-active', 'steward', 'steward-active']) {
     assert.equal(fs.existsSync(path.join(root, 'assets', 'tabbar', `${name}.png`)), true)
   }
+  assert.match(style, /@keyframes companionTabInA/)
+  assert.match(style, /@keyframes companionTabInB/)
+})
+
+test('companion venue and icon survive navigation between primary pages', () => {
+  const home = read('pages/home/index.js')
+  const chat = read('pages/chat/index.js')
+  const settings = read('pages/settings/index.js')
+
+  assert.match(home, /wx\.setStorageSync\('healthmate_agent_id', activeCompanion\.id\)/)
+  assert.match(home, /tabBar\.syncCompanion\(activeCompanion\.id\)/)
+  assert.match(chat, /tabBar\.syncCompanion\(\)/)
+  assert.match(settings, /wx\.setStorageSync\('healthmate_agent_id', companion\)/)
+  assert.match(settings, /tabBar\.syncCompanion\(companion\)/)
 })
 
 test('gym inherits streaks and hosts the two voice companions', () => {

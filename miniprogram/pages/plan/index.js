@@ -1,13 +1,45 @@
 const api = require('../../utils/request')
 const { buildPlanActivity } = require('../../utils/planActivity')
 const ACTIVITY_REVEAL_DELAY_MS = 300
+const PREVIEW_DAY_LABELS = ['今天', '明天', '后天', '第 4 天', '第 5 天', '第 6 天', '第 7 天']
+const PREVIEW_CATEGORY_LABELS = {
+  exercise: '训练', diet: '饮食', sleep: '睡眠', habit: '习惯', recovery: '恢复'
+}
+const PREVIEW_ACTORS = {
+  xiaojian: { id: 'xiaojian', name: '小健', icon: '/assets/characters/xiaojian-portrait-v1.png' },
+  xiaokang: { id: 'xiaokang', name: '小康', icon: '/assets/characters/xiaokang-portrait-v1.png' }
+}
+const REVIEW_TOKEN_TICK_MS = 22
+
+function displayTokens(text) {
+  return String(text || '').match(/[\u3400-\u4dbf\u4e00-\u9fff]|[A-Za-z0-9]+(?:[._:/+-][A-Za-z0-9]+)*|\s+|./g) || []
+}
 
 Page({
   data: {
     headline: '今天只做三件真正有用的事', items: [], doneCount: 0, agentPlan: null,
     showWeek: false, showAdd: false, addTitle: '', addDesc: '', saving: false,
     activityLoading: true, activityError: '', activityBands: [], activityReveal: false,
-    activitySummary: { completeDays: 0, partialDays: 0, activeDays: 0 }
+    activitySummary: { completeDays: 0, partialDays: 0, activeDays: 0 },
+    previewMode: false, previewRunId: 0, previewLoading: false,
+    previewError: '', preview: null, applyingPreview: false,
+    previewExpanded: false, previewActor: PREVIEW_ACTORS.xiaojian,
+    previewReplyText: '', previewReplyStreaming: false
+  },
+  onLoad(options = {}) {
+    this._unloaded = false
+    const runId = Number(options.run_id || 0)
+    const previewMode = options.mode === 'preview' && Number.isInteger(runId) && runId > 0
+    const savedActor = options.agent_id || wx.getStorageSync('healthmate_agent_id')
+    const previewActor = PREVIEW_ACTORS[savedActor] || PREVIEW_ACTORS.xiaojian
+    this.setData({ previewMode, previewRunId: previewMode ? runId : 0, previewActor })
+    if (previewMode) {
+      this.loadPreview()
+      this.previewOpenTimer = setTimeout(() => {
+        this.previewOpenTimer = null
+        if (!this._unloaded) this.setData({ previewExpanded: true })
+      }, 80)
+    }
   },
   onShow() {
     this.startActivityReveal()
@@ -15,7 +47,18 @@ Page({
     this.loadActivity()
   },
   onHide() { this.clearActivityRevealTimer() },
-  onUnload() { this.clearActivityRevealTimer() },
+  onUnload() {
+    this._unloaded = true
+    this.clearActivityRevealTimer()
+    this.clearPreviewTimers()
+  },
+  clearPreviewTimers() {
+    if (this.previewOpenTimer) clearTimeout(this.previewOpenTimer)
+    if (this.previewReplyTimer) clearTimeout(this.previewReplyTimer)
+    this.previewOpenTimer = null
+    this.previewReplyTimer = null
+    this._previewReplyTokens = []
+  },
   clearActivityRevealTimer() {
     if (this.activityRevealTimer) clearTimeout(this.activityRevealTimer)
     this.activityRevealTimer = null
@@ -27,6 +70,112 @@ Page({
       this.activityRevealTimer = null
       this.setData({ activityReveal: true })
     }, ACTIVITY_REVEAL_DELAY_MS)
+  },
+  async loadPreview() {
+    const runId = this.data.previewRunId
+    if (!runId || this.data.previewLoading) return
+    this.setData({ previewLoading: true, previewError: '', previewReplyText: '', previewReplyStreaming: false })
+    try {
+      const detail = await api.get(`/agent/runs/${runId}`, { allowCache: false })
+      if (this._unloaded) return
+      const preview = detail && detail.plan_preview
+      if (!preview || !Array.isArray(preview.items) || !preview.items.length) {
+        throw new Error('这份计划草案已失效，请回到健身房重新告诉我你的目标')
+      }
+      const write = preview.write || {}
+      const isDraft = preview.status === 'draft'
+      const isApplied = preview.status === 'applied'
+      const contractValid = Number(preview.run_id) === runId
+        && preview.read_only === true
+        && write.automatic === false
+        && ((isDraft && write.status === 'not_applied' && write.confirmation_required === true)
+          || (isApplied && write.status === 'applied' && write.confirmation_required === false))
+      if (!contractValid) throw new Error('这份计划草案状态异常，请回到健身房重新生成')
+      const items = preview.items.map((item, index) => {
+        const offset = Math.max(0, Math.min(6, Number(item.date_offset) || 0))
+        return {
+          ...item,
+          key: `${offset}-${index}-${item.title || ''}`,
+          dayLabel: PREVIEW_DAY_LABELS[offset],
+          categoryLabel: PREVIEW_CATEGORY_LABELS[item.category] || '健康'
+        }
+      })
+      const actorId = detail.presentation && detail.presentation.actor
+      const previewActor = PREVIEW_ACTORS[actorId] || this.data.previewActor
+      const reply = String(detail.reply || '我整理了一版计划，你先看看。').trim()
+      this.setData({
+        preview: { ...preview, items },
+        previewActor,
+        previewLoading: false
+      }, () => this.revealPreviewReply(reply))
+    } catch (error) {
+      if (this._unloaded) return
+      this.setData({ previewLoading: false, previewError: error.message || '计划草案暂时无法打开' })
+    }
+  },
+  retryPreview() { this.loadPreview() },
+  togglePreviewFloating() {
+    this.setData({ previewExpanded: !this.data.previewExpanded })
+  },
+  deferPreview() { this.setData({ previewExpanded: false }) },
+  revealPreviewReply(reply) {
+    if (this.previewReplyTimer) clearTimeout(this.previewReplyTimer)
+    this._previewReplyTokens = displayTokens(reply)
+    this._previewReplyText = ''
+    this.setData({ previewReplyText: '', previewReplyStreaming: this._previewReplyTokens.length > 0 })
+    this.drainPreviewReply()
+  },
+  drainPreviewReply() {
+    if (this._unloaded) return
+    const queue = this._previewReplyTokens || []
+    if (!queue.length) {
+      this.previewReplyTimer = null
+      this.setData({ previewReplyStreaming: false })
+      return
+    }
+    const batchSize = queue.length > 80 ? 4 : queue.length > 36 ? 2 : 1
+    this._previewReplyText += queue.splice(0, batchSize).join('')
+    this.setData({ previewReplyText: this._previewReplyText })
+    this.previewReplyTimer = setTimeout(() => this.drainPreviewReply(), REVIEW_TOKEN_TICK_MS)
+  },
+  dismissAppliedPreview() {
+    this.clearPreviewTimers()
+    this.setData({ previewMode: false, preview: null, previewExpanded: false })
+  },
+  confirmPreview() {
+    const preview = this.data.preview
+    if (!preview || this.data.applyingPreview || this._confirmPreviewOpen) return
+    if (!preview.write || preview.write.status !== 'not_applied' || preview.write.confirmation_required !== true) return
+    this._confirmPreviewOpen = true
+    wx.showModal({
+      title: '加入这份计划？',
+      content: '确认后才会写入你的计划；稍后仍可逐项调整。',
+      confirmText: '确认加入',
+      confirmColor: '#506336',
+      success: result => { if (result.confirm) this.applyPreview() },
+      complete: () => { this._confirmPreviewOpen = false }
+    })
+  },
+  async applyPreview() {
+    if (this.data.applyingPreview || !this.data.previewRunId) return
+    this.setData({ applyingPreview: true })
+    try {
+      await api.post(`/agent/runs/${this.data.previewRunId}/apply-plan`, {})
+      if (this._unloaded) return
+      this.setData({
+        'preview.status': 'applied',
+        'preview.write.status': 'applied',
+        'preview.write.confirmation_required': false,
+        applyingPreview: false
+      })
+      wx.showToast({ title: '计划已加入', icon: 'success' })
+      this.loadToday()
+      this.loadActivity()
+    } catch (error) {
+      if (this._unloaded) return
+      this.setData({ applyingPreview: false })
+      wx.showModal({ title: '暂时无法加入', content: error.message || '请稍后重试', showCancel: false })
+    }
   },
   async loadToday() {
     try {
