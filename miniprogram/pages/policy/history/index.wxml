@@ -1,4 +1,6 @@
-<view class="policy-page">
+<include src="/components/page-transition/first-paint.wxml"/>
+<page-transition/>
+<view class="policy-page ui-page-content">
   <view class="policy-hero">
     <view class="policy-kicker">PERSONAL HISTORY</view>
     <view class="policy-title">历史记录可追溯<br/>结论也可以撤回</view>

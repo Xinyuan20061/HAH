@@ -1,4 +1,6 @@
-<view class="policy-page">
+<include src="/components/page-transition/first-paint.wxml"/>
+<page-transition/>
+<view class="policy-page ui-page-content">
   <view class="policy-hero">
     <view class="policy-kicker">STEP 1 · FREEZE THE PROTOCOL</view>
     <view class="policy-title">先把这次尝试说清楚</view>

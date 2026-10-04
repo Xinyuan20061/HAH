@@ -1,1 +1,6 @@
-{"navigationBarTitleText":"今日计划"}
+{
+  "navigationBarTitleText": "今日计划",
+  "usingComponents": {
+    "agent-float": "/components/agent-float/index"
+  }
+}

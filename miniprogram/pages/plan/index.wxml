@@ -106,4 +106,5 @@
       <view wx:if="{{!previewExpanded}}" class="review-unread-dot"></view>
     </view>
   </view>
+  <agent-float page-owned="{{true}}" voice-only="{{previewMode}}" bindinteractionstart="deferPreview"/>
 </view>

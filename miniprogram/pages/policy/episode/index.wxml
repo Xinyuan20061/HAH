@@ -1,4 +1,6 @@
-<view class="policy-page">
+<include src="/components/page-transition/first-paint.wxml"/>
+<page-transition/>
+<view class="policy-page ui-page-content">
   <view class="policy-hero">
     <view class="policy-kicker">STEP 2 · RECORD, DO NOT GUESS</view>
     <view class="policy-title">周期中的真实记录</view>

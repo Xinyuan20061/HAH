@@ -1,4 +1,6 @@
-<view class="policy-page">
+<include src="/components/page-transition/first-paint.wxml"/>
+<page-transition/>
+<view class="policy-page ui-page-content">
   <view class="policy-hero">
     <view class="policy-kicker">PERSONAL ACTION PROTOCOL</view>
     <view class="policy-title">把一次尝试<br/>变成可复核的个人记录</view>

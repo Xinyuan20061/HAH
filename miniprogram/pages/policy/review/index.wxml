@@ -1,4 +1,6 @@
-<view class="policy-page">
+<include src="/components/page-transition/first-paint.wxml"/>
+<page-transition/>
+<view class="policy-page ui-page-content">
   <view class="policy-hero">
     <view class="policy-kicker">STEP 3 · REVIEW THE EVIDENCE</view>
     <view class="policy-title">复查这次观察</view>

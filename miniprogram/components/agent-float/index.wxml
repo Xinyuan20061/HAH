@@ -1,0 +1,43 @@
+<view class="agent-float {{expanded?'expanded':''}} {{voiceOnly?'voice-only':''}} {{suppressed?'suppressed':''}}">
+  <view class="agent-dialog" aria-hidden="{{!expanded}}">
+    <view class="dialog-head">
+      <view class="dialog-avatar"><image src="{{actor.icon}}" mode="aspectFill" fade-in="{{false}}"/></view>
+      <view class="dialog-identity"><view class="dialog-name">{{actor.name}}</view><view class="dialog-status">{{statusText}}</view></view>
+      <view class="dialog-close tappable" bindtap="closeDialog" hover-class="tap" hover-start-time="0" hover-stay-time="80" aria-label="收起对话"><image src="/assets/icons/close.png" mode="aspectFit"/></view>
+    </view>
+
+    <scroll-view scroll-y class="dialog-messages" scroll-top="{{scrollTop}}">
+      <view wx:if="{{!messages.length}}" class="dialog-empty">{{actor.greeting}}</view>
+      <view wx:for="{{messages}}" wx:key="id" wx:for-item="message" wx:for-index="messageIndex" class="dialog-message {{message.role}}">
+        <view wx:if="{{message.role==='user'}}" class="user-message">{{message.content}}</view>
+        <view wx:else class="agent-message">
+          <view class="agent-message-mark"><image src="{{message.agentIcon||actor.icon}}" mode="aspectFill"/></view>
+          <view class="agent-message-body">
+            <view wx:if="{{message.pending&&!message.content}}" class="dialog-thinking"><view></view><view></view><view></view></view>
+            <view wx:else class="agent-message-text">{{message.content}}<text wx:if="{{sending&&messageIndex===messages.length-1}}" class="stream-cursor"></text></view>
+            <view wx:if="{{message.action}}" class="dialog-action tappable" data-index="{{messageIndex}}" bindtap="openAction" hover-class="tap-card" hover-start-time="0" hover-stay-time="80">{{message.action.label}}<image src="/assets/icons/chevron.png" mode="aspectFit"/></view>
+          </view>
+        </view>
+      </view>
+      <view class="dialog-bottom-space"></view>
+    </scroll-view>
+
+    <view class="dialog-composer">
+      <textarea class="dialog-input" value="{{input}}" bindinput="onInput" auto-height maxlength="1000" show-confirm-bar="{{false}}" cursor-spacing="16" placeholder="告诉{{actor.name}}你想做什么"/>
+      <button class="dialog-send tappable {{canSend||sending?'ready':''}}" bindtap="composerAction" disabled="{{!canSend&&!sending}}" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80" aria-label="{{sending?'停止生成':'发送'}}">
+        <view wx:if="{{sending}}" class="dialog-stop"></view><image wx:else src="/assets/icons/send.png" mode="aspectFit"/>
+      </button>
+    </view>
+  </view>
+
+  <view class="agent-dock">
+    <view wx:if="{{!voiceOnly}}" class="agent-trigger tappable" bindtap="toggleDialog" hover-class="tap-card" hover-start-time="0" hover-stay-time="80" aria-label="{{expanded?'收起对话':'打开对话'}}">
+      <image src="{{actor.icon}}" mode="aspectFill" fade-in="{{false}}"/>
+      <view wx:if="{{!expanded&&messages.length}}" class="agent-unread"></view>
+    </view>
+    <view class="voice-trigger tappable {{recording?'recording':''}} {{voiceWorking?'working':''}}" bindtouchstart="startVoice" bindtouchend="stopVoice" bindtouchcancel="cancelVoice" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80" aria-label="按住语音输入">
+      <view wx:if="{{recording}}" class="voice-ring"></view>
+      <image src="/assets/icons/mic.png" mode="aspectFit"/>
+    </view>
+  </view>
+</view>
