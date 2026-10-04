@@ -1,19 +1,18 @@
 <p align="center">
-  <img src="miniprogram/assets/icons/spark.png" alt="HealthMate" width="96">
+  <img src="miniprogram/assets/icons/spark.png" alt="HAH" width="96">
 </p>
 
-<h1 align="center">HealthMate</h1>
+<h1 align="center">HAH</h1>
 
 <p align="center"><strong>面向个人健康管理的 Agent 工作台</strong></p>
 
 <p align="center">
-  <a href="#运行预览">运行预览</a> ·
   <a href="#能做什么">能做什么</a> ·
   <a href="#如何使用">如何使用</a> ·
   <a href="#安装与启动">安装与启动</a>
 </p>
 
-HealthMate 是一个由 Health Agent Harness 驱动的个人健康工作台。它把饮食、运动、睡眠、
+HAH 是一个由 Health Agent Harness 驱动的个人健康工作台。它把饮食、运动、睡眠、
 身体状态和健康计划注册为受控工具，让 Agent 能读取真实记录、调用工具、观察结果并持续调整；
 所有写入和高风险操作仍由用户确认。
 
@@ -23,17 +22,6 @@ Harness 的能力目录、本人数据范围授权、预览、暂停/恢复和�
 当前提供三位共享同一 Harness Kernel 的用户人格：小健负责自律训练，小康负责温和养生，
 小管家负责整合记录与组织计划。请求进入内核后由 Router Agent 分派给领域子 Agent，
 再由 Decision Agent 仲裁为唯一答复；人格层与领域能力层彼此独立。
-
-## 运行预览
-
-<table align="center">
-  <tr>
-    <td align="center"><img src="docs/assets/screens/home.png" width="170" alt="首页"><br><sub>首页 · 坚持打卡</sub></td>
-    <td align="center"><img src="docs/assets/screens/chat.png" width="170" alt="对话"><br><sub>对话 · 智能问答</sub></td>
-    <td align="center"><img src="docs/assets/screens/records.png" width="170" alt="记录"><br><sub>记录 · 能量收支</sub></td>
-    <td align="center"><img src="docs/assets/screens/profile.png" width="170" alt="我的"><br><sub>我的 · 健康档案</sub></td>
-  </tr>
-</table>
 
 ## 能做什么
 
@@ -53,7 +41,7 @@ Harness 的能力目录、本人数据范围授权、预览、暂停/恢复和�
 
 ## 如何使用
 
-1. 在微信中打开 HealthMate 小程序，授权登录；
+1. 在微信中打开 HAH 小程序，授权登录；
 2. 完善健康档案：填写年龄、身高、体重，选择你的目标（减脂 / 保持 / 增肌）；
 3. 吃饭时拍照识餐，运动后随手记录；
 4. 在「记录」页查看能量收支和七日趋势；
@@ -71,8 +59,8 @@ Harness Kernel 的边界、多 Agent 协议、ReAct 子循环与语音配置见
 **1. 启动后端**
 
 ```powershell
-git clone https://github.com/hauyer/health-assistant.git
-cd health-assistant/backend
+git clone https://github.com/Xinyuan20061/HAH.git
+cd HAH/backend
 py -3.12 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements-dev.txt
