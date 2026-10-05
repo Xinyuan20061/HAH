@@ -28,14 +28,14 @@ test('functional pages inherit one persistent companion surface', () => {
   assert.match(floatScript, /pages\/chat\/index/)
 })
 
-test('floating companion opens chat, streams replies and keeps voice input visible', () => {
+test('floating companion opens chat and keeps voice input inside the composer', () => {
   const view = read('components/agent-float/index.wxml')
   const script = read('components/agent-float/index.js')
   const style = read('components/agent-float/index.wxss')
 
   assert.match(view, /class="agent-dialog"/)
   assert.match(view, /class="agent-trigger tappable"/)
-  assert.match(view, /class="voice-trigger tappable/)
+  assert.match(view, /class="composer-voice tappable/)
   assert.match(view, /bindtouchstart="startVoice"/)
   assert.match(view, /bindtouchend="stopVoice"/)
   assert.match(view, /bindtouchcancel="cancelVoice"/)
@@ -49,15 +49,30 @@ test('floating companion opens chat, streams replies and keeps voice input visib
   assert.match(script, /normalizeNavigation\(result\)/)
   assert.match(style, /\.agent-dialog\{[^}]*opacity:0;transform:translateY\(24rpx\) scale\(\.98\)/)
   assert.match(style, /\.agent-float\.expanded \.agent-dialog\{opacity:1;transform:translateY\(0\) scale\(1\)/)
-  assert.match(style, /\.voice-trigger\{[^}]*width:80rpx;[^}]*height:80rpx;[^}]*border-radius:50%/)
+  assert.match(style, /\.composer-voice\{[^}]*width:64rpx;[^}]*height:64rpx;[^}]*border-radius:50%/)
+  assert.match(style, /\.dialog-send\{[^}]*width:64rpx;[^}]*height:64rpx;[^}]*border-radius:50%/)
+  assert.match(style, /\.composer-voice image\{[^}]*width:32rpx;[^}]*height:32rpx/)
+  assert.match(style, /\.dialog-send-arrow\{[^}]*width:36rpx;[^}]*height:36rpx/)
+  assert.match(view, /class="dialog-send-arrow"/)
+  assert.doesNotMatch(view, /dialog-send[^>]*\sdisabled=|\/assets\/icons\/send\.png/)
+  assert.doesNotMatch(view, /class="agent-dock"[\s\S]*class="voice-trigger/)
   assert.doesNotMatch(style, /\.agent-float\{[^}]*animation:/)
 })
 
-test('plan keeps its review window and pairs it with the persistent voice control', () => {
+test('plan uses one companion dialog for review, typing and voice', () => {
   const view = read('pages/plan/index.wxml')
+  const floatScript = read('components/agent-float/index.js')
+  const sessionScript = read('utils/floatingAgentSession.js')
   const config = JSON.parse(read('pages/plan/index.json'))
   assert.match(view, /<page-transition\/>/)
-  assert.match(view, /<agent-float page-owned="\{\{true\}\}" voice-only="\{\{previewMode\}\}" bindinteractionstart="deferPreview"\/>/)
+  assert.match(view, /page-owned="\{\{true\}\}"/)
+  assert.match(view, /agent-id="\{\{previewActor\.id\}\}"/)
+  assert.match(view, /plan-review="\{\{floatingReview\}\}"/)
+  assert.match(view, /bindreviewconfirm="confirmPreview"/)
+  assert.doesNotMatch(view, /agent-review-float|voice-only/)
+  assert.match(floatScript, /function mergePlanReview/)
+  assert.match(floatScript, /kind: 'plan-review'/)
+  assert.match(sessionScript, /message\.ephemeral/)
   assert.equal(config.usingComponents['agent-float'], '/components/agent-float/index')
 })
 

@@ -16,10 +16,56 @@ function messageId(role) {
   return `${role}-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`
 }
 
+function mergePlanReview(messages, review, actor, preferredIndex) {
+  const source = Array.isArray(messages) ? messages.slice() : []
+  const existingIndex = source.findIndex(message => message && message.kind === 'plan-review')
+  const clean = source.filter(message => !message || message.kind !== 'plan-review')
+  if (!review || !review.id) return { messages: clean, index: null }
+  const fallbackIndex = Number.isInteger(preferredIndex) ? preferredIndex : clean.length
+  const index = Math.max(0, Math.min(clean.length, existingIndex >= 0 ? existingIndex : fallbackIndex))
+  clean.splice(index, 0, {
+    id: `plan-review-${review.id}`,
+    role: 'assistant',
+    kind: 'plan-review',
+    ephemeral: true,
+    content: String(review.content || ''),
+    agentName: actor.name,
+    agentIcon: actor.icon,
+    review
+  })
+  return { messages: clean, index }
+}
+
 Component({
   properties: {
-    voiceOnly: { type: Boolean, value: false },
-    pageOwned: { type: Boolean, value: false }
+    pageOwned: { type: Boolean, value: false },
+    agentId: { type: String, value: '' },
+    planReview: { type: Object, value: null }
+  },
+
+  observers: {
+    agentId() { this.syncActor() },
+    planReview(review) {
+      if (!this._attached) return
+      if (!review || !review.id) {
+        this._openedReviewId = null
+        this._reviewInsertIndex = null
+        const merged = mergePlanReview(this.data.messages, null, this.data.actor)
+        this.setData({ messages: merged.messages })
+        return
+      }
+      this.syncActor(review.actorId)
+      const actor = AGENTS[review.actorId] || this.data.actor
+      const merged = mergePlanReview(this.data.messages, review, actor, this._reviewInsertIndex)
+      this._reviewInsertIndex = merged.index
+      this.setData({ messages: merged.messages })
+      if (review.autoOpen && this._openedReviewId !== review.id) {
+        this._openedReviewId = review.id
+        this.setData({ expanded: true }, () => this.scrollBottom())
+        return
+      }
+      if (this.data.expanded) this.scrollBottom()
+    }
   },
 
   data: {
@@ -38,14 +84,22 @@ Component({
 
   lifetimes: {
     attached() {
+      this._attached = true
       this._detached = false
       const suppressed = this.syncVisibility()
       this.syncActor()
       const session = getSession()
-      this.setData({ messages: session.messages || [] })
+      const actor = AGENTS[this.properties.agentId] || this.data.actor
+      const merged = mergePlanReview(session.messages, this.properties.planReview, actor, this._reviewInsertIndex)
+      this._reviewInsertIndex = merged.index
+      const review = this.properties.planReview
+      const expanded = !!(review && review.id && review.autoOpen)
+      if (expanded) this._openedReviewId = review.id
+      this.setData({ messages: merged.messages, expanded }, () => { if (expanded) this.scrollBottom() })
       if (!suppressed) this.initVoice()
     },
     detached() {
+      this._attached = false
       this._detached = true
       this.clearTimers()
       if (this._streamTask && this._streamTask.abort) this._streamTask.abort()
@@ -59,7 +113,12 @@ Component({
       const suppressed = this.syncVisibility()
       this.syncActor()
       const session = getSession()
-      if (!this.data.sending) this.setData({ messages: session.messages || [] })
+      if (!this.data.sending) {
+        const actor = AGENTS[this.properties.agentId] || this.data.actor
+        const merged = mergePlanReview(session.messages, this.properties.planReview, actor, this._reviewInsertIndex)
+        this._reviewInsertIndex = merged.index
+        this.setData({ messages: merged.messages })
+      }
       if (!suppressed) this.initVoice()
     },
     hide() {
@@ -86,8 +145,8 @@ Component({
       return suppressed
     },
 
-    syncActor() {
-      const saved = wx.getStorageSync('healthmate_agent_id')
+    syncActor(preferredId) {
+      const saved = preferredId || this.properties.agentId || wx.getStorageSync('healthmate_agent_id')
       const actor = AGENTS[saved] || AGENTS.xiaojian
       if (actor.id !== this.data.actor.id) this.setData({ actor })
     },
@@ -110,6 +169,20 @@ Component({
     },
 
     closeDialog() { this.setData({ expanded: false }) },
+
+    confirmPlanReview() { this.triggerEvent('reviewconfirm') },
+
+    deferPlanReview() {
+      this.setData({ expanded: false })
+      this.triggerEvent('reviewdefer')
+    },
+
+    retryPlanReview() { this.triggerEvent('reviewretry') },
+
+    dismissPlanReview() {
+      this.setData({ expanded: false })
+      this.triggerEvent('reviewdismiss')
+    },
 
     onInput(e) {
       const input = e.detail.value

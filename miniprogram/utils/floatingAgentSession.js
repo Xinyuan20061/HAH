@@ -13,7 +13,9 @@ function getSession() {
 }
 
 function saveSession(patch = {}) {
-  if (Array.isArray(patch.messages)) state.messages = patch.messages.slice(-MAX_MESSAGES)
+  if (Array.isArray(patch.messages)) {
+    state.messages = patch.messages.filter(message => message && !message.ephemeral).slice(-MAX_MESSAGES)
+  }
   if (Object.prototype.hasOwnProperty.call(patch, 'sessionId')) state.sessionId = patch.sessionId || null
   return getSession()
 }

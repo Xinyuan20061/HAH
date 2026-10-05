@@ -1,4 +1,4 @@
-<view class="agent-float {{expanded?'expanded':''}} {{voiceOnly?'voice-only':''}} {{suppressed?'suppressed':''}}">
+<view class="agent-float {{expanded?'expanded':''}} {{suppressed?'suppressed':''}}">
   <view class="agent-dialog" aria-hidden="{{!expanded}}">
     <view class="dialog-head">
       <view class="dialog-avatar"><image src="{{actor.icon}}" mode="aspectFill" fade-in="{{false}}"/></view>
@@ -9,7 +9,26 @@
     <scroll-view scroll-y class="dialog-messages" scroll-top="{{scrollTop}}">
       <view wx:if="{{!messages.length}}" class="dialog-empty">{{actor.greeting}}</view>
       <view wx:for="{{messages}}" wx:key="id" wx:for-item="message" wx:for-index="messageIndex" class="dialog-message {{message.role}}">
-        <view wx:if="{{message.role==='user'}}" class="user-message">{{message.content}}</view>
+        <view wx:if="{{message.kind==='plan-review'}}" class="agent-message">
+          <view class="agent-message-mark"><image src="{{message.agentIcon||actor.icon}}" mode="aspectFill"/></view>
+          <view class="agent-message-body plan-review-body">
+            <view wx:if="{{message.review.state==='loading'}}" class="dialog-thinking"><view></view><view></view><view></view></view>
+            <block wx:elif="{{message.review.state==='error'}}">
+              <view class="plan-review-text">{{message.review.content}}</view>
+              <view class="plan-review-retry tappable" bindtap="retryPlanReview" hover-class="tap-card" hover-start-time="0" hover-stay-time="80">重新加载</view>
+            </block>
+            <block wx:else>
+              <view class="plan-review-text">{{message.review.content}}<text wx:if="{{message.review.streaming}}" class="stream-cursor"></text></view>
+              <view wx:if="{{!message.review.streaming}}" class="plan-review-state">{{message.review.applied?'已加入计划':'确认后才会加入计划'}}</view>
+              <view wx:if="{{!message.review.streaming&&!message.review.applied}}" class="plan-review-actions">
+                <button class="plan-review-secondary tappable" bindtap="deferPlanReview" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">稍后决定</button>
+                <button class="plan-review-primary tappable" bindtap="confirmPlanReview" disabled="{{message.review.applying}}" loading="{{message.review.applying}}" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">确认加入</button>
+              </view>
+              <view wx:if="{{!message.review.streaming&&message.review.applied}}" class="plan-review-done tappable" bindtap="dismissPlanReview" hover-class="tap" hover-start-time="0" hover-stay-time="80">完成</view>
+            </block>
+          </view>
+        </view>
+        <view wx:elif="{{message.role==='user'}}" class="user-message">{{message.content}}</view>
         <view wx:else class="agent-message">
           <view class="agent-message-mark"><image src="{{message.agentIcon||actor.icon}}" mode="aspectFill"/></view>
           <view class="agent-message-body">
@@ -23,21 +42,22 @@
     </scroll-view>
 
     <view class="dialog-composer">
+      <view class="composer-voice tappable {{recording?'recording':''}} {{voiceWorking?'working':''}}" bindtouchstart="startVoice" bindtouchend="stopVoice" bindtouchcancel="cancelVoice" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80" aria-label="按住语音输入">
+        <view wx:if="{{recording}}" class="voice-ring"></view>
+        <image src="/assets/icons/mic.png" mode="aspectFit"/>
+      </view>
       <textarea class="dialog-input" value="{{input}}" bindinput="onInput" auto-height maxlength="1000" show-confirm-bar="{{false}}" cursor-spacing="16" placeholder="告诉{{actor.name}}你想做什么"/>
-      <button class="dialog-send tappable {{canSend||sending?'ready':''}}" bindtap="composerAction" disabled="{{!canSend&&!sending}}" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80" aria-label="{{sending?'停止生成':'发送'}}">
-        <view wx:if="{{sending}}" class="dialog-stop"></view><image wx:else src="/assets/icons/send.png" mode="aspectFit"/>
-      </button>
+      <view class="dialog-send tappable {{canSend||sending?'ready':'inactive'}}" bindtap="composerAction" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80" aria-label="{{sending?'停止生成':'发送'}}" aria-disabled="{{!canSend&&!sending}}">
+        <view wx:if="{{sending}}" class="dialog-stop"></view>
+        <view wx:else class="dialog-send-arrow"><view class="dialog-send-head"></view><view class="dialog-send-stem"></view></view>
+      </view>
     </view>
   </view>
 
   <view class="agent-dock">
-    <view wx:if="{{!voiceOnly}}" class="agent-trigger tappable" bindtap="toggleDialog" hover-class="tap-card" hover-start-time="0" hover-stay-time="80" aria-label="{{expanded?'收起对话':'打开对话'}}">
+    <view class="agent-trigger tappable" bindtap="toggleDialog" hover-class="tap-card" hover-start-time="0" hover-stay-time="80" aria-label="{{expanded?'收起对话':'打开对话'}}">
       <image src="{{actor.icon}}" mode="aspectFill" fade-in="{{false}}"/>
-      <view wx:if="{{!expanded&&messages.length}}" class="agent-unread"></view>
-    </view>
-    <view class="voice-trigger tappable {{recording?'recording':''}} {{voiceWorking?'working':''}}" bindtouchstart="startVoice" bindtouchend="stopVoice" bindtouchcancel="cancelVoice" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80" aria-label="按住语音输入">
-      <view wx:if="{{recording}}" class="voice-ring"></view>
-      <image src="/assets/icons/mic.png" mode="aspectFit"/>
+      <view wx:if="{{!expanded&&(messages.length||(planReview&&planReview.id))}}" class="agent-unread"></view>
     </view>
   </view>
 </view>

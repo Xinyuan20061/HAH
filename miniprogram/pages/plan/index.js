@@ -35,6 +35,17 @@ function clearPlanHandoff(runId) {
   try { wx.removeStorageSync(handoffStorageKey(runId)) } catch (error) {}
 }
 
+function formatPreviewMessage(reply, preview, items) {
+  const lines = []
+  if (reply) lines.push(reply)
+  lines.push('', preview.title || '本周健康计划', '')
+  items.forEach(item => {
+    const detail = String(item.description || '').trim()
+    lines.push(`${item.dayLabel}｜${item.title}${detail ? `：${detail}` : ''}`)
+  })
+  return lines.join('\n').trim()
+}
+
 Page({
   data: {
     headline: '今天只做三件真正有用的事', items: [], doneCount: 0, agentPlan: null,
@@ -43,8 +54,8 @@ Page({
     activitySummary: { completeDays: 0, partialDays: 0, activeDays: 0 },
     previewMode: false, previewRunId: 0, previewLoading: false,
     previewError: '', preview: null, applyingPreview: false,
-    previewExpanded: false, previewActor: PREVIEW_ACTORS.xiaojian,
-    previewReplyText: '', previewReplyStreaming: false
+    previewActor: PREVIEW_ACTORS.xiaojian,
+    previewReplyText: '', previewReplyStreaming: false, floatingReview: null
   },
   onLoad(options = {}) {
     this._unloaded = false
@@ -52,13 +63,20 @@ Page({
     const previewMode = options.mode === 'preview' && Number.isInteger(runId) && runId > 0
     const savedActor = options.agent_id || wx.getStorageSync('healthmate_agent_id')
     const previewActor = PREVIEW_ACTORS[savedActor] || PREVIEW_ACTORS.xiaojian
-    this.setData({ previewMode, previewRunId: previewMode ? runId : 0, previewActor })
+    this.setData({
+      previewMode,
+      previewRunId: previewMode ? runId : 0,
+      previewActor,
+      floatingReview: previewMode ? {
+        id: `plan-${runId}`,
+        actorId: previewActor.id,
+        state: 'loading',
+        content: '',
+        autoOpen: true
+      } : null
+    })
     if (previewMode) {
       this.loadPreview()
-      this.previewOpenTimer = setTimeout(() => {
-        this.previewOpenTimer = null
-        if (!this._unloaded) this.setData({ previewExpanded: true })
-      }, 80)
     }
   },
   onShow() {
@@ -73,9 +91,7 @@ Page({
     this.clearPreviewTimers()
   },
   clearPreviewTimers() {
-    if (this.previewOpenTimer) clearTimeout(this.previewOpenTimer)
     if (this.previewReplyTimer) clearTimeout(this.previewReplyTimer)
-    this.previewOpenTimer = null
     this.previewReplyTimer = null
     this._previewReplyTokens = []
   },
@@ -94,7 +110,20 @@ Page({
   async loadPreview() {
     const runId = this.data.previewRunId
     if (!runId || this.data.previewLoading) return
-    this.setData({ previewLoading: true, previewError: '', previewReplyText: '', previewReplyStreaming: false })
+    const loadingReview = {
+      id: `plan-${runId}`,
+      actorId: this.data.previewActor.id,
+      state: 'loading',
+      content: '',
+      autoOpen: true
+    }
+    this.setData({
+      previewLoading: true,
+      previewError: '',
+      previewReplyText: '',
+      previewReplyStreaming: false,
+      floatingReview: loadingReview
+    })
     try {
       const handoff = readPlanHandoff(runId)
       let detail
@@ -134,22 +163,46 @@ Page({
         preview: { ...preview, items },
         previewActor,
         previewLoading: false
-      }, () => this.revealPreviewReply(reply))
+      }, () => this.revealPreviewReply(formatPreviewMessage(reply, preview, items)))
     } catch (error) {
       if (this._unloaded) return
-      this.setData({ previewLoading: false, previewError: error.message || '计划草案暂时无法打开' })
+      const content = error.message || '计划草案暂时无法打开'
+      this.setData({
+        previewLoading: false,
+        previewError: content,
+        floatingReview: {
+          id: `plan-${runId}`,
+          actorId: this.data.previewActor.id,
+          state: 'error',
+          content,
+          autoOpen: true
+        }
+      })
     }
   },
   retryPreview() { this.loadPreview() },
-  togglePreviewFloating() {
-    this.setData({ previewExpanded: !this.data.previewExpanded })
+  nextFloatingReview(patch) {
+    return Object.assign({}, this.data.floatingReview || {}, patch)
   },
-  deferPreview() { this.setData({ previewExpanded: false }) },
   revealPreviewReply(reply) {
     if (this.previewReplyTimer) clearTimeout(this.previewReplyTimer)
     this._previewReplyTokens = displayTokens(reply)
     this._previewReplyText = ''
-    this.setData({ previewReplyText: '', previewReplyStreaming: this._previewReplyTokens.length > 0 })
+    const streaming = this._previewReplyTokens.length > 0
+    this.setData({
+      previewReplyText: '',
+      previewReplyStreaming: streaming,
+      floatingReview: {
+        id: `plan-${this.data.previewRunId}`,
+        actorId: this.data.previewActor.id,
+        state: this.data.preview && this.data.preview.write.status === 'applied' ? 'applied' : 'ready',
+        content: '',
+        streaming,
+        applied: this.data.preview && this.data.preview.write.status === 'applied',
+        applying: false,
+        autoOpen: true
+      }
+    })
     this.drainPreviewReply()
   },
   drainPreviewReply() {
@@ -157,18 +210,24 @@ Page({
     const queue = this._previewReplyTokens || []
     if (!queue.length) {
       this.previewReplyTimer = null
-      this.setData({ previewReplyStreaming: false })
+      this.setData({
+        previewReplyStreaming: false,
+        floatingReview: this.nextFloatingReview({ streaming: false })
+      })
       return
     }
     const batchSize = queue.length > 80 ? 4 : queue.length > 36 ? 2 : 1
     this._previewReplyText += queue.splice(0, batchSize).join('')
-    this.setData({ previewReplyText: this._previewReplyText })
+    this.setData({
+      previewReplyText: this._previewReplyText,
+      floatingReview: this.nextFloatingReview({ content: this._previewReplyText })
+    })
     this.previewReplyTimer = setTimeout(() => this.drainPreviewReply(), REVIEW_TOKEN_TICK_MS)
   },
   dismissAppliedPreview() {
     this.clearPreviewTimers()
     clearPlanHandoff(this.data.previewRunId)
-    this.setData({ previewMode: false, preview: null, previewExpanded: false })
+    this.setData({ previewMode: false, preview: null, floatingReview: null })
   },
   confirmPreview() {
     const preview = this.data.preview
@@ -186,7 +245,10 @@ Page({
   },
   async applyPreview() {
     if (this.data.applyingPreview || !this.data.previewRunId) return
-    this.setData({ applyingPreview: true })
+    this.setData({
+      applyingPreview: true,
+      floatingReview: this.nextFloatingReview({ applying: true })
+    })
     try {
       await api.post(`/agent/runs/${this.data.previewRunId}/apply-plan`, {})
       if (this._unloaded) return
@@ -194,7 +256,8 @@ Page({
         'preview.status': 'applied',
         'preview.write.status': 'applied',
         'preview.write.confirmation_required': false,
-        applyingPreview: false
+        applyingPreview: false,
+        floatingReview: this.nextFloatingReview({ state: 'applied', applied: true, applying: false })
       })
       clearPlanHandoff(this.data.previewRunId)
       wx.showToast({ title: '计划已加入', icon: 'success' })
@@ -202,7 +265,10 @@ Page({
       this.loadActivity()
     } catch (error) {
       if (this._unloaded) return
-      this.setData({ applyingPreview: false })
+      this.setData({
+        applyingPreview: false,
+        floatingReview: this.nextFloatingReview({ applying: false })
+      })
       wx.showModal({ title: '暂时无法加入', content: error.message || '请稍后重试', showCancel: false })
     }
   },
