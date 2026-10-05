@@ -832,12 +832,22 @@ def test_outcomes_api_reports_results_and_preferences(api, db):
 
 def test_confirmed_action_records_an_outcome(api, db):
     """The confirm endpoint feeds the policy statistics (plan §9.2)."""
-    from app.models import AgentActionProposal, HealthAgentRun
+    from app.models import AgentActionProposal, HealthAgentRun, HarnessPluginInstallation
+
+    installation = db.scalar(select(HarnessPluginInstallation).where(
+        HarnessPluginInstallation.user_id == api.user_id,
+        HarnessPluginInstallation.plugin_id == "plan_outcome",
+    ))
 
     run = HealthAgentRun(
         user_id=api.user_id,
         intent="plan",
         user_message="x",
+        context_json=json.dumps({"_capability_bindings": {"plan_outcome": {
+            "installation_id": installation.id,
+            "config_version": installation.config_version,
+            "manifest_hash": installation.reviewed_manifest_hash,
+        }}}),
         result_json=json.dumps(
             {
                 "plan": {

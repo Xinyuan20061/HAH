@@ -1,4 +1,5 @@
 import os
+import json
 from pathlib import Path
 from uuid import uuid4
 
@@ -19,6 +20,9 @@ from app.main import app
 from app.models import User
 
 
+_KNOWLEDGE_MIGRATION_SEED: list[dict] = []
+
+
 @pytest.fixture(scope="session")
 def migrated_engine(tmp_path_factory):
     url = os.environ.get("TEST_DATABASE_URL")
@@ -36,6 +40,11 @@ def migrated_engine(tmp_path_factory):
     command.upgrade(config, "head")
     settings.database_url = previous
     engine = build_engine(url)
+    with engine.connect() as connection:
+        knowledge_table = Base.metadata.tables["knowledge_documents"]
+        _KNOWLEDGE_MIGRATION_SEED[:] = [
+            dict(row) for row in connection.execute(knowledge_table.select()).mappings().all()
+        ]
     yield engine
     engine.dispose()
 
@@ -55,9 +64,14 @@ def api(migrated_engine, monkeypatch, request):
                 "dataset_registry",
                 "model_registry",
                 "food_references",
+                "knowledge_documents",
             }:
                 continue
             connection.execute(table.delete())
+        knowledge_table = Base.metadata.tables["knowledge_documents"]
+        connection.execute(knowledge_table.delete())
+        if _KNOWLEDGE_MIGRATION_SEED:
+            connection.execute(knowledge_table.insert(), _KNOWLEDGE_MIGRATION_SEED)
     import app.core.diagnostics as diagnostics
     import app.main as main
 
@@ -96,13 +110,26 @@ def api(migrated_engine, monkeypatch, request):
             from app.models import HarnessPluginInstallation
             from app.core.time import utc_now
             for manifest in BUILTIN_PLUGINS:
+                # Legacy domain tests represent users who had already reviewed
+                # and consented to the full built-in capability. Dedicated
+                # capability tests intentionally start with no grant. Keep this
+                # compatibility fixture explicit; production defaults remain
+                # deny-by-default and are not changed by the test setup.
+                legacy_consent = {
+                    "goal": manifest.goals[0][0] if manifest.goals else "daily_guidance",
+                    "data_scopes": [key for key, _ in manifest.scope_definitions],
+                    "allow_action_proposals": bool(manifest.may_propose_actions),
+                    "notification_frequency": "on_request",
+                }
                 db.add(HarnessPluginInstallation(
                     user_id=user_id,
                     plugin_id=manifest.plugin_id,
                     plugin_version=manifest.version,
                     enabled=True,
-                    config_json='{"data_scope": [], "notifications": true}',
+                    config_json=json.dumps(legacy_consent, ensure_ascii=False),
                     enabled_at=utc_now(),
+                    config_version=1,
+                    reviewed_manifest_hash=manifest.manifest_hash(),
                 ))
             db.commit()
     with TestClient(app) as client:

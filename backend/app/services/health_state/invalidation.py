@@ -21,6 +21,8 @@ import logging
 
 from sqlalchemy.orm import Session
 
+from app.models import User
+
 logger = logging.getLogger("healthmate.health_state.invalidation")
 
 # Canonical source domains. Callers pass these, never a feature key, so the mapping
@@ -80,6 +82,27 @@ def record_changed(
         raise ValueError("source_revision must be a positive integer when source_id is set")
     if source_id is not None and len(requested) != 1:
         raise ValueError("source identity is only valid for one source domain")
+
+    # A stale/deleted account must not trigger a derived snapshot write with a
+    # dangling user_id. This is a harmless no-op for maintenance callers and
+    # keeps the foreign-key boundary intact.
+    with db.no_autoflush:
+        user_exists = db.get(User, user_id) is not None
+    if not user_exists:
+        return {
+            "unknown": [],
+            "affected": [],
+            "deleted_rows": 0,
+            "recomputed": False,
+            "missing_user": True,
+        }
+
+    # Serialize the source change and its policy-evidence invalidation against
+    # certificate issue/consumption. The caller owns this transaction and must
+    # roll it back if any later invalidation step fails.
+    from app.services.policy_learning.acquisition.service import _fence
+
+    _fence(db, user_id)
 
     # Sessions run with autoflush disabled; flush the just-edited source before
     # recomputing its derived features or resolving the source revision.

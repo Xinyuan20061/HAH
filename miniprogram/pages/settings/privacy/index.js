@@ -16,6 +16,7 @@ Page({
     } catch (e) { this.setData({ error: e.message || '隐私设置加载失败' }) }
     finally { this.setData({ loading: false }) }
   },
+  retry() { this.load() },
   async exportData() {
     const ok = await new Promise(r => wx.showModal({
       title: '导出个人数据',

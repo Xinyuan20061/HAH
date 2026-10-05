@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import re
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import KnowledgeDocument
-from app.services.rag.embeddings import cosine, embed
+from app.services.rag.embeddings import active_embedding_backend, cosine, embed
 
 
 RETRIEVER_VERSION = "audited_hybrid_v2"
@@ -110,6 +111,7 @@ def _score(
 
 
 def serialize_document(document: KnowledgeDocument, rank: int, score: float) -> dict:
+    content = document.content or ""
     return {
         "id": document.id,
         "source_key": document.source_key,
@@ -119,7 +121,15 @@ def serialize_document(document: KnowledgeDocument, rank: int, score: float) -> 
         "url": document.source_url,
         "published_at": document.source_published_at or None,
         "section": document.section,
-        "excerpt": document.content,
+        "excerpt": content,
+        "content_sha256": document.content_sha256 or hashlib.sha256(content.encode("utf-8")).hexdigest(),
+        "reviewed_at": document.reviewed_at.isoformat() if document.reviewed_at else None,
+        "reviewer": document.reviewer or "",
+        "review_expires_at": (document.review_expires_at.isoformat()
+                              if document.review_expires_at else None),
+        "population": document.population or "",
+        "exclusions": document.exclusions or "",
+        "active": bool(document.active),
         "tags": _deserialize_tags(document.tags_json),
         "retrieval_score": round(score, 4),
         "source": "audited_knowledge_database",
@@ -182,6 +192,23 @@ def search_knowledge(db: Session, query: str, top_k: int = 3) -> list[dict]:
         serialize_document(document, index, score)
         for index, (document, score) in enumerate(ranked[: max(1, min(top_k, 5))], 1)
     ]
+
+
+def retrieval_meta(db: Session) -> dict:
+    """Deployment-run audit fields (spec B1). The embedding backend is the one
+    actually used by embed(); the snapshot hash covers active reviewed chunks so
+    a fallback run never inherits ONNX-mode scores as its own result."""
+    return {
+        "version": RETRIEVER_VERSION,
+        "embedding_backend": active_embedding_backend(),
+        "knowledge_snapshot_hash": knowledge_snapshot_hash(db),
+    }
+
+
+def knowledge_snapshot_hash(db: Session) -> str:
+    rows = db.scalars(select(KnowledgeDocument).where(KnowledgeDocument.active.is_(True))).all()
+    parts = [f"{row.source_key}:{row.content or ''}" for row in sorted(rows, key=lambda r: r.source_key)]
+    return hashlib.sha256("\n".join(parts).encode("utf-8")).hexdigest()
 
 
 def _embed_text(document: KnowledgeDocument) -> str:

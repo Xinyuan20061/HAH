@@ -3,6 +3,7 @@
 <view class="page goals-page ui-page-content">
   <view class="hero"><view class="kicker">目标体系</view><view class="title">把目标变成每天的一小步</view></view>
   <view wx:if="{{loading}}" class="skeleton-grid"><view wx:for="{{[1,2,3,4]}}" wx:key="*this" class="sk-card shimmer"></view></view>
+  <view wx:elif="{{error}}" class="state-card state-card-error"><view><view class="state-title">目标暂时加载失败</view><view class="state-desc">{{error}}</view></view><button class="btn-soft compact tappable" bindtap="retry" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">重试</button></view>
   <block wx:else>
     <view class="adaptive card">
       <view class="row space"><view><view class="kicker">近 14 天</view><view class="adaptive-title">动态调整目标</view></view><button class="mini-btn tappable" loading="{{dynamicLoading}}" bindtap="evaluateDynamic" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">评估</button></view>

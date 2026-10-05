@@ -385,7 +385,8 @@ Page({
       presentation.activity,
       ACTIVITY_STATUS[presentation.activity] || ACTIVITY_STATUS.speaking
     )
-    if (settings.autoplay) this.speak(reply)
+    const autoplay = settings.autoplay == null ? this._voiceAutoplay : settings.autoplay
+    if (autoplay) this.speak(reply)
     return result
   },
 

@@ -1,0 +1,207 @@
+{
+  "diagnosis_schema_version": "evidence-acquisition-v1-negative-diagnosis-v1",
+  "git_commit": "81c12b6fe32b397d8e1fd6d040dbcb99ea4ae475",
+  "seed": 20261005,
+  "dataset_hash": "627d16ace3fcd467f424731a43126b831da0ae3e3b3d7b36d7703197a4c10847",
+  "config_hash": "5f915d4ba9ef8f853e9c5d45c91bc8138da7ccc4fd236d40f167c4faf530690e",
+  "reproducibility_hash_ok": true,
+  "summaries": {
+    "one_step_decision_value": {
+      "episodes": 363,
+      "resolved": 238,
+      "coverage": 0.6556473829201102,
+      "correct": 238,
+      "accuracy": 1.0,
+      "issued_questions": 357,
+      "answered": 197,
+      "total_cost_ms": 1323994
+    },
+    "two_step_decision_value": {
+      "episodes": 363,
+      "resolved": 238,
+      "coverage": 0.6556473829201102,
+      "correct": 238,
+      "accuracy": 1.0,
+      "issued_questions": 357,
+      "answered": 197,
+      "total_cost_ms": 1323994
+    },
+    "random_same_budget": {
+      "episodes": 363,
+      "resolved": 252,
+      "coverage": 0.6942148760330579,
+      "correct": 252,
+      "accuracy": 1.0,
+      "issued_questions": 356,
+      "answered": 242,
+      "total_cost_ms": 1313395
+    },
+    "entropy_first": {
+      "episodes": 363,
+      "resolved": 248,
+      "coverage": 0.6831955922865014,
+      "correct": 248,
+      "accuracy": 1.0,
+      "issued_questions": 357,
+      "answered": 239,
+      "total_cost_ms": 1321077
+    },
+    "current_gate_with_fixed_acquisition_adapter": {
+      "episodes": 363,
+      "resolved": 248,
+      "coverage": 0.6831955922865014,
+      "correct": 248,
+      "accuracy": 1.0,
+      "issued_questions": 357,
+      "answered": 239,
+      "total_cost_ms": 1321077
+    },
+    "small_state_exact_reference": {
+      "episodes": 363,
+      "resolved": 248,
+      "coverage": 0.6831955922865014,
+      "correct": 248,
+      "accuracy": 1.0,
+      "issued_questions": 357,
+      "answered": 239,
+      "total_cost_ms": 1321077
+    }
+  },
+  "headline_two_step_vs_one_step": {
+    "frozen_report_identical": true,
+    "replayed_identical": true,
+    "decision_sequence_identical": {
+      "cases": 0,
+      "differing_decision_cases": 0,
+      "differing_decisions": 0,
+      "detail": []
+    }
+  },
+  "pairwise_decision_equality": {
+    "one_step_decision_value vs two_step_decision_value": {
+      "compared_steps": 357,
+      "differing_decisions": 0
+    },
+    "one_step_decision_value vs random_same_budget": {
+      "compared_steps": 373,
+      "differing_decisions": 179
+    },
+    "one_step_decision_value vs small_state_exact_reference": {
+      "compared_steps": 357,
+      "differing_decisions": 58
+    },
+    "random_same_budget vs two_step_decision_value": {
+      "compared_steps": 373,
+      "differing_decisions": 179
+    },
+    "random_same_budget vs small_state_exact_reference": {
+      "compared_steps": 373,
+      "differing_decisions": 179
+    },
+    "entropy_first vs one_step_decision_value": {
+      "compared_steps": 357,
+      "differing_decisions": 58
+    },
+    "entropy_first vs two_step_decision_value": {
+      "compared_steps": 357,
+      "differing_decisions": 58
+    },
+    "entropy_first vs random_same_budget": {
+      "compared_steps": 373,
+      "differing_decisions": 179
+    },
+    "entropy_first vs small_state_exact_reference": {
+      "compared_steps": 357,
+      "differing_decisions": 0
+    },
+    "current_gate_with_fixed_acquisition_adapter vs one_step_decision_value": {
+      "compared_steps": 357,
+      "differing_decisions": 58
+    },
+    "current_gate_with_fixed_acquisition_adapter vs two_step_decision_value": {
+      "compared_steps": 357,
+      "differing_decisions": 58
+    },
+    "current_gate_with_fixed_acquisition_adapter vs random_same_budget": {
+      "compared_steps": 373,
+      "differing_decisions": 179
+    },
+    "current_gate_with_fixed_acquisition_adapter vs entropy_first": {
+      "compared_steps": 357,
+      "differing_decisions": 0
+    },
+    "current_gate_with_fixed_acquisition_adapter vs small_state_exact_reference": {
+      "compared_steps": 357,
+      "differing_decisions": 0
+    },
+    "small_state_exact_reference vs two_step_decision_value": {
+      "compared_steps": 357,
+      "differing_decisions": 58
+    }
+  },
+  "layered": {
+    "initial_candidates_distribution": {
+      "3": 79,
+      "2": 106,
+      "1": 96,
+      "4": 31,
+      "5": 9,
+      "0": 40,
+      "6": 2
+    },
+    "initial_proof_state": {
+      "undetermined": 213,
+      "determined_1": 70,
+      "determined_0": 80
+    },
+    "stop_reasons": {
+      "endpoint_sufficient": 207,
+      "budget_exhausted": 144,
+      "candidates_empty": 12
+    },
+    "response_status_counts": {
+      "answered": 197,
+      "no_response": 73,
+      "unknown": 65,
+      "declined": 22
+    },
+    "label_flips": 88,
+    "answered_questions": 197,
+    "marginal_resolving_rate": 0.4467005076142132,
+    "first_question_resolves_count": 57,
+    "resolved_with_zero_questions": 150,
+    "resolved_after_one_question": 57,
+    "resolved_after_two_questions": 31,
+    "slot_answered_label_flip_counts": {
+      "4": [
+        14,
+        26
+      ],
+      "2": [
+        15,
+        38
+      ],
+      "0": [
+        12,
+        48
+      ],
+      "1": [
+        18,
+        45
+      ],
+      "5": [
+        15,
+        19
+      ],
+      "3": [
+        7,
+        14
+      ],
+      "6": [
+        7,
+        7
+      ]
+    }
+  },
+  "mechanism_note": "ExecutionDomain candidates are pairwise symmetric and independent (identical cost, identical prior, each question writes only its own slot; unknown/declined/no_response leave state unchanged and the asked slot becomes unaskable). Under that structure the relative ordering of the best first question is invariant to look-ahead depth, so horizon-2 and horizon-1 planning emit the same decision sequence."
+}

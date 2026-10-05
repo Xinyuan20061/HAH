@@ -6,7 +6,7 @@ import logging
 import re
 from datetime import timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -57,6 +57,23 @@ router = APIRouter(
     prefix="/worker", tags=["ai-worker"], dependencies=[Depends(require_worker_token)]
 )
 logger = logging.getLogger("healthmate.worker")
+
+
+@router.post("/maintenance/policy-acquisition")
+def maintain_policy_acquisition(limit: int = Query(default=100, ge=1, le=200),
+                                db: Session = Depends(get_db)):
+    """Bounded scheduled reconciliation; never schedules or sends a prompt."""
+    from app.services.policy_learning.acquisition.maintenance import expire_issued_questions
+    from app.services.policy_learning.outbox import process_pending_policy_events
+
+    try:
+        result = expire_issued_questions(db, limit=limit)
+        result["policy_outbox"] = process_pending_policy_events(db, limit=limit)
+        db.commit()
+        return {"ok": True, **result}
+    except Exception:
+        db.rollback()
+        raise
 
 
 @router.post("/heartbeat")

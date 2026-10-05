@@ -23,6 +23,9 @@ benchmark-results/
 uploads/
 *.zip
 
+# 生产库备份与数据清理审计（含用户数据，绝不上传）
+healthmate-prod-backups/
+
 # 前端改色 / 动效的本地工作目录（渲染截图、可重放脚本、换肤前快照）。
 # 不是产品代码，留在本地即可；重放流程见 .agents/skills/healthmate-motion/SKILL.md
 .tmp_ui_ref/

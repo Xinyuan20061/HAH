@@ -74,22 +74,20 @@ def test_record_changed_scopes_invalidation_to_the_changed_domain(api, db):
 
 
 def test_record_changed_rejects_an_unknown_source(api, db):
-    result = record_changed(db, api.user_id, "diet")  # not the canonical name
-    assert result["unknown"] == ["diet"]
-    assert result["deleted_rows"] == 0, "未知来源不得静默失效任何特征"
+    with pytest.raises(ValueError, match="unknown health-state source"):
+        record_changed(db, api.user_id, "diet")  # not the canonical name
 
 
-def test_invalidation_failure_does_not_break_the_caller(api, db, monkeypatch):
-    """The record edit is already committed; state failure must stay contained."""
+def test_invalidation_failure_propagates_so_source_writer_can_rollback(api, db, monkeypatch):
+    """Transactional invalidation failure must reach the source-record writer."""
     import app.services.health_state as health_state
 
     def boom(*args, **kwargs):
         raise RuntimeError("simulated state failure")
 
     monkeypatch.setattr(health_state, "invalidate", boom)
-    result = record_changed(db, api.user_id, SOURCE_DIET)
-    assert result["error"] == "invalidation_failed"
-    assert result["deleted_rows"] == 0
+    with pytest.raises(RuntimeError, match="simulated state failure"):
+        record_changed(db, api.user_id, SOURCE_DIET)
 
 
 # --------------------------------------------------------------------------- #
@@ -220,7 +218,8 @@ def test_deleted_record_values_no_longer_appear_in_state(api, db):
 
 def test_missing_user_does_not_explode(db):
     result = record_changed(db, 999_999, SOURCE_DIET)
-    assert "deleted_rows" in result
+    assert result["deleted_rows"] == 0
+    assert result["missing_user"] is True
 
 
 def test_pending_proposal_refreshes_active_actions(api, db):

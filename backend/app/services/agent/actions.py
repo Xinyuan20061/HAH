@@ -76,6 +76,7 @@ ACTION_REGISTRY = {
         ActionSpec("policy.episode.start", "开始个人策略验证", "按已确认协议开始一个可撤销的个人观察周期。", "low", True, ("user",)),
         ActionSpec("policy.episode.finish", "复查个人策略周期", "结束周期并按证据门控生成可撤销裁决。", "low", True, ("user",)),
         ActionSpec("policy.episode.stop", "停止个人策略周期", "停止当前周期，不删除已经存在的健康记录。", "low", True, ("user",)),
+        ActionSpec("policy.episode.rereview", "重新复查已修复周期", "保留既有复查版本，并按本人确认的新证据生成一个新版本。", "low", True, ("user",)),
         ActionSpec("policy.memory.reset", "清除个人策略记忆", "按用户指定范围清除策略后验的影响。", "medium", True, ("user",)),
         ActionSpec(
             "privacy.export",

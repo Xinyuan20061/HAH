@@ -1,0 +1,531 @@
+{
+  "report_schema_version": "evidence-acquisition-report-v2",
+  "git_commit": "81c12b6fe32b397d8e1fd6d040dbcb99ea4ae475",
+  "seed": 20261005,
+  "dataset_hash": "dc7123eff615fd469449645e0cb4920996b590cf10894dccef100379bd7584ad",
+  "config_hash": "4dbffa1aed23076a924984ed53a8776d94c5d01650f3fb30aafb4aa6562fa957",
+  "response_model_id": "declared-mechanism-response-v2",
+  "calibration_state": "prior_only",
+  "sample_count": 0,
+  "evidence_level": "synthetic_replay",
+  "primary_strategy": "two_step_decision_value",
+  "pre_registered": {
+    "arms": [
+      "two_step_decision_value",
+      "one_step_decision_value",
+      "random_same_budget",
+      "entropy_first",
+      "current_gate",
+      "fixed_order",
+      "small_state_exact_reference"
+    ],
+    "direction": "two_step primary cost <= one_step at non-decreasing coverage",
+    "safety_gate": "0 wrong determinations and 0 stale certificate uses in both_resolved cases",
+    "sharing_rule": "per-user 70/30 split; tuning and final test share no user"
+  },
+  "strategies": {
+    "two_step_decision_value": {
+      "episodes": 360,
+      "users": 40,
+      "both_resolved": 252,
+      "both_correct": 252,
+      "coverage_rate": 0.7,
+      "accuracy_when_determined": 1.0,
+      "exec_determined": 274,
+      "exec_correct": 274,
+      "burden_determined": 330,
+      "burden_correct": 330,
+      "wrong_determined": 0,
+      "deferred": 108,
+      "issued_questions": 664,
+      "answered_questions": 482,
+      "total_time_ms": 2474290,
+      "per_episode_time": {
+        "p50": 7390.0,
+        "p95": 15967.7
+      },
+      "repair_questions": 40,
+      "certificate_invalidations": 75,
+      "stale_certificate_uses": 0,
+      "duplicate_attempts": 0,
+      "primary_cost_questions": 2.634920634920635,
+      "primary_cost_time_ms": 9818.611111111111
+    },
+    "one_step_decision_value": {
+      "episodes": 360,
+      "users": 40,
+      "both_resolved": 176,
+      "both_correct": 176,
+      "coverage_rate": 0.4888888888888889,
+      "accuracy_when_determined": 1.0,
+      "exec_determined": 274,
+      "exec_correct": 274,
+      "burden_determined": 244,
+      "burden_correct": 244,
+      "wrong_determined": 0,
+      "deferred": 184,
+      "issued_questions": 416,
+      "answered_questions": 286,
+      "total_time_ms": 1555518,
+      "per_episode_time": {
+        "p50": 3367.0,
+        "p95": 13395.7
+      },
+      "repair_questions": 32,
+      "certificate_invalidations": 62,
+      "stale_certificate_uses": 0,
+      "duplicate_attempts": 0,
+      "primary_cost_questions": 2.3636363636363638,
+      "primary_cost_time_ms": 8838.170454545454
+    },
+    "random_same_budget": {
+      "episodes": 360,
+      "users": 40,
+      "both_resolved": 253,
+      "both_correct": 253,
+      "coverage_rate": 0.7027777777777777,
+      "accuracy_when_determined": 1.0,
+      "exec_determined": 273,
+      "exec_correct": 273,
+      "burden_determined": 330,
+      "burden_correct": 330,
+      "wrong_determined": 0,
+      "deferred": 107,
+      "issued_questions": 743,
+      "answered_questions": 519,
+      "total_time_ms": 2789473,
+      "per_episode_time": {
+        "p50": 8290.0,
+        "p95": 16000.0
+      },
+      "repair_questions": 39,
+      "certificate_invalidations": 74,
+      "stale_certificate_uses": 0,
+      "duplicate_attempts": 0,
+      "primary_cost_questions": 2.9367588932806323,
+      "primary_cost_time_ms": 11025.584980237154
+    },
+    "entropy_first": {
+      "episodes": 360,
+      "users": 40,
+      "both_resolved": 178,
+      "both_correct": 178,
+      "coverage_rate": 0.49444444444444446,
+      "accuracy_when_determined": 1.0,
+      "exec_determined": 276,
+      "exec_correct": 276,
+      "burden_determined": 244,
+      "burden_correct": 244,
+      "wrong_determined": 0,
+      "deferred": 182,
+      "issued_questions": 478,
+      "answered_questions": 306,
+      "total_time_ms": 1800053,
+      "per_episode_time": {
+        "p50": 3998.0,
+        "p95": 14813.5
+      },
+      "repair_questions": 32,
+      "certificate_invalidations": 62,
+      "stale_certificate_uses": 0,
+      "duplicate_attempts": 0,
+      "primary_cost_questions": 2.6853932584269664,
+      "primary_cost_time_ms": 10112.657303370786
+    },
+    "current_gate": {
+      "episodes": 360,
+      "users": 40,
+      "both_resolved": 178,
+      "both_correct": 178,
+      "coverage_rate": 0.49444444444444446,
+      "accuracy_when_determined": 1.0,
+      "exec_determined": 279,
+      "exec_correct": 279,
+      "burden_determined": 244,
+      "burden_correct": 244,
+      "wrong_determined": 0,
+      "deferred": 182,
+      "issued_questions": 558,
+      "answered_questions": 362,
+      "total_time_ms": 2086963,
+      "per_episode_time": {
+        "p50": 4976.5,
+        "p95": 14813.5
+      },
+      "repair_questions": 32,
+      "certificate_invalidations": 62,
+      "stale_certificate_uses": 0,
+      "duplicate_attempts": 0,
+      "primary_cost_questions": 3.134831460674157,
+      "primary_cost_time_ms": 11724.511235955057
+    },
+    "fixed_order": {
+      "episodes": 360,
+      "users": 40,
+      "both_resolved": 246,
+      "both_correct": 246,
+      "coverage_rate": 0.6833333333333333,
+      "accuracy_when_determined": 1.0,
+      "exec_determined": 262,
+      "exec_correct": 262,
+      "burden_determined": 340,
+      "burden_correct": 340,
+      "wrong_determined": 0,
+      "deferred": 114,
+      "issued_questions": 740,
+      "answered_questions": 520,
+      "total_time_ms": 2756850,
+      "per_episode_time": {
+        "p50": 8290.0,
+        "p95": 16000.0
+      },
+      "repair_questions": 40,
+      "certificate_invalidations": 75,
+      "stale_certificate_uses": 0,
+      "duplicate_attempts": 0,
+      "primary_cost_questions": 3.008130081300813,
+      "primary_cost_time_ms": 11206.707317073171
+    },
+    "small_state_exact_reference": {
+      "episodes": 360,
+      "users": 40,
+      "both_resolved": 253,
+      "both_correct": 253,
+      "coverage_rate": 0.7027777777777777,
+      "accuracy_when_determined": 1.0,
+      "exec_determined": 275,
+      "exec_correct": 275,
+      "burden_determined": 329,
+      "burden_correct": 329,
+      "wrong_determined": 0,
+      "deferred": 107,
+      "issued_questions": 670,
+      "answered_questions": 484,
+      "total_time_ms": 2496459,
+      "per_episode_time": {
+        "p50": 7457.0,
+        "p95": 15534.900000000003
+      },
+      "repair_questions": 40,
+      "certificate_invalidations": 75,
+      "stale_certificate_uses": 0,
+      "duplicate_attempts": 0,
+      "primary_cost_questions": 2.6482213438735176,
+      "primary_cost_time_ms": 9867.426877470356
+    }
+  },
+  "test_set": {
+    "two_step_decision_value": {
+      "episodes": 108,
+      "users": 12,
+      "both_resolved": 76,
+      "both_correct": 76,
+      "coverage_rate": 0.7037037037037037,
+      "accuracy_when_determined": 1.0,
+      "exec_determined": 84,
+      "exec_correct": 84,
+      "burden_determined": 97,
+      "burden_correct": 97,
+      "wrong_determined": 0,
+      "deferred": 32,
+      "issued_questions": 197,
+      "answered_questions": 144,
+      "total_time_ms": 735442,
+      "per_episode_time": {
+        "p50": 6985.5,
+        "p95": 15667.499999999993
+      },
+      "repair_questions": 19,
+      "certificate_invalidations": 32,
+      "stale_certificate_uses": 0,
+      "duplicate_attempts": 0,
+      "primary_cost_questions": 2.5921052631578947,
+      "primary_cost_time_ms": 9676.868421052632
+    },
+    "one_step_decision_value": {
+      "episodes": 108,
+      "users": 12,
+      "both_resolved": 52,
+      "both_correct": 52,
+      "coverage_rate": 0.48148148148148145,
+      "accuracy_when_determined": 1.0,
+      "exec_determined": 83,
+      "exec_correct": 83,
+      "burden_determined": 71,
+      "burden_correct": 71,
+      "wrong_determined": 0,
+      "deferred": 56,
+      "issued_questions": 121,
+      "answered_questions": 84,
+      "total_time_ms": 452954,
+      "per_episode_time": {
+        "p50": 3089.0,
+        "p95": 14145.999999999987
+      },
+      "repair_questions": 15,
+      "certificate_invalidations": 25,
+      "stale_certificate_uses": 0,
+      "duplicate_attempts": 0,
+      "primary_cost_questions": 2.326923076923077,
+      "primary_cost_time_ms": 8710.653846153846
+    },
+    "random_same_budget": {
+      "episodes": 108,
+      "users": 12,
+      "both_resolved": 77,
+      "both_correct": 77,
+      "coverage_rate": 0.7129629629629629,
+      "accuracy_when_determined": 1.0,
+      "exec_determined": 84,
+      "exec_correct": 84,
+      "burden_determined": 99,
+      "burden_correct": 99,
+      "wrong_determined": 0,
+      "deferred": 31,
+      "issued_questions": 223,
+      "answered_questions": 158,
+      "total_time_ms": 830205,
+      "per_episode_time": {
+        "p50": 8202.0,
+        "p95": 15871.8
+      },
+      "repair_questions": 19,
+      "certificate_invalidations": 32,
+      "stale_certificate_uses": 0,
+      "duplicate_attempts": 0,
+      "primary_cost_questions": 2.896103896103896,
+      "primary_cost_time_ms": 10781.883116883117
+    },
+    "entropy_first": {
+      "episodes": 108,
+      "users": 12,
+      "both_resolved": 53,
+      "both_correct": 53,
+      "coverage_rate": 0.49074074074074076,
+      "accuracy_when_determined": 1.0,
+      "exec_determined": 84,
+      "exec_correct": 84,
+      "burden_determined": 71,
+      "burden_correct": 71,
+      "wrong_determined": 0,
+      "deferred": 55,
+      "issued_questions": 134,
+      "answered_questions": 88,
+      "total_time_ms": 504182,
+      "per_episode_time": {
+        "p50": 3542.0,
+        "p95": 14831.5
+      },
+      "repair_questions": 15,
+      "certificate_invalidations": 25,
+      "stale_certificate_uses": 0,
+      "duplicate_attempts": 0,
+      "primary_cost_questions": 2.5283018867924527,
+      "primary_cost_time_ms": 9512.867924528302
+    },
+    "current_gate": {
+      "episodes": 108,
+      "users": 12,
+      "both_resolved": 53,
+      "both_correct": 53,
+      "coverage_rate": 0.49074074074074076,
+      "accuracy_when_determined": 1.0,
+      "exec_determined": 85,
+      "exec_correct": 85,
+      "burden_determined": 71,
+      "burden_correct": 71,
+      "wrong_determined": 0,
+      "deferred": 55,
+      "issued_questions": 165,
+      "answered_questions": 106,
+      "total_time_ms": 616303,
+      "per_episode_time": {
+        "p50": 4880.5,
+        "p95": 14831.5
+      },
+      "repair_questions": 15,
+      "certificate_invalidations": 25,
+      "stale_certificate_uses": 0,
+      "duplicate_attempts": 0,
+      "primary_cost_questions": 3.1132075471698113,
+      "primary_cost_time_ms": 11628.358490566037
+    },
+    "fixed_order": {
+      "episodes": 108,
+      "users": 12,
+      "both_resolved": 75,
+      "both_correct": 75,
+      "coverage_rate": 0.6944444444444444,
+      "accuracy_when_determined": 1.0,
+      "exec_determined": 82,
+      "exec_correct": 82,
+      "burden_determined": 100,
+      "burden_correct": 100,
+      "wrong_determined": 0,
+      "deferred": 33,
+      "issued_questions": 217,
+      "answered_questions": 157,
+      "total_time_ms": 804927,
+      "per_episode_time": {
+        "p50": 8202.0,
+        "p95": 15851.849999999999
+      },
+      "repair_questions": 19,
+      "certificate_invalidations": 32,
+      "stale_certificate_uses": 0,
+      "duplicate_attempts": 0,
+      "primary_cost_questions": 2.8933333333333335,
+      "primary_cost_time_ms": 10732.36
+    },
+    "small_state_exact_reference": {
+      "episodes": 108,
+      "users": 12,
+      "both_resolved": 76,
+      "both_correct": 76,
+      "coverage_rate": 0.7037037037037037,
+      "accuracy_when_determined": 1.0,
+      "exec_determined": 84,
+      "exec_correct": 84,
+      "burden_determined": 97,
+      "burden_correct": 97,
+      "wrong_determined": 0,
+      "deferred": 32,
+      "issued_questions": 199,
+      "answered_questions": 144,
+      "total_time_ms": 741299,
+      "per_episode_time": {
+        "p50": 6985.5,
+        "p95": 15667.499999999993
+      },
+      "repair_questions": 19,
+      "certificate_invalidations": 32,
+      "stale_certificate_uses": 0,
+      "duplicate_attempts": 0,
+      "primary_cost_questions": 2.6184210526315788,
+      "primary_cost_time_ms": 9753.934210526315
+    }
+  },
+  "bootstrap_ci_95": {
+    "two_step_decision_value": {
+      "coverage_rate": {
+        "lower": 0.55,
+        "upper": 0.825
+      },
+      "primary_cost_questions": {
+        "lower": 1.8620689655172413,
+        "upper": 3.8181818181818183
+      },
+      "primary_cost_time_ms": {
+        "lower": 6925.676470588235,
+        "upper": 14384.40909090909
+      }
+    },
+    "one_step_decision_value": {
+      "coverage_rate": {
+        "lower": 0.325,
+        "upper": 0.65
+      },
+      "primary_cost_questions": {
+        "lower": 1.4761904761904763,
+        "upper": 4.0625
+      },
+      "primary_cost_time_ms": {
+        "lower": 5471.782608695652,
+        "upper": 14883.125
+      }
+    },
+    "random_same_budget": {
+      "coverage_rate": {
+        "lower": 0.55,
+        "upper": 0.825
+      },
+      "primary_cost_questions": {
+        "lower": 2.111111111111111,
+        "upper": 4.363636363636363
+      },
+      "primary_cost_time_ms": {
+        "lower": 7880.545454545455,
+        "upper": 16494.291666666668
+      }
+    },
+    "entropy_first": {
+      "coverage_rate": {
+        "lower": 0.325,
+        "upper": 0.65
+      },
+      "primary_cost_questions": {
+        "lower": 1.6956521739130435,
+        "upper": 4.615384615384615
+      },
+      "primary_cost_time_ms": {
+        "lower": 6372.590909090909,
+        "upper": 17285.8
+      }
+    },
+    "current_gate": {
+      "coverage_rate": {
+        "lower": 0.325,
+        "upper": 0.65
+      },
+      "primary_cost_questions": {
+        "lower": 1.9642857142857142,
+        "upper": 5.333333333333333
+      },
+      "primary_cost_time_ms": {
+        "lower": 7506.875,
+        "upper": 19965.0
+      }
+    },
+    "fixed_order": {
+      "coverage_rate": {
+        "lower": 0.525,
+        "upper": 0.825
+      },
+      "primary_cost_questions": {
+        "lower": 2.129032258064516,
+        "upper": 4.55
+      },
+      "primary_cost_time_ms": {
+        "lower": 7833.375,
+        "upper": 17221.238095238095
+      }
+    },
+    "small_state_exact_reference": {
+      "coverage_rate": {
+        "lower": 0.55,
+        "upper": 0.825
+      },
+      "primary_cost_questions": {
+        "lower": 1.875,
+        "upper": 3.8181818181818183
+      },
+      "primary_cost_time_ms": {
+        "lower": 7015.25,
+        "upper": 14277.42857142857
+      }
+    }
+  },
+  "failure_cases_count": 984,
+  "case_type_counts": {
+    "refusal_unknown": 58,
+    "paired_burden": 54,
+    "knowledge_withdrawal": 27,
+    "certificate_invalidation_repair": 18,
+    "mnar": 41,
+    "source_revision": 44,
+    "window_boundary": 29,
+    "execution_gap": 70,
+    "duplicate_cross_day": 19
+  },
+  "split_counts": {
+    "train": 252,
+    "test": 108
+  },
+  "limitations": [
+    "Synthetic only; no user data and no real-device evaluation.",
+    "Response probabilities are declared per case type (prior_only); not learned from users.",
+    "Latency is simulated; P50/P95 are simulated user-reported time proxies, not measured user time.",
+    "This replay does not establish medical effectiveness or novelty over published methods.",
+    "Cost per correct determined endpoint counts questions and simulated time separately."
+  ]
+}

@@ -2,15 +2,16 @@ const api=require('../../utils/request'); const {ensureLogin}=require('../../uti
 // 松手速度阈值（步/秒）：超过即视为「甩动」，触发惯性补格
 const SNAP_VELOCITY = 6
 Page({
-  data:{loading:true,saving:false,dynamicLoading:false,explainLoading:false,dynamic:null,dynamicExplain:'',goals:{water_target:1800,sleep_target:8,exercise_target:30,steps_target:8000,protein_target:90,calorie_target:2000,weekly_checkin_target:5},summary:{},cards:[],snapKey:'',checkinSnap:false},
+  data:{loading:true,saving:false,dynamicLoading:false,explainLoading:false,error:'',dynamic:null,dynamicExplain:'',goals:{water_target:1800,sleep_target:8,exercise_target:30,steps_target:8000,protein_target:90,calorie_target:2000,weekly_checkin_target:5},summary:{},cards:[],snapKey:'',checkinSnap:false},
   onShow(){this.load()},
   pct(a,b){return Math.min(100,Math.round((Number(a)||0)/(Number(b)||1)*100))},
   async load(){
-    this.setData({loading:true})
+    this.setData({loading:true,error:''})
     try{await ensureLogin(); const [g,s]=await Promise.all([api.get('/health/goals'),api.get('/health/today')]);this.setData({goals:g,summary:s}); this.buildCards()}
-    catch(e){wx.showToast({title:e.message||'目标加载失败',icon:'none'})}
+    catch(e){this.setData({error:e.message||'目标加载失败'})}
     finally{this.setData({loading:false})}
   },
+  retry(){this.load()},
   buildCards(){const g=this.data.goals,s=this.data.summary;this.setData({cards:[
     {k:'water_target',name:'每日饮水',value:g.water_target,unit:'ml',current:s.water_ml||0,pct:this.pct(s.water_ml,g.water_target),min:800,max:4000,step:100,icon:'/assets/icons/water.png'},
     {k:'sleep_target',name:'睡眠时长',value:g.sleep_target,unit:'h',current:s.sleep_hours||0,pct:this.pct(s.sleep_hours,g.sleep_target),min:5,max:10,step:.5,icon:'/assets/icons/sleep.png'},

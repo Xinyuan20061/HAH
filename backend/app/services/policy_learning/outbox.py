@@ -161,8 +161,14 @@ def invalidate_source(
         ref_query = ref_query.where(PolicyObservationRef.source_revision < source_revision)
     refs = db.scalars(ref_query).all()
     affected = {row.episode_id for row in refs}
-    if not refs:
-        return {"affected_episode_ids": [], "source_generation": None, "deleted": deleted}
+    from app.services.policy_learning.acquisition.service import invalidate_source as invalidate_acquisition_source
+    acquisition_certificates = invalidate_acquisition_source(
+        db, user_id, source_type, source_id,
+        source_revision=source_revision if not deleted else None,
+    )
+    if not refs and not acquisition_certificates:
+        return {"affected_episode_ids": [], "source_generation": None,
+                "acquisition_certificates_invalidated": 0, "deleted": deleted}
     for ref in refs:
         ref.valid = False
     generation = db.scalar(select(PolicyDomainGeneration).where(PolicyDomainGeneration.user_id == user_id, PolicyDomainGeneration.domain == source_type))
@@ -198,4 +204,5 @@ def invalidate_source(
         status="pending",
     ))
     db.flush()
-    return {"affected_episode_ids": sorted(affected), "source_generation": generation.source_generation, "deleted": deleted}
+    return {"affected_episode_ids": sorted(affected), "source_generation": generation.source_generation,
+            "acquisition_certificates_invalidated": acquisition_certificates, "deleted": deleted}

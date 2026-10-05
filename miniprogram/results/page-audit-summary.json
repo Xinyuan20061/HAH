@@ -1,0 +1,299 @@
+{
+  "totalPages": 28,
+  "complete": 28,
+  "orphanRoutes": [],
+  "untestedPages": [
+    "pages/insights/index",
+    "pages/exercise-detail/index",
+    "pages/profile/edit",
+    "pages/records/exercise",
+    "pages/policy/overview/index",
+    "pages/policy/protocol/index",
+    "pages/policy/review/index",
+    "pages/policy/history/index"
+  ],
+  "writePages": [
+    {
+      "route": "pages/insights/index",
+      "writes": [
+        {
+          "method": "post",
+          "path": "/agent/insights/${code}/feedback"
+        },
+        {
+          "method": "post",
+          "path": "/agent/experiments"
+        },
+        {
+          "method": "post",
+          "path": "/agent/experiments/${current.id}/finish"
+        },
+        {
+          "method": "post",
+          "path": "/agent/experiments/${current.id}/cancel"
+        }
+      ]
+    },
+    {
+      "route": "pages/scan/index",
+      "writes": [
+        {
+          "method": "post",
+          "path": "/vision/food-jobs"
+        },
+        {
+          "method": "put",
+          "path": "/vision/food-analysis/${this.data.result.analysis_id}/correct"
+        }
+      ]
+    },
+    {
+      "route": "pages/media/index",
+      "writes": [
+        {
+          "method": "put",
+          "path": "/fitness/training-intent"
+        },
+        {
+          "method": "post",
+          "path": "/media/motion-analyses"
+        },
+        {
+          "method": "post",
+          "path": "/media/motion-analyses/${id}/confirm-label"
+        },
+        {
+          "method": "post",
+          "path": "/media/motion-analyses/${parentId}/reanalyze"
+        },
+        {
+          "method": "post",
+          "path": "/media/motion-analyses/${id}/feedback"
+        }
+      ]
+    },
+    {
+      "route": "pages/chat/index",
+      "writes": [
+        {
+          "method": "post",
+          "path": "/agent/runs/${runId}/apply-plan"
+        },
+        {
+          "method": "post",
+          "path": "/agent/actions/${proposalId}/confirm"
+        },
+        {
+          "method": "post",
+          "path": "/agent/actions/${proposalId}/reject"
+        }
+      ]
+    },
+    {
+      "route": "pages/plan/index",
+      "writes": [
+        {
+          "method": "post",
+          "path": "/agent/runs/${this.data.previewRunId}/apply-plan"
+        },
+        {
+          "method": "post",
+          "path": "/health/plan/today/custom"
+        },
+        {
+          "method": "put",
+          "path": "/health/plan/today/${key}"
+        },
+        {
+          "method": "put",
+          "path": "/health/plan/today/${key}"
+        },
+        {
+          "method": "del",
+          "path": "/health/plan/today/custom/${key}"
+        },
+        {
+          "method": "put",
+          "path": "/agent/plans/items/${id}"
+        }
+      ]
+    },
+    {
+      "route": "pages/goals/index",
+      "writes": [
+        {
+          "method": "put",
+          "path": "/health/goals"
+        },
+        {
+          "method": "post",
+          "path": "/health/goals/dynamic/${id}/apply"
+        }
+      ]
+    },
+    {
+      "route": "pages/profile/index",
+      "writes": [
+        {
+          "method": "put",
+          "path": "/users/me"
+        }
+      ]
+    },
+    {
+      "route": "pages/profile/edit",
+      "writes": [
+        {
+          "method": "put",
+          "path": "/users/me/health-profile"
+        }
+      ]
+    },
+    {
+      "route": "pages/records/diet",
+      "writes": [
+        {
+          "method": "patch",
+          "path": "/diet/records/${editor.id}"
+        },
+        {
+          "method": "del",
+          "path": "/diet/records/${id}"
+        }
+      ]
+    },
+    {
+      "route": "pages/records/exercise",
+      "writes": [
+        {
+          "method": "post",
+          "path": "/exercise/records"
+        },
+        {
+          "method": "del",
+          "path": "/exercise/records/${id}"
+        }
+      ]
+    },
+    {
+      "route": "pages/policy/protocol/index",
+      "writes": [
+        {
+          "method": "post",
+          "path": "/policy/compile"
+        },
+        {
+          "method": "post",
+          "path": "/policy/units/${this.data.compiled.strategy_unit_id}/proposal"
+        }
+      ]
+    },
+    {
+      "route": "pages/policy/episode/index",
+      "writes": [
+        {
+          "method": "post",
+          "path": "/policy/episodes/${this.data.episode.episode_id}/reports"
+        },
+        {
+          "method": "post",
+          "path": "/policy/episodes/${episode.episode_id}/observations"
+        },
+        {
+          "method": "post",
+          "path": "/policy/episodes/${episode.episode_id}/stop-proposal"
+        }
+      ]
+    },
+    {
+      "route": "pages/policy/review/index",
+      "writes": [
+        {
+          "method": "post",
+          "path": "/policy/episodes/${this.episodeId}/review-preview"
+        },
+        {
+          "method": "post",
+          "path": "/policy/episodes/${episode.episode_id}/finish-proposal"
+        }
+      ]
+    },
+    {
+      "route": "pages/policy/history/index",
+      "writes": [
+        {
+          "method": "post",
+          "path": "/policy/memory/reset-proposal"
+        }
+      ]
+    },
+    {
+      "route": "pages/checkin/index",
+      "writes": [
+        {
+          "method": "put",
+          "path": "/health/checkin/today"
+        }
+      ]
+    },
+    {
+      "route": "pages/settings/capabilities/index",
+      "writes": [
+        {
+          "method": "post",
+          "path": "/harness/installations/${plugin.installation_id}/pause"
+        },
+        {
+          "method": "post",
+          "path": "/harness/installations"
+        },
+        {
+          "method": "patch",
+          "path": "/harness/installations/${plugin.installation_id}"
+        },
+        {
+          "method": "post",
+          "path": "/harness/installations/${plugin.installation_id}/resume"
+        },
+        {
+          "method": "post",
+          "path": "/harness/installations/${plugin.installation_id}/preview"
+        },
+        {
+          "method": "post",
+          "path": "/harness/installations/${plugin.installation_id}/pause"
+        },
+        {
+          "method": "del",
+          "path": "/harness/installations/${plugin.installation_id}?config_version=${plugin.config_version}"
+        }
+      ]
+    },
+    {
+      "route": "pages/settings/ai/index",
+      "writes": [
+        {
+          "method": "put",
+          "path": "/users/me/ai-config"
+        },
+        {
+          "method": "post",
+          "path": "/users/me/ai-config/test"
+        },
+        {
+          "method": "del",
+          "path": "/users/me/ai-config"
+        }
+      ]
+    },
+    {
+      "route": "pages/settings/privacy/index",
+      "writes": [
+        {
+          "method": "del",
+          "path": "/privacy/account"
+        }
+      ]
+    }
+  ]
+}

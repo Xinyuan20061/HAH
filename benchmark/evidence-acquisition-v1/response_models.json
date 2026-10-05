@@ -1,0 +1,13 @@
+{
+  "schema_version": "evidence-response-model-v1",
+  "model_id": "declared-common-response-v1",
+  "answered_probability": 0.75,
+  "unknown_probability": 0.10,
+  "declined_probability": 0.05,
+  "no_response_probability": 0.10,
+  "completion_probability_given_answer": 0.58,
+  "hidden_noncompletion_answer_adjustment": 0.30,
+  "latency_ms": {"minimum": 2500, "maximum": 5000},
+  "repair_answered_probability": 0.70,
+  "notes": "The same pre-generated response/status and latency for each case/slot are shared by all strategies. This declared response mechanism is synthetic, not learned from HealthMate users."
+}

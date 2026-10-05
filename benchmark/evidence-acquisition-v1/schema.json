@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "healthmate-evidence-acquisition-case-v1",
+  "type": "object",
+  "required": ["case_id", "mechanism", "truth", "initial_visible", "due_slots", "response_uniforms", "repair_uniforms", "latency_ms", "revision_event", "revision_slot"],
+  "properties": {
+    "case_id": {"type": "string"},
+    "mechanism": {"enum": ["MCAR", "MAR", "MNAR"]},
+    "truth": {"type": "array", "minItems": 7, "maxItems": 7, "items": {"type": "boolean"}},
+    "initial_visible": {"type": "array", "minItems": 7, "maxItems": 7, "items": {"type": ["boolean", "null"]}},
+    "due_slots": {"type": "array", "items": {"type": "integer", "minimum": 0, "maximum": 6}},
+    "response_uniforms": {"type": "array", "minItems": 7, "maxItems": 7, "items": {"type": "number", "minimum": 0, "maximum": 1}},
+    "repair_uniforms": {"type": "array", "minItems": 7, "maxItems": 7, "items": {"type": "number", "minimum": 0, "maximum": 1}},
+    "latency_ms": {"type": "array", "minItems": 7, "maxItems": 7, "items": {"type": "integer", "minimum": 1}},
+    "revision_event": {"enum": ["none", "corrected", "deleted"]},
+    "revision_slot": {"type": "integer", "minimum": 0, "maximum": 6}
+  }
+}

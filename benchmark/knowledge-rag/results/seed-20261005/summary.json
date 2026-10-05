@@ -1,0 +1,19 @@
+{
+  "query_hash": "c77f61e673ce2fb70378c08290b773670aff7a7cbcfc85fbfdd526d714537460",
+  "query_count": 61,
+  "onnx": {
+    "actual_backend": "onnx_bge",
+    "hit_rate_at_1_pct": 90.2,
+    "hit_rate_at_3_pct": 100.0,
+    "negative_rejection_rate_pct": 100.0,
+    "active_documents": 13
+  },
+  "hash_fallback": {
+    "actual_backend": "hash_fallback",
+    "hit_rate_at_1_pct": 82.35,
+    "hit_rate_at_3_pct": 98.04,
+    "negative_rejection_rate_pct": 100.0,
+    "active_documents": 13
+  },
+  "note": "检索分数不等于最终回答准确率；最终回答双人盲评在 P3 交付文档另记。"
+}

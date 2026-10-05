@@ -38,7 +38,7 @@ from app.services.health_state.invalidation import (
     SOURCE_PLAN,
     record_changed,
 )
-from app.services.timeline import add_event
+from app.services.timeline import add_event, add_state_event
 
 router = APIRouter(prefix="/health", tags=["health"])
 
@@ -97,7 +97,7 @@ def save_checkin(
         setattr(item, k, v)
     db.add(item)
     db.flush()
-    add_event(
+    add_state_event(
         db,
         user.id,
         "checkin",
@@ -539,7 +539,7 @@ def update_plan(
     item.done = body.done
     db.add(item)
     db.flush()
-    add_event(
+    add_state_event(
         db,
         user.id,
         "daily_plan_completed" if body.done else "daily_plan_reopened",

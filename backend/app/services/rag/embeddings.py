@@ -123,15 +123,31 @@ def _hash_fallback(text: str) -> list[float]:
     return [x / norm for x in vector]
 
 
+# Actual backend used by the last embed() call: "onnx_bge" or "hash_fallback".
+# Updated inside embed() so the reported backend always matches the code path
+# that actually produced the vector (spec B1: never claim ONNX-mode results
+# when hashing fallback ran).
+_EMBED_BACKEND = "hash_fallback"
+
+
 @lru_cache(maxsize=256)
 def embed(text: str) -> list[float]:
     """L2-normalised embedding; ONNX model first, hashing fallback second."""
+    global _EMBED_BACKEND
     if model_available():
         try:
-            return _run_onnx(text)
+            vector = _run_onnx(text)
+            _EMBED_BACKEND = "onnx_bge"
+            return vector
         except Exception:
-            return _hash_fallback(text)
+            pass
+    _EMBED_BACKEND = "hash_fallback"
     return _hash_fallback(text)
+
+
+def active_embedding_backend() -> str:
+    """Backend of the most recent embed() call; exact path taken, no guessing."""
+    return _EMBED_BACKEND
 
 
 def cosine(a: list[float], b: list[float]) -> float:

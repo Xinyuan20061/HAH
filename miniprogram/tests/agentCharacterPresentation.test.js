@@ -200,7 +200,7 @@ test('gym exposes a voice-free plan routing probe through the real agent decisio
   assert.match(script, /await this\.submitAgentMessage\(PLAN_ROUTE_TEST_PROMPT,\s*\{\s*channel: 'voice'/s)
   assert.match(script, /persistPlanHandoff\(result, presentation\.action\)/)
   assert.match(script, /queuePendingNavigation\(presentation\.autoNavigate \? presentation\.action : null\)/)
-  const testHandler = script.match(/async testPlanRouting\(\)\s*\{[\s\S]*?\n  \},\n\n  async speak/) || []
+  const testHandler = script.match(/async testPlanRouting\(\)\s*\{[\s\S]*?\r?\n  \},\r?\n\r?\n  async speak/) || []
   assert.ok(testHandler[0], '缺少计划路由测试处理器')
   assert.doesNotMatch(testHandler[0], /navigateAction\(/, '测试按钮不得绕过智能体决策直接跳页')
   assert.match(css, /\.route-test-button\s*\{[^}]*transition:opacity \.16s ease-out;/s)

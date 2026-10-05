@@ -85,7 +85,7 @@ def test_registry_aggregation_is_not_silently_median_for_fraction():
 
 def test_api_compile_start_report_and_review(api, migrated_engine):
     _enable_personal_policy(api)
-    compiled = api.post("/api/v1/policy/compile", json={"template_id": "session_duration", "parameters": {"variant": "session_15m", "time_budget": "tight"}})
+    compiled = api.post("/api/v1/policy/compile", json={"template_id": "session_duration", "parameters": {"variant": "session_15m", "time_budget": "tight"}}, headers={"Idempotency-Key": "policy-compile-start-review"})
     assert compiled.status_code == 200, compiled.text
     payload = compiled.json()
     proposal = api.post(f"/api/v1/policy/units/{payload['strategy_unit_id']}/proposal", json={})

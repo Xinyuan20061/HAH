@@ -17,6 +17,52 @@
       <view class="policy-note">执行记录与训练负担自评是不同类型的信息；主观负担不会伪装成设备或健康测量。</view>
     </view>
 
+    <view wx:if="{{episode.status === 'active'}}" class="policy-section">低负担、可撤回的按需核查</view>
+    <view wx:if="{{episode.status === 'active' && !acquisition}}" class="policy-card">
+      <view class="policy-card-title">只在缺失记录可能改变判断时询问</view>
+      <view class="policy-copy">开启后，系统每次最多提出一条已经到期且有判断价值的问题。你可以答复、不记得、暂不回答或随时暂停；未知和拒答不会被记成未完成。下面的预算可以调低，设为 0 表示不提出问题。</view>
+      <view class="policy-input-row"><text>每日问题上限</text><picker range="{{dailyBudgetOptions}}" value="{{dailyBudgetIndex}}" data-dimension="daily" bindchange="chooseAcquisitionBudget"><view>{{dailyBudgetOptions[dailyBudgetIndex]}}　⌄</view></picker></view>
+      <view class="policy-input-row"><text>本周期问题上限</text><picker range="{{episodeBudgetOptions}}" value="{{episodeBudgetIndex}}" data-dimension="episode" bindchange="chooseAcquisitionBudget"><view>{{episodeBudgetOptions[episodeBudgetIndex]}}　⌄</view></picker></view>
+      <view class="policy-input-row"><text>每日预计时间上限</text><picker range="{{timeBudgetOptions}}" value="{{timeBudgetIndex}}" data-dimension="time" bindchange="chooseAcquisitionBudget"><view>{{timeBudgetOptions[timeBudgetIndex]}}　⌄</view></picker></view>
+      <checkbox-group bindchange="toggleAcquisitionConsent">
+        <label class="policy-consent"><checkbox value="agree" checked="{{acquisitionConsent}}" />我同意本周期按上述预算进行主动核查</label>
+      </checkbox-group>
+      <button class="policy-button" loading="{{acquisitionBusy}}" disabled="{{acquisitionBusy || !acquisitionConsent}}" bindtap="startAcquisition">开启按需核查</button>
+    </view>
+    <view wx:if="{{acquisition}}" class="policy-card">
+      <view class="policy-list-head"><text class="policy-card-title">核查状态</text><text class="policy-pill">{{acquisition.session_status === 'paused' ? '已暂停' : acquisition.decision_state}}</text></view>
+      <view class="policy-copy">{{acquisition.decision.user_message}}</view>
+      <view class="policy-list-sub">执行判断与训练负担/结果判断相互独立；核查证书不会直接形成效果结论。</view>
+      <view wx:if="{{acquisition.certificate}}" class="policy-note">执行依据：{{acquisition.certificate.effective_status === 'current' ? '当前有效' : '已过时或需重新核验'}} · 保留未知 {{acquisition.certificate.proof.unknown_slots.length}} 条</view>
+      <view wx:if="{{acquisition.decision.question}}" class="policy-acquisition-question">
+        <view class="policy-card-title">{{acquisition.decision.question.prompt}}</view>
+        <view class="policy-copy">{{acquisition.decision.question.why}}</view>
+        <view wx:if="{{pendingAcquisitionAnswer}}" class="policy-note policy-warning">上次答复结果未确认。为避免重复或替换答复，请用保存的原内容安全重试。</view>
+        <button wx:if="{{pendingAcquisitionAnswer}}" class="policy-button" loading="{{acquisitionBusy}}" disabled="{{acquisitionBusy}}" bindtap="retryAcquisitionAnswer">安全重试上次答复</button>
+        <block wx:else>
+          <block wx:if="{{acquisition.decision.question.kind === 'execution_confirmation'}}">
+            <button class="policy-button secondary" data-response="answered" data-value="completed" loading="{{acquisitionBusy}}" disabled="{{acquisitionBusy}}" bindtap="answerAcquisition">确认：已完成</button>
+            <button class="policy-button secondary" data-response="answered" data-value="explicitly_not_completed" loading="{{acquisitionBusy}}" disabled="{{acquisitionBusy}}" bindtap="answerAcquisition">确认：未完成</button>
+          </block>
+          <block wx:elif="{{acquisition.decision.question.kind === 'burden_baseline' || acquisition.decision.question.kind === 'burden_followup'}}">
+            <view class="policy-note">必须是已经真实发生的观察。可选日期：{{acquisitionBurdenDateMin}} 至 {{acquisitionBurdenDateMax}}；不会根据执行情况推算评分。</view>
+            <view class="policy-input-row"><text>真实发生日期</text><picker mode="date" value="{{acquisitionBurdenDate}}" start="{{acquisitionBurdenDateMin}}" end="{{acquisitionBurdenDateMax}}" bindchange="chooseAcquisitionBurdenDate"><view>{{acquisitionBurdenDate || '请选择日期'}}　⌄</view></picker></view>
+            <view class="policy-input-row"><text>主观负担</text><input type="digit" value="{{acquisitionBurdenValue}}" placeholder="0–10" bindinput="inputAcquisitionBurden" /></view>
+            <button class="policy-button secondary" data-response="answered" loading="{{acquisitionBusy}}" disabled="{{acquisitionBusy}}" bindtap="answerAcquisition">确认本人自评</button>
+          </block>
+          <button class="policy-button quiet" data-response="unknown" loading="{{acquisitionBusy}}" disabled="{{acquisitionBusy}}" bindtap="answerAcquisition">不记得</button>
+          <button class="policy-button quiet" data-response="declined" loading="{{acquisitionBusy}}" disabled="{{acquisitionBusy}}" bindtap="answerAcquisition">暂不回答</button>
+          <button class="policy-button quiet" data-response="unavailable" loading="{{acquisitionBusy}}" disabled="{{acquisitionBusy}}" bindtap="answerAcquisition">没有可用记录</button>
+        </block>
+      </view>
+      <button wx:if="{{acquisition.session_status === 'active' && acquisition.decision.action !== 'ask' && acquisition.decision.action !== 'needs_repair'}}" class="policy-button" loading="{{acquisitionBusy}}" disabled="{{acquisitionBusy}}" bindtap="nextAcquisitionQuestion">{{acquisition.decision.action === 'sufficient' ? '继续查看独立结果证据' : '核查下一项'}}</button>
+      <button wx:if="{{acquisition.session_status === 'active'}}" class="policy-button quiet" loading="{{acquisitionBusy}}" disabled="{{acquisitionBusy}}" bindtap="setAcquisitionPaused" data-paused="true">暂停核查</button>
+      <button wx:if="{{acquisition.session_status === 'paused'}}" class="policy-button secondary" loading="{{acquisitionBusy}}" disabled="{{acquisitionBusy}}" bindtap="setAcquisitionPaused" data-paused="false">本人操作后恢复核查</button>
+      <button wx:if="{{acquisition.decision.action === 'needs_repair'}}" class="policy-button secondary" loading="{{acquisitionBusy}}" disabled="{{acquisitionBusy}}" bindtap="repairAcquisition">{{pendingAcquisitionRepair ? '安全重试上次修复' : '重新核验当前依据'}}</button>
+      <button wx:if="{{acquisition.decision.action === 'needs_repair'}}" class="policy-button secondary" bindtap="openReview">查看记录与复查状态</button>
+      <view wx:if="{{acquisitionError}}" class="policy-note policy-error">{{acquisitionError}}</view>
+    </view>
+
     <view class="policy-section">逐日记录执行情况</view>
     <view class="policy-card">
       <view wx:for="{{opportunities}}" wx:key="id" class="policy-list-item">

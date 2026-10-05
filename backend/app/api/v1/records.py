@@ -254,14 +254,10 @@ def patch_diet(
 
     submitted["version"] = record.version + 1
     submitted["updated_at"] = utc_now()
-    # Reflect the accepted change on the in-memory row so the timeline payload
-    # below describes the *new* state; the CAS guard is what protects the write.
-    for field, value in submitted.items():
-        if field not in {"version", "updated_at"}:
-            setattr(record, field, value)
-    record.version = submitted["version"]
     # Compare-and-set: a stale version affects 0 rows and never overwrites a
-    # change made in another page (spec §5.4).
+    # change made in another page (spec §5.4). Do not mutate the ORM instance
+    # before this Core UPDATE: autoflush would persist the new version first and
+    # make the CAS predicate fail against the version we just changed.
     result = db.execute(
         update(DietRecord)
         .where(
@@ -281,6 +277,8 @@ def patch_diet(
             "记录已在其他页面修改，请刷新后重试",
             details={"current_version": current.version if current else None},
         )
+
+    db.refresh(record)
 
     # Rewrite the existing timeline row; never append a second event.
     db.execute(

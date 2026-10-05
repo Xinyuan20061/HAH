@@ -352,6 +352,18 @@ def _policy_episode_stop(db: Session, *, user_id: int, arguments: dict[str, Any]
         raise ApiException(status, exc.code, exc.message) from exc
 
 
+def _policy_episode_rereview(db: Session, *, user_id: int, arguments: dict[str, Any]) -> dict:
+    from app.services.policy_learning.acquisition.service import AcquisitionError, execute_rereview
+    try:
+        return execute_rereview(
+            db, user_id=user_id, episode_id=str(arguments["episode_id"]),
+            episode_version=int(arguments["episode_version"]),
+            expected_adjudication_revision=int(arguments["expected_adjudication_revision"]),
+            expected_evidence_hash=str(arguments["expected_evidence_hash"]))
+    except AcquisitionError as exc:
+        raise ApiException(exc.status, exc.code, exc.message) from None
+
+
 def _policy_memory_reset(db: Session, *, user_id: int, arguments: dict[str, Any]) -> dict:
     from app.services.policy_learning.repository import current_control, learning_epoch
     scope = str(arguments.get("strategy_id") or "*") if arguments.get("scope", "strategy") == "strategy" else "*"
@@ -396,6 +408,7 @@ EXECUTORS: dict[str, Executor] = {
     "policy.episode.start": _policy_episode_start,
     "policy.episode.finish": _policy_episode_finish,
     "policy.episode.stop": _policy_episode_stop,
+    "policy.episode.rereview": _policy_episode_rereview,
     "policy.memory.reset": _policy_memory_reset,
     "privacy.export": _privacy_export,
     "privacy.account.delete": _privacy_account_delete,

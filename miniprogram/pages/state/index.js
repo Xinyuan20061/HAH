@@ -276,21 +276,55 @@ Page({
     const statusLabels = {
       active: '进行中', awaiting_review: '等待复查', reviewed: '已复查', stopped: '已停止'
     }
+    const episodeView = episode ? {
+      status: statusLabels[episode.status] || '状态待更新',
+      statusKey: episode.status || '',
+      version: episode.version,
+      completed: (episode.reports || []).filter(item => item.execution === 'completed').length,
+      total: (episode.opportunities || []).length
+    } : null
+    const policyKind = decision.kind || 'collect_evidence_or_wait'
     this.setData({
       policyDecision: {
         selected: selectedLabel,
-        kind: decision.kind || 'collect_evidence_or_wait',
+        kind: policyKind,
         personalised: !!decision.personalised,
         explanation: decision.explanation || '排序只使用已经通过门控的个人证据。'
       },
-      policyEpisode: episode ? {
-        id: episode.episode_id,
-        status: statusLabels[episode.status] || '状态待更新',
-        version: episode.version,
-        completed: (episode.reports || []).filter(item => item.execution === 'completed').length,
-        total: (episode.opportunities || []).length
-      } : null
+      policyEpisode: episodeView,
+      // Spec §6: map "today's next step" into three user-readable categories;
+      // the main CTA goes straight to the relevant page, never to an internal ID.
+      nextStep: this.nextStep(policyKind, episodeView)
     })
+  },
+
+  // 可行动 / 等待暂缓 / 需修复 —— 三类聚合，主 CTA 直达页面。
+  nextStep(policyKind, episodeView) {
+    const repair = policyKind === 'needs_repair' || policyKind === 'blocked'
+      || (episodeView && episodeView.statusKey === 'awaiting_review' && episodeView.completed < episodeView.total)
+    if (repair) {
+      return { category: 'needs_repair', categoryLabel: '需修复', label: '有记录需要修复或复查', route: '/pages/policy/episode/index' }
+    }
+    if (this.data.nextAction) {
+      return { category: 'actionable', categoryLabel: '可行动', label: '有一条建议等待你确认', route: '/pages/chat/index' }
+    }
+    if (episodeView && episodeView.statusKey === 'active' && episodeView.completed < episodeView.total) {
+      return { category: 'actionable', categoryLabel: '可行动', label: `本周期已记录 ${episodeView.completed}/${episodeView.total} 条`, route: '/pages/policy/episode/index' }
+    }
+    if (episodeView && (episodeView.statusKey === 'active' || episodeView.statusKey === 'awaiting_review')) {
+      return { category: 'waiting', categoryLabel: '等待暂缓', label: '本周期在等待观察或复查窗口', route: '/pages/policy/episode/index' }
+    }
+    return { category: 'waiting', categoryLabel: '等待暂缓', label: '暂无进行中的行动协议', route: '/pages/policy/overview/index' }
+  },
+
+  goNextStep() {
+    const step = this.data.nextStep
+    if (!step || !step.route) return
+    if (step.route === '/pages/chat/index') {
+      wx.switchTab({ url: step.route, fail: () => wx.navigateTo({ url: step.route }) })
+      return
+    }
+    wx.navigateTo({ url: step.route })
   },
 
   reason(res, fallback) {

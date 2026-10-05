@@ -142,6 +142,9 @@ def dashboard(db: Session, user_id: int, days: int = 30):
                 "unit": b.unit,
                 "sample_size": b.sample_size,
                 "notes": b.notes,
+                "dataset": b.dataset or "",
+                "evidence_level": b.evidence_level or "",
+                "retriever_version": b.retriever_version or "",
                 "measured_at": utc_iso(b.created_at),
             }
         )

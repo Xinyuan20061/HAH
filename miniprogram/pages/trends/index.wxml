@@ -2,6 +2,7 @@
 <page-transition/>
 <view class="page trends-page ui-page-content"><view class="title">过去 7 天</view><view class="subtitle intro">关注趋势，不纠结单日波动。</view>
 <view wx:if="{{loading}}"><view class="sk-row"><view class="sk shimmer"></view><view class="sk shimmer"></view></view><view class="sk-chart shimmer"></view></view>
+<view wx:elif="{{error}}" class="state-card state-card-error"><view><view class="state-title">趋势数据暂时加载失败</view><view class="state-desc">{{error}}</view></view><button class="btn-soft compact tappable" bindtap="retry" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">重试</button></view>
 <block wx:else>
   <view class="summary"><view class="sum card"><view class="sum-v">{{avg.water}}</view><view class="sum-u">ml</view><view class="muted sum-k">平均饮水</view></view><view class="sum card"><view class="sum-v">{{avg.sleep}}</view><view class="sum-u">h</view><view class="muted sum-k">平均睡眠</view></view></view>
   <view class="summary"><view class="sum card"><view class="sum-v">{{avg.exercise}}</view><view class="sum-u">min</view><view class="muted sum-k">平均运动</view></view><view class="sum card"><view class="sum-v">{{avg.steps}}</view><view class="sum-u">步</view><view class="muted sum-k">平均步数</view></view></view>

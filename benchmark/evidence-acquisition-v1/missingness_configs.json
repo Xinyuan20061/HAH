@@ -1,0 +1,14 @@
+{
+  "schema_version": "evidence-missingness-config-v1",
+  "generator_version": "synthetic-execution-v1",
+  "episodes_per_mechanism": 120,
+  "window_days": 7,
+  "execution_target": 0.7,
+  "max_questions": 2,
+  "max_time_ms": 10000,
+  "mechanisms": {
+    "MCAR": {"base_missing_probability": 0.28},
+    "MAR": {"base_missing_probability": 0.22, "observed_low_execution_adjustment": 0.18},
+    "MNAR": {"base_missing_probability": 0.18, "hidden_noncompletion_adjustment": 0.30}
+  }
+}

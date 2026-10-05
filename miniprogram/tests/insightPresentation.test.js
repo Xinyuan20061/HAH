@@ -115,7 +115,7 @@ test('timeline and basis blocks are present in the insight page', () => {
 test('chat renders the decision explanation returned by the health agent', () => {
   const script = fs.readFileSync(path.join(__dirname, '..', 'pages', 'chat', 'index.js'), 'utf8')
   const view = fs.readFileSync(path.join(__dirname, '..', 'pages', 'chat', 'index.wxml'), 'utf8')
-  assert.match(script, /presentTrace\(r\.trace\)/)
+  assert.match(script, /presentTrace\(r\.trace,\s*r\.decision_explanation\)/)
   assert.match(view, /为什么这样建议/)
   assert.match(view, /msg\.trace\.reasons/)
 })

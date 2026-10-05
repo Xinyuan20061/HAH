@@ -59,7 +59,8 @@ test('AI settings no longer auto-runs voice-test; uses manual verify-once + serv
 test('gym honours the settings voice autoplay preference', () => {
   const script = read('pages/home/index.js')
   assert.match(script, /healthmate_voice_autoplay/)
-  assert.match(script, /if \(this\._voiceAutoplay\) this\.speak\(reply\)/)
+  assert.match(script, /settings\.autoplay == null \? this\._voiceAutoplay : settings\.autoplay/)
+  assert.match(script, /if \(autoplay\) this\.speak\(reply\)/)
 })
 
 test('capability page can focus the plan permission required by a companion request', () => {

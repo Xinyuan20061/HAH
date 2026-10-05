@@ -525,6 +525,11 @@ class EvaluationBenchmark(Base, TimestampMixin):
     unit: Mapped[str] = mapped_column(String(30), default="%")
     sample_size: Mapped[int] = mapped_column(Integer, default=0)
     notes: Mapped[str] = mapped_column(Text, default="")
+    # Spec §6 evaluation-page provenance: every externally shown score must
+    # carry dataset, evidence level and model/retriever version.
+    dataset: Mapped[str] = mapped_column(String(120), default="")
+    evidence_level: Mapped[str] = mapped_column(String(40), default="")
+    retriever_version: Mapped[str] = mapped_column(String(60), default="")
 
 
 class SafetyEvent(Base, TimestampMixin):
@@ -667,6 +672,62 @@ class KnowledgeDocument(Base, TimestampMixin):
     content: Mapped[str] = mapped_column(Text)
     tags_json: Mapped[str] = mapped_column(Text, default="[]")
     active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    reviewed_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+    # Spec B2 audit fields (migration 0039): population/exclusions/reviewer
+    # per reviewed chunk; review_expires_at forces a re-review deadline;
+    # content_sha256 anchors atomic-statement citation checks.
+    population: Mapped[str] = mapped_column(String(240), default="")
+    exclusions: Mapped[str] = mapped_column(String(240), default="")
+    reviewer: Mapped[str] = mapped_column(String(120), default="")
+    review_expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    content_sha256: Mapped[str] = mapped_column(String(64), default="")
+
+
+class KnowledgeClaim(Base, TimestampMixin):
+    """Structured atomic claim from a reviewed knowledge chunk (spec B3)."""
+
+    __tablename__ = "knowledge_claims"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    claim_id: Mapped[str] = mapped_column(String(64))
+    source_key: Mapped[str] = mapped_column(String(120), index=True)
+    subject_population: Mapped[str] = mapped_column(String(120), default="")
+    condition: Mapped[str] = mapped_column(String(120), default="")
+    behavior: Mapped[str] = mapped_column(String(160), default="")
+    outcome: Mapped[str] = mapped_column(String(160), default="")
+    direction: Mapped[str] = mapped_column(String(32), default="unspecified")
+    strength: Mapped[str] = mapped_column(String(32), default="unspecified")
+    qualifier: Mapped[str] = mapped_column(String(240), default="")
+    source_location: Mapped[str] = mapped_column(String(240), default="")
+    review_state: Mapped[str] = mapped_column(String(40), default="reviewed")
+    reviewed_by: Mapped[str] = mapped_column(String(120), default="")
+    reviewed_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+    version_hash: Mapped[str] = mapped_column(String(64))
+    active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+
+
+class KnowledgeConflictReview(Base, TimestampMixin):
+    """Human-reviewed conflict verdict between two claims (spec B3)."""
+
+    __tablename__ = "knowledge_conflict_reviews"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    claim_a_id: Mapped[int] = mapped_column(Integer, index=True)
+    claim_b_id: Mapped[int] = mapped_column(Integer, index=True)
+    conflict_status: Mapped[str] = mapped_column(String(40))
+    scope: Mapped[str] = mapped_column(String(240), default="")
+    resolution: Mapped[str] = mapped_column(String(600), default="")
+    reviewed_by: Mapped[str] = mapped_column(String(120), default="")
+    reviewed_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+
+
+class KnowledgeReviewEvent(Base, TimestampMixin):
+    """Append-only audit trail of knowledge review lifecycle (spec B2)."""
+
+    __tablename__ = "knowledge_review_events"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    source_key: Mapped[str] = mapped_column(String(120), index=True)
+    event_type: Mapped[str] = mapped_column(String(40))
+    payload_json: Mapped[str] = mapped_column(Text, default="{}")
+    reviewed_by: Mapped[str] = mapped_column(String(120), default="")
     reviewed_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
 
 
@@ -1470,6 +1531,7 @@ class PolicyObservationRef(Base):
     source_type: Mapped[str] = mapped_column(String(48))
     source_id: Mapped[str] = mapped_column(String(96))
     source_revision: Mapped[int] = mapped_column(Integer)
+    revision: Mapped[int] = mapped_column(Integer, default=1, server_default="1", nullable=False)
     value_json: Mapped[str] = mapped_column(Text, default="null")
     observed_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
     metric_version: Mapped[str] = mapped_column(String(40))
@@ -1592,6 +1654,199 @@ class PolicyLearningControl(Base):
     epoch_counter: Mapped[int] = mapped_column(Integer, default=0)
     learning_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     reset_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class PolicyAcquisitionSession(Base, TimestampMixin):
+    __tablename__ = "policy_acquisition_sessions"
+    __table_args__ = (
+        UniqueConstraint("user_id", "episode_id", name="uq_acq_session_user_episode"),
+        Index("ix_acq_sessions_user_status", "user_id", "status"),
+        CheckConstraint("status IN ('active','paused','closed')", name="ck_acq_session_status"),
+        CheckConstraint("decision_state IN ('needs_evidence','sufficient','waiting_window','deferred','needs_repair','blocked','stopped')", name="ck_acq_session_decision_state"),
+        CheckConstraint("version > 0 AND episode_prompt_count >= 0", name="ck_acq_session_counters"),
+    )
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    episode_id: Mapped[str] = mapped_column(ForeignKey("policy_episodes.id"), nullable=False, index=True)
+    contract_json: Mapped[str] = mapped_column(Text, nullable=False)
+    contract_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), default="active", nullable=False)
+    decision_state: Mapped[str] = mapped_column(String(32), default="needs_evidence", nullable=False)
+    version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    consented_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    budget_json: Mapped[str] = mapped_column(Text, default="{}", nullable=False)
+    episode_prompt_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    active_question_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    latest_certificate_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+
+class PolicyAcquisitionQuestion(Base):
+    __tablename__ = "policy_acquisition_questions"
+    __table_args__ = (
+        Index("ix_acq_question_session_status", "session_id", "status"),
+        Index("ix_acq_question_user_target", "user_id", "target_key"),
+        CheckConstraint("status IN ('issued','answered','unknown','declined','unavailable','timed_out','obsolete','cancelled')", name="ck_acq_question_status"),
+        CheckConstraint("slot >= 0 AND estimated_cost_ms >= 0", name="ck_acq_question_bounds"),
+        CheckConstraint("expected_episode_version > 0 AND expected_session_version > 0", name="ck_acq_question_versions"),
+    )
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    session_id: Mapped[str] = mapped_column(ForeignKey("policy_acquisition_sessions.id"), nullable=False, index=True)
+    target_key: Mapped[str] = mapped_column(String(160), nullable=False)
+    kind: Mapped[str] = mapped_column(String(40), nullable=False)
+    endpoint: Mapped[str] = mapped_column(String(24), nullable=False)
+    slot: Mapped[int] = mapped_column(Integer, nullable=False)
+    target_opportunity_id: Mapped[str | None] = mapped_column(ForeignKey("policy_execution_opportunities.id"), nullable=True)
+    fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    expected_episode_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    expected_snapshot_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    expected_session_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[str] = mapped_column(String(20), default="issued", nullable=False)
+    prompt_json: Mapped[str] = mapped_column(Text, nullable=False)
+    estimated_cost_ms: Mapped[int] = mapped_column(Integer, default=3000, nullable=False)
+    issued_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    answered_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    answer_json: Mapped[str] = mapped_column(Text, default="{}", nullable=False)
+    resulting_report_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    resulting_observation_ref_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+
+class PolicyAcquisitionCommand(Base):
+    __tablename__ = "policy_acquisition_commands"
+    __table_args__ = (
+        UniqueConstraint("user_id", "idempotency_key", name="uq_acq_command_user_key"),
+        CheckConstraint("method IN ('POST','PATCH','PUT','DELETE')", name="ck_acq_command_method"),
+    )
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    idempotency_key: Mapped[str] = mapped_column(String(120), nullable=False)
+    method: Mapped[str] = mapped_column(String(8), nullable=False)
+    route_key: Mapped[str] = mapped_column(String(200), nullable=False)
+    request_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    resource_kind: Mapped[str] = mapped_column(String(40), nullable=False)
+    resource_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    response_json: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, nullable=False)
+
+
+class PolicyAcquisitionDailyUsage(Base):
+    __tablename__ = "policy_acquisition_daily_usage"
+    __table_args__ = (
+        UniqueConstraint("user_id", "business_date", name="uq_acq_usage_user_date"),
+        CheckConstraint("prompt_count >= 0 AND estimated_ms >= 0 AND measured_ms >= 0 AND version > 0", name="ck_acq_usage_bounds"),
+    )
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    business_date: Mapped[datetime] = mapped_column(Date, nullable=False)
+    prompt_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    estimated_ms: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    measured_ms: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+
+
+class PolicyAcquisitionEvent(Base):
+    __tablename__ = "policy_acquisition_events"
+    __table_args__ = (
+        UniqueConstraint("session_id", "sequence", name="uq_acq_event_sequence"),
+        Index("ix_acq_event_user_created", "user_id", "created_at"),
+        CheckConstraint("sequence > 0 AND (elapsed_ms IS NULL OR elapsed_ms >= 0)", name="ck_acq_event_bounds"),
+    )
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    session_id: Mapped[str] = mapped_column(ForeignKey("policy_acquisition_sessions.id"), nullable=False, index=True)
+    question_id: Mapped[str | None] = mapped_column(ForeignKey("policy_acquisition_questions.id"), nullable=True)
+    sequence: Mapped[int] = mapped_column(Integer, nullable=False)
+    event_type: Mapped[str] = mapped_column(String(40), nullable=False)
+    reason_code: Mapped[str] = mapped_column(String(80), default="", nullable=False)
+    elapsed_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    payload_json: Mapped[str] = mapped_column(Text, default="{}", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, nullable=False)
+
+
+class PolicyDecisionCertificate(Base):
+    __tablename__ = "policy_decision_certificates"
+    __table_args__ = (
+        UniqueConstraint("session_id", "revision", name="uq_acq_certificate_revision"),
+        Index("ix_acq_certificate_user_episode", "user_id", "episode_id", "status"),
+        CheckConstraint("revision > 0", name="ck_acq_certificate_revision"),
+        CheckConstraint("purpose IN ('execution_progress','execution_endpoint')", name="ck_acq_certificate_purpose"),
+        CheckConstraint("endpoint = 'execution'", name="ck_acq_certificate_endpoint"),
+        CheckConstraint("status IN ('valid','stale','revoked')", name="ck_acq_certificate_status"),
+        CheckConstraint("label IS NULL OR label IN (0,1)", name="ck_acq_certificate_label"),
+    )
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    episode_id: Mapped[str] = mapped_column(ForeignKey("policy_episodes.id"), nullable=False, index=True)
+    session_id: Mapped[str] = mapped_column(ForeignKey("policy_acquisition_sessions.id"), nullable=False, index=True)
+    revision: Mapped[int] = mapped_column(Integer, nullable=False)
+    purpose: Mapped[str] = mapped_column(String(32), nullable=False)
+    endpoint: Mapped[str] = mapped_column(String(24), nullable=False)
+    label: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    status: Mapped[str] = mapped_column(String(16), default="valid", nullable=False)
+    contract_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    evidence_snapshot_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    binding_json: Mapped[str] = mapped_column(Text, nullable=False)
+    proof_json: Mapped[str] = mapped_column(Text, nullable=False)
+    body_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    predecessor_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, nullable=False)
+
+
+class PolicyCertificateDependency(Base):
+    __tablename__ = "policy_certificate_dependencies"
+    __table_args__ = (
+        UniqueConstraint("certificate_id", "dependency_kind", "source_type", "source_id", "metric_version", name="uq_acq_dependency_identity"),
+        Index("ix_acq_dependency_source", "user_id", "source_type", "source_id"),
+        CheckConstraint("source_revision >= 0", name="ck_acq_dependency_source_revision"),
+        CheckConstraint("observation_revision IS NULL OR observation_revision > 0", name="ck_acq_dependency_observation_revision"),
+    )
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    certificate_id: Mapped[str] = mapped_column(ForeignKey("policy_decision_certificates.id"), nullable=False, index=True)
+    dependency_kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    source_type: Mapped[str] = mapped_column(String(48), default="", nullable=False)
+    source_id: Mapped[str] = mapped_column(String(96), default="", nullable=False)
+    source_revision: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    metric_version: Mapped[str] = mapped_column(String(40), default="", nullable=False)
+    value_hash: Mapped[str] = mapped_column(String(64), default="", nullable=False)
+    observation_ref_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    observation_revision: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    opportunity_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    current_report_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+
+class PolicyEvidenceRevision(Base):
+    __tablename__ = "policy_evidence_revisions"
+    __table_args__ = (
+        UniqueConstraint("user_id", "observation_ref_id", "observation_revision", name="uq_acq_evidence_revision"),
+        Index("ix_acq_evidence_source", "user_id", "source_type", "source_id"),
+        CheckConstraint("observation_revision > 0 AND source_revision > 0 AND slot >= 0", name="ck_acq_evidence_revision_bounds"),
+    )
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    observation_ref_id: Mapped[int] = mapped_column(ForeignKey("policy_observation_refs.id"), nullable=False, index=True)
+    observation_revision: Mapped[int] = mapped_column(Integer, nullable=False)
+    source_type: Mapped[str] = mapped_column(String(48), nullable=False)
+    source_id: Mapped[str] = mapped_column(String(96), nullable=False)
+    source_revision: Mapped[int] = mapped_column(Integer, nullable=False)
+    metric_version: Mapped[str] = mapped_column(String(40), nullable=False)
+    endpoint: Mapped[str] = mapped_column(String(24), nullable=False)
+    slot: Mapped[int] = mapped_column(Integer, nullable=False)
+    observed_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    value_json: Mapped[str] = mapped_column(Text, nullable=False)
+    value_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    confirmed: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, nullable=False)
+
+
+class PolicyAcquisitionFence(Base):
+    __tablename__ = "policy_acquisition_fences"
+    __table_args__ = (CheckConstraint("generation >= 0", name="ck_acq_fence_generation"),)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), primary_key=True)
+    generation: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, onupdate=utc_now, nullable=False)
 
 
 class HarnessPluginInstallation(Base, TimestampMixin):

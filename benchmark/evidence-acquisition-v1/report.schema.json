@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "healthmate-evidence-acquisition-report-v1",
+  "type": "object",
+  "required": ["report_schema_version", "git_commit", "oracle_version", "planner_version", "dataset_hash", "config_hash", "seed", "eligible_episodes", "resolved_episodes", "wrong_determined_labels", "deferred_episodes", "issued_questions", "answered_questions", "total_measured_or_simulated_time_ms", "repair_questions", "stale_certificate_uses", "cost_per_valid_resolution", "evidence_level", "controlled_complementary_pair"],
+  "properties": {
+    "report_schema_version": {"const": "evidence-acquisition-report-v1"},
+    "evidence_level": {"const": "synthetic_replay"},
+    "eligible_episodes": {"type": "integer", "minimum": 1},
+    "resolved_episodes": {"type": "integer", "minimum": 0},
+    "wrong_determined_labels": {"type": "integer", "minimum": 0},
+    "deferred_episodes": {"type": "integer", "minimum": 0},
+    "issued_questions": {"type": "integer", "minimum": 0},
+    "answered_questions": {"type": "integer", "minimum": 0},
+    "total_measured_or_simulated_time_ms": {"type": "integer", "minimum": 0},
+    "repair_questions": {"type": "integer", "minimum": 0},
+    "stale_certificate_uses": {"type": "integer", "minimum": 0},
+    "cost_per_valid_resolution": {"type": ["number", "null"], "minimum": 0},
+    "controlled_complementary_pair": {
+      "type": "object",
+      "required": ["design", "budget_questions", "budget_time_ms", "response_realization", "one_step", "two_step", "interpretation"],
+      "properties": {
+        "design": {"const": "single_decision_horizon_complementarity"},
+        "budget_questions": {"const": 2},
+        "budget_time_ms": {"const": 8000},
+        "response_realization": {"const": "answered_then_answered"},
+        "one_step": {"type": "object"},
+        "two_step": {"type": "object"},
+        "interpretation": {"type": "string", "minLength": 1}
+      }
+    }
+  }
+}

@@ -146,19 +146,21 @@ BUILTIN_PLUGINS: tuple[PluginManifest, ...] = (
         goals=(("daily_guidance", "日常状态与建议"), ("understand_limits", "看懂记录缺口与限制")),
     ),
     PluginManifest(
-        "personal_policy", "1.1.0", "个人策略学习", "把一次建议变成可执行、可复查的个人周期。",
+        "personal_policy", "1.2.0", "个人策略学习", "把一次建议变成可执行、可复查的个人周期。",
         "逐渐发现什么方法在什么情况下更适合你。",
         ("目标", "执行记录", "结果记录"), "只使用本人授权的记录；结论可撤销、可重置。",
         (
             "policy.templates.read", "policy.candidates.preview", "policy.episode.read",
             "policy.evidence.read", "policy.memory.read", "policy.decision.explain",
+            "policy.acquisition.preview", "policy.certificate.read", "policy.knowledge.read",
             "policy.episode.start", "policy.episode.finish", "policy.episode.stop", "policy.memory.reset",
+            "policy.episode.rereview",
         ),
-        ("policy.episode.start", "policy.episode.finish", "policy.episode.stop", "policy.memory.reset"),
+        ("policy.episode.start", "policy.episode.finish", "policy.episode.stop", "policy.memory.reset", "policy.episode.rereview"),
         (
             ("policy.goals.read", "个人策略目标"), ("policy.execution.read", "周期执行记录"),
             ("policy.outcomes.read", "周期结果记录"), ("health.profile.read", "健康档案与约束"),
-            ("health.records.read", "用于评估的健康记录"),
+            ("health.records.read", "用于评估的健康记录"), ("health.knowledge.read", "审核健康知识"),
         ),
         (("execution_pattern", "了解执行节奏"), ("compare_outcomes", "复查周期结果")),
         may_propose_actions=True,
@@ -445,10 +447,14 @@ def _tool_binding(tool_name: str) -> ToolBinding | None:
         scopes = ("motion.frames.read",) if tool_name == "motion.timeline.read" else ("motion.analysis.read",)
         if tool_name == "motion.feedback.read": scopes = ("motion.feedback.read",)
     elif manifest.plugin_id == "personal_policy":
-        if tool_name in {"policy.episode.read", "policy.evidence.read", "policy.decision.explain", "policy.memory.read"}:
+        if tool_name in {"policy.acquisition.preview", "policy.certificate.read"}:
+            scopes = ("policy.execution.read",)
+        elif tool_name == "policy.knowledge.read":
+            scopes = ("health.knowledge.read", "policy.execution.read")
+        elif tool_name in {"policy.episode.read", "policy.evidence.read", "policy.decision.explain", "policy.memory.read"}:
             scopes = ("policy.execution.read", "policy.outcomes.read")
         elif tool_name == "policy.candidates.preview": scopes = ("policy.goals.read", "policy.outcomes.read")
-        elif tool_name in {"policy.episode.finish", "policy.episode.stop"}:
+        elif tool_name in {"policy.episode.finish", "policy.episode.stop", "policy.episode.rereview"}:
             return ToolBinding(manifest.plugin_id, ("policy.execution.read",), "close_existing", "user_action")
         elif tool_name == "policy.memory.reset":
             return ToolBinding(manifest.plugin_id, ("policy.execution.read",), "delete", "user_action")
@@ -465,7 +471,7 @@ def _tool_binding(tool_name: str) -> ToolBinding | None:
         elif tool_name in {"plan.simulate", "decision.contract", "decision.next_best_action", "harness.plan.simulate", "harness.next_action.rank"}:
             scopes = ("health.profile.read", "health.records.read", "plan.goals.read", "plan.outcomes.read", "user.preferences.read")
         else: scopes = ("plan.goals.read", "plan.outcomes.read")
-    if tool_name in {"motion.analysis.read", "motion.timeline.read", "motion.history.compare", "motion.feedback.read", "policy.episode.read", "policy.evidence.read", "policy.decision.explain", "policy.memory.read", "health.outcomes.compare", "outcomes.history.read", "harness.outcomes.history.read", "experiment.result.read"}:
+    if tool_name in {"motion.analysis.read", "motion.timeline.read", "motion.history.compare", "motion.feedback.read", "policy.episode.read", "policy.evidence.read", "policy.decision.explain", "policy.memory.read", "policy.acquisition.preview", "policy.certificate.read", "policy.knowledge.read", "health.outcomes.compare", "outcomes.history.read", "harness.outcomes.history.read", "experiment.result.read"}:
         return ToolBinding(manifest.plugin_id, tuple(scopes), "read_history", "read")
     if tool_name in manifest.action_names:
         return ToolBinding(manifest.plugin_id, tuple(scopes), "new_work", "propose")

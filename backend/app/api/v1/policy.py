@@ -375,7 +375,11 @@ def _episode_allowed_actions(
     return actions
 
 
-@router.post("/decide", deprecated=True)
+@router.post(
+    "/decide",
+    deprecated=True,
+    description="已弃用：兼容旧预览入口。请改用 GET /api/v1/policy/decide（只读预览）或 POST /api/v1/policy/decisions（持久化决策）。计划 2026-11-01 移除，保留期内不回退行为。",
+)
 def decide_policy(body: DecisionRequest, user=Depends(current_user), db: Session = Depends(get_db)):
     """Compatibility alias for a pure preview; decisions are saved at /decisions."""
     _require_policy_capability(
@@ -476,7 +480,11 @@ def decide_policy_read(user=Depends(current_user), db: Session = Depends(get_db)
     return _decision_response(result, decision_id=None, preview=True)
 
 
-@router.post("/episodes/start", deprecated=True)
+@router.post(
+    "/episodes/start",
+    deprecated=True,
+    description="已弃用：旧入口只创建启动提案、从不直接启动。请改用策略页交互流程（协议确认后通过提案确认接口落库）。计划 2026-11-01 移除，保留期内行为不变。",
+)
 def start(body: EpisodeStartRequest, user=Depends(current_user), db: Session = Depends(get_db)):
     """Compatibility entry point that creates a proposal but never starts directly."""
     _require_policy_capability(
@@ -636,6 +644,8 @@ def report(episode_id: str, body: ExecutionReportRequest, user=Depends(current_u
 @router.post("/episodes/{episode_id}/observations")
 def observations(episode_id: str, body: ObservationRequest, user=Depends(current_user), db: Session = Depends(get_db)):
     _require_policy_capability(db, user.id, phase="close_existing", scopes=("policy.execution.read",), operation="user_action")
+    from app.services.policy_learning.acquisition.service import _fence
+    _fence(db, user.id)
     episode = db.get(PolicyEpisode, episode_id)
     if episode is None or episode.user_id != user.id:
         raise ApiException(404, "POLICY_NOT_FOUND", "周期不存在")
@@ -643,7 +653,7 @@ def observations(episode_id: str, body: ObservationRequest, user=Depends(current
         raise ApiException(409, "POLICY_NOT_READY", "周期已关闭，不能追加观察证据")
     if episode.version != body.episode_version:
         raise ApiException(409, "POLICY_VERSION_CONFLICT", "周期版本已变化，请刷新后重试")
-    from app.models import PolicyObservationRef
+    from app.models import PolicyEvidenceRevision, PolicyObservationRef
     unit = db.get(PersonalStrategyUnit, episode.unit_id)
     if unit is None or unit.user_id != user.id:
         raise ApiException(404, "POLICY_NOT_FOUND", "策略协议不存在")
@@ -752,6 +762,19 @@ def observations(episode_id: str, body: ObservationRequest, user=Depends(current
             # Keep the slot stable while allowing a user to replace evidence
             # invalidated by a source correction. Prior adjudications retain
             # their own immutable evidence_refs_json snapshot.
+            previous_revision = int(getattr(existing, "revision", 1) or 1)
+            db.add(PolicyEvidenceRevision(
+                user_id=user.id, observation_ref_id=existing.id,
+                observation_revision=previous_revision,
+                source_type=existing.source_type, source_id=existing.source_id,
+                source_revision=existing.source_revision,
+                metric_version=existing.metric_version, endpoint=existing.endpoint,
+                slot=existing.slot, observed_at=existing.observed_at,
+                value_json=existing.value_json,
+                value_hash=hashlib.sha256((existing.value_json or "null").encode()).hexdigest(),
+                confirmed=existing.confirmed,
+            ))
+            existing.revision = previous_revision + 1
             existing.source_type = resolved.source_type
             existing.source_id = resolved.source_id
             existing.source_revision = resolved.source_revision
@@ -779,6 +802,8 @@ def observations(episode_id: str, body: ObservationRequest, user=Depends(current
         inserted = True
     if inserted:
         episode.version += 1
+        from app.services.policy_learning.acquisition.service import invalidate_episode
+        invalidate_episode(db, user.id, episode.id)
     try:
         db.commit()
     except IntegrityError:

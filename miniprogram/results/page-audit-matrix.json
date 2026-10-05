@@ -1,0 +1,1064 @@
+[
+  {
+    "route": "pages/home/index",
+    "files": {
+      "js": true,
+      "wxml": true,
+      "wxss": true
+    },
+    "lines": {
+      "js": 529,
+      "wxml": 53,
+      "wxss": 69
+    },
+    "entryRefs": [
+      "custom-tab-bar/index.js",
+      "pages/insights/index.js",
+      "pages/settings/privacy/index.js"
+    ],
+    "apiCalls": [
+      {
+        "method": "get",
+        "path": "/health/command-center"
+      }
+    ],
+    "tests": [
+      "agentCharacterPresentation.test.js",
+      "circularControls.test.js",
+      "navigationShell.test.js",
+      "pageReachability.test.js",
+      "settingsPresentation.test.js",
+      "statePagePresentation.test.js"
+    ]
+  },
+  {
+    "route": "pages/insights/index",
+    "files": {
+      "js": true,
+      "wxml": true,
+      "wxss": true
+    },
+    "lines": {
+      "js": 146,
+      "wxml": 97,
+      "wxss": 98
+    },
+    "entryRefs": [
+      "custom-tab-bar/index.js",
+      "pages/profile/index.js",
+      "pages/state/index.js"
+    ],
+    "apiCalls": [
+      {
+        "method": "get",
+        "path": "/agent/insights"
+      },
+      {
+        "method": "post",
+        "path": "/agent/insights/${code}/feedback"
+      },
+      {
+        "method": "post",
+        "path": "/agent/experiments"
+      },
+      {
+        "method": "post",
+        "path": "/agent/experiments/${current.id}/finish"
+      },
+      {
+        "method": "post",
+        "path": "/agent/experiments/${current.id}/cancel"
+      }
+    ],
+    "tests": []
+  },
+  {
+    "route": "pages/scan/index",
+    "files": {
+      "js": true,
+      "wxml": true,
+      "wxss": true
+    },
+    "lines": {
+      "js": 253,
+      "wxml": 56,
+      "wxss": 47
+    },
+    "entryRefs": [
+      "custom-tab-bar/index.js",
+      "pages/records/diet.js",
+      "pages/records/index.js"
+    ],
+    "apiCalls": [
+      {
+        "method": "get",
+        "path": "/system/ai-worker"
+      },
+      {
+        "method": "post",
+        "path": "/vision/food-jobs"
+      },
+      {
+        "method": "get",
+        "path": "/vision/food-analysis/${r.analysis_id}"
+      },
+      {
+        "method": "put",
+        "path": "/vision/food-analysis/${this.data.result.analysis_id}/correct"
+      }
+    ],
+    "tests": [
+      "circularControls.test.js",
+      "disclosure.test.js",
+      "foodRecordLifecycle.test.js",
+      "pageReachability.test.js",
+      "recordsEnergyPresentation.test.js"
+    ]
+  },
+  {
+    "route": "pages/workout/index",
+    "files": {
+      "js": true,
+      "wxml": true,
+      "wxss": true
+    },
+    "lines": {
+      "js": 2,
+      "wxml": 4,
+      "wxss": 5
+    },
+    "entryRefs": [
+      "custom-tab-bar/index.js",
+      "pages/home/index.js",
+      "utils/agentNavigation.js",
+      "utils/insightPresentation.js"
+    ],
+    "apiCalls": [],
+    "tests": [
+      "insightPresentation.test.js",
+      "interactions.test.js"
+    ]
+  },
+  {
+    "route": "pages/exercise-detail/index",
+    "files": {
+      "js": true,
+      "wxml": true,
+      "wxss": true
+    },
+    "lines": {
+      "js": 9,
+      "wxml": 18,
+      "wxss": 2
+    },
+    "entryRefs": [
+      "pages/workout/index.js"
+    ],
+    "apiCalls": [],
+    "tests": []
+  },
+  {
+    "route": "pages/report/index",
+    "files": {
+      "js": true,
+      "wxml": true,
+      "wxss": true
+    },
+    "lines": {
+      "js": 12,
+      "wxml": 20,
+      "wxss": 3
+    },
+    "entryRefs": [
+      "custom-tab-bar/index.js"
+    ],
+    "apiCalls": [
+      {
+        "method": "get",
+        "path": "/insights/weekly-report"
+      }
+    ],
+    "tests": [
+      "circularControls.test.js"
+    ]
+  },
+  {
+    "route": "pages/media/index",
+    "files": {
+      "js": true,
+      "wxml": true,
+      "wxss": true
+    },
+    "lines": {
+      "js": 447,
+      "wxml": 119,
+      "wxss": 107
+    },
+    "entryRefs": [
+      "custom-tab-bar/index.js",
+      "pages/records/index.js",
+      "utils/insightPresentation.js"
+    ],
+    "apiCalls": [
+      {
+        "method": "get",
+        "path": "/system/ai-worker"
+      },
+      {
+        "method": "get",
+        "path": "/fitness/motion-profile?days=30"
+      },
+      {
+        "method": "get",
+        "path": "/fitness/training-intent"
+      },
+      {
+        "method": "get",
+        "path": "/fitness/motion-capabilities"
+      },
+      {
+        "method": "put",
+        "path": "/fitness/training-intent"
+      },
+      {
+        "method": "post",
+        "path": "/media/motion-analyses"
+      },
+      {
+        "method": "get",
+        "path": "/media/motion-analyses/${analysisId}"
+      },
+      {
+        "method": "get",
+        "path": "/media/${id}/playback"
+      },
+      {
+        "method": "get",
+        "path": "/media/motion-analyses/${id}/evidence"
+      },
+      {
+        "method": "post",
+        "path": "/media/motion-analyses/${id}/confirm-label"
+      },
+      {
+        "method": "post",
+        "path": "/media/motion-analyses/${parentId}/reanalyze"
+      },
+      {
+        "method": "post",
+        "path": "/media/motion-analyses/${id}/feedback"
+      },
+      {
+        "method": "get",
+        "path": "/media/motion-analyses/${this.data.analysisId}/trace"
+      }
+    ],
+    "tests": [
+      "circularControls.test.js",
+      "disclosure.test.js",
+      "insightPresentation.test.js",
+      "mediaUnifiedFlow.test.js",
+      "motionReanalysis.test.js"
+    ]
+  },
+  {
+    "route": "pages/chat/index",
+    "files": {
+      "js": true,
+      "wxml": true,
+      "wxss": true
+    },
+    "lines": {
+      "js": 410,
+      "wxml": 149,
+      "wxss": 212
+    },
+    "entryRefs": [
+      "custom-tab-bar/index.js",
+      "pages/insights/index.js",
+      "pages/state/index.js"
+    ],
+    "apiCalls": [
+      {
+        "method": "get",
+        "path": "/harness/manifest"
+      },
+      {
+        "method": "post",
+        "path": "/agent/runs/${runId}/apply-plan"
+      },
+      {
+        "method": "post",
+        "path": "/agent/actions/${proposalId}/confirm"
+      },
+      {
+        "method": "post",
+        "path": "/agent/actions/${proposalId}/reject"
+      }
+    ],
+    "tests": [
+      "circularControls.test.js",
+      "motionReanalysis.test.js",
+      "navigationShell.test.js",
+      "pageReachability.test.js"
+    ]
+  },
+  {
+    "route": "pages/records/index",
+    "files": {
+      "js": true,
+      "wxml": true,
+      "wxss": true
+    },
+    "lines": {
+      "js": 122,
+      "wxml": 54,
+      "wxss": 66
+    },
+    "entryRefs": [
+      "custom-tab-bar/index.js",
+      "pages/home/index.js",
+      "utils/agentNavigation.js"
+    ],
+    "apiCalls": [
+      {
+        "method": "get",
+        "path": "/health/energy-dashboard"
+      }
+    ],
+    "tests": [
+      "circularControls.test.js",
+      "foodRecordLifecycle.test.js",
+      "pageReachability.test.js",
+      "recordsEnergyPresentation.test.js"
+    ]
+  },
+  {
+    "route": "pages/plan/index",
+    "files": {
+      "js": true,
+      "wxml": true,
+      "wxss": true
+    },
+    "lines": {
+      "js": 369,
+      "wxml": 74,
+      "wxss": 77
+    },
+    "entryRefs": [
+      "custom-tab-bar/index.js",
+      "pages/chat/index.js",
+      "pages/home/index.js",
+      "utils/agentNavigation.js"
+    ],
+    "apiCalls": [
+      {
+        "method": "get",
+        "path": "/agent/runs/${runId}"
+      },
+      {
+        "method": "post",
+        "path": "/agent/runs/${this.data.previewRunId}/apply-plan"
+      },
+      {
+        "method": "get",
+        "path": "/health/plan/today"
+      },
+      {
+        "method": "get",
+        "path": "/agent/plans/current"
+      },
+      {
+        "method": "get",
+        "path": "/health/plan/activity/year"
+      },
+      {
+        "method": "post",
+        "path": "/health/plan/today/custom"
+      },
+      {
+        "method": "put",
+        "path": "/health/plan/today/${key}"
+      },
+      {
+        "method": "put",
+        "path": "/health/plan/today/${key}"
+      },
+      {
+        "method": "del",
+        "path": "/health/plan/today/custom/${key}"
+      },
+      {
+        "method": "put",
+        "path": "/agent/plans/items/${id}"
+      }
+    ],
+    "tests": [
+      "agentCharacterPresentation.test.js",
+      "circularControls.test.js",
+      "floatingAgentPresentation.test.js",
+      "planActivity.test.js",
+      "planPreviewPresentation.test.js"
+    ]
+  },
+  {
+    "route": "pages/goals/index",
+    "files": {
+      "js": true,
+      "wxml": true,
+      "wxss": true
+    },
+    "lines": {
+      "js": 67,
+      "wxml": 27,
+      "wxss": 11
+    },
+    "entryRefs": [
+      "custom-tab-bar/index.js",
+      "pages/profile/index.js",
+      "pages/settings/index.js"
+    ],
+    "apiCalls": [
+      {
+        "method": "get",
+        "path": "/health/goals"
+      },
+      {
+        "method": "get",
+        "path": "/health/today"
+      },
+      {
+        "method": "put",
+        "path": "/health/goals"
+      },
+      {
+        "method": "post",
+        "path": "/health/goals/dynamic/${id}/apply"
+      }
+    ],
+    "tests": [
+      "circularControls.test.js",
+      "interactions.test.js"
+    ]
+  },
+  {
+    "route": "pages/profile/index",
+    "files": {
+      "js": true,
+      "wxml": true,
+      "wxss": true
+    },
+    "lines": {
+      "js": 82,
+      "wxml": 69,
+      "wxss": 15
+    },
+    "entryRefs": [
+      "custom-tab-bar/index.js"
+    ],
+    "apiCalls": [
+      {
+        "method": "get",
+        "path": "/users/me"
+      },
+      {
+        "method": "get",
+        "path": "/users/me/health-profile"
+      },
+      {
+        "method": "put",
+        "path": "/users/me"
+      }
+    ],
+    "tests": [
+      "circularControls.test.js",
+      "profilePresentation.test.js"
+    ]
+  },
+  {
+    "route": "pages/profile/edit",
+    "files": {
+      "js": true,
+      "wxml": true,
+      "wxss": true
+    },
+    "lines": {
+      "js": 2,
+      "wxml": 4,
+      "wxss": 1
+    },
+    "entryRefs": [
+      "custom-tab-bar/index.js",
+      "pages/profile/index.js",
+      "pages/settings/index.js"
+    ],
+    "apiCalls": [
+      {
+        "method": "get",
+        "path": "/users/me/health-profile"
+      },
+      {
+        "method": "put",
+        "path": "/users/me/health-profile"
+      }
+    ],
+    "tests": []
+  },
+  {
+    "route": "pages/records/diet",
+    "files": {
+      "js": true,
+      "wxml": true,
+      "wxss": true
+    },
+    "lines": {
+      "js": 273,
+      "wxml": 105,
+      "wxss": 68
+    },
+    "entryRefs": [
+      "pages/records/index.js",
+      "pages/scan/index.js",
+      "pages/settings/index.js"
+    ],
+    "apiCalls": [
+      {
+        "method": "get",
+        "path": "/diet/records?${params.join("
+      },
+      {
+        "method": "patch",
+        "path": "/diet/records/${editor.id}"
+      },
+      {
+        "method": "del",
+        "path": "/diet/records/${id}"
+      }
+    ],
+    "tests": [
+      "foodRecordLifecycle.test.js",
+      "pageReachability.test.js",
+      "recordsEnergyPresentation.test.js"
+    ]
+  },
+  {
+    "route": "pages/records/exercise",
+    "files": {
+      "js": true,
+      "wxml": true,
+      "wxss": true
+    },
+    "lines": {
+      "js": 5,
+      "wxml": 4,
+      "wxss": 10
+    },
+    "entryRefs": [
+      "pages/records/index.js"
+    ],
+    "apiCalls": [
+      {
+        "method": "get",
+        "path": "/exercise/records"
+      },
+      {
+        "method": "post",
+        "path": "/exercise/records"
+      },
+      {
+        "method": "del",
+        "path": "/exercise/records/${id}"
+      }
+    ],
+    "tests": []
+  },
+  {
+    "route": "pages/policy/overview/index",
+    "files": {
+      "js": true,
+      "wxml": true,
+      "wxss": true
+    },
+    "lines": {
+      "js": 77,
+      "wxml": 56,
+      "wxss": 4
+    },
+    "entryRefs": [
+      "pages/policy/episode/index.js",
+      "pages/state/index.js"
+    ],
+    "apiCalls": [
+      {
+        "method": "get",
+        "path": "/policy/candidates"
+      },
+      {
+        "method": "get",
+        "path": "/policy/episodes/current"
+      },
+      {
+        "method": "get",
+        "path": "/policy/history?limit=5"
+      }
+    ],
+    "tests": []
+  },
+  {
+    "route": "pages/policy/protocol/index",
+    "files": {
+      "js": true,
+      "wxml": true,
+      "wxss": true
+    },
+    "lines": {
+      "js": 175,
+      "wxml": 46,
+      "wxss": 2
+    },
+    "entryRefs": [
+      "pages/policy/overview/index.js"
+    ],
+    "apiCalls": [
+      {
+        "method": "get",
+        "path": "/policy/candidates"
+      },
+      {
+        "method": "get",
+        "path": "/policy/candidates"
+      },
+      {
+        "method": "post",
+        "path": "/policy/compile"
+      },
+      {
+        "method": "post",
+        "path": "/policy/units/${this.data.compiled.strategy_unit_id}/proposal"
+      },
+      {
+        "method": "get",
+        "path": "/policy/episodes/current"
+      }
+    ],
+    "tests": []
+  },
+  {
+    "route": "pages/policy/episode/index",
+    "files": {
+      "js": true,
+      "wxml": true,
+      "wxss": true
+    },
+    "lines": {
+      "js": 635,
+      "wxml": 103,
+      "wxss": 5
+    },
+    "entryRefs": [
+      "pages/policy/overview/index.js",
+      "pages/policy/protocol/index.js",
+      "pages/state/index.js"
+    ],
+    "apiCalls": [
+      {
+        "method": "get",
+        "path": "/policy/episodes/${this.episodeId}"
+      },
+      {
+        "method": "get",
+        "path": "/policy/episodes/current"
+      },
+      {
+        "method": "get",
+        "path": "/policy/units/${episode.strategy_unit_id}"
+      },
+      {
+        "method": "post",
+        "path": "/policy/episodes/${this.data.episode.episode_id}/reports"
+      },
+      {
+        "method": "post",
+        "path": "/policy/episodes/${episode.episode_id}/observations"
+      },
+      {
+        "method": "post",
+        "path": "/policy/episodes/${episode.episode_id}/stop-proposal"
+      }
+    ],
+    "tests": [
+      "policyAcquisitionBudget.test.js"
+    ]
+  },
+  {
+    "route": "pages/policy/review/index",
+    "files": {
+      "js": true,
+      "wxml": true,
+      "wxss": true
+    },
+    "lines": {
+      "js": 220,
+      "wxml": 86,
+      "wxss": 3
+    },
+    "entryRefs": [
+      "pages/policy/episode/index.js",
+      "pages/policy/history/index.js",
+      "pages/policy/overview/index.js"
+    ],
+    "apiCalls": [
+      {
+        "method": "get",
+        "path": "/policy/episodes/${this.episodeId}"
+      },
+      {
+        "method": "get",
+        "path": "/policy/episodes/${this.episodeId}/explanation"
+      },
+      {
+        "method": "post",
+        "path": "/policy/episodes/${this.episodeId}/review-preview"
+      },
+      {
+        "method": "post",
+        "path": "/policy/episodes/${episode.episode_id}/finish-proposal"
+      }
+    ],
+    "tests": []
+  },
+  {
+    "route": "pages/policy/history/index",
+    "files": {
+      "js": true,
+      "wxml": true,
+      "wxss": true
+    },
+    "lines": {
+      "js": 66,
+      "wxml": 27,
+      "wxss": 2
+    },
+    "entryRefs": [
+      "pages/policy/overview/index.js",
+      "pages/policy/review/index.js"
+    ],
+    "apiCalls": [
+      {
+        "method": "get",
+        "path": "/policy/history${query}"
+      },
+      {
+        "method": "post",
+        "path": "/policy/memory/reset-proposal"
+      }
+    ],
+    "tests": []
+  },
+  {
+    "route": "pages/checkin/index",
+    "files": {
+      "js": true,
+      "wxml": true,
+      "wxss": true
+    },
+    "lines": {
+      "js": 3,
+      "wxml": 8,
+      "wxss": 2
+    },
+    "entryRefs": [
+      "pages/insights/index.wxml",
+      "pages/records/index.js",
+      "utils/insightPresentation.js"
+    ],
+    "apiCalls": [
+      {
+        "method": "get",
+        "path": "/health/checkin/today"
+      },
+      {
+        "method": "put",
+        "path": "/health/checkin/today"
+      }
+    ],
+    "tests": [
+      "insightPresentation.test.js"
+    ]
+  },
+  {
+    "route": "pages/trends/index",
+    "files": {
+      "js": true,
+      "wxml": true,
+      "wxss": true
+    },
+    "lines": {
+      "js": 11,
+      "wxml": 12,
+      "wxss": 2
+    },
+    "entryRefs": [
+      "custom-tab-bar/index.js",
+      "pages/profile/index.js",
+      "pages/records/index.js",
+      "pages/state/index.js",
+      "utils/insightPresentation.js"
+    ],
+    "apiCalls": [
+      {
+        "method": "get",
+        "path": "/health/trends/7d"
+      }
+    ],
+    "tests": [
+      "insightPresentation.test.js"
+    ]
+  },
+  {
+    "route": "pages/settings/index",
+    "files": {
+      "js": true,
+      "wxml": true,
+      "wxss": true
+    },
+    "lines": {
+      "js": 84,
+      "wxml": 53,
+      "wxss": 5
+    },
+    "entryRefs": [
+      "custom-tab-bar/index.js",
+      "pages/profile/index.js"
+    ],
+    "apiCalls": [
+      {
+        "method": "get",
+        "path": "/users/me/ai-config"
+      }
+    ],
+    "tests": [
+      "capabilityPagePresentation.test.js",
+      "circularControls.test.js",
+      "navigationShell.test.js",
+      "settingsPresentation.test.js"
+    ]
+  },
+  {
+    "route": "pages/settings/capabilities/index",
+    "files": {
+      "js": true,
+      "wxml": true,
+      "wxss": true
+    },
+    "lines": {
+      "js": 324,
+      "wxml": 80,
+      "wxss": 70
+    },
+    "entryRefs": [
+      "pages/home/index.js",
+      "pages/policy/overview/index.js",
+      "pages/policy/protocol/index.js",
+      "pages/settings/index.js",
+      "utils/agentNavigation.js"
+    ],
+    "apiCalls": [
+      {
+        "method": "get",
+        "path": "/harness/plugin-catalog"
+      },
+      {
+        "method": "post",
+        "path": "/harness/installations/${plugin.installation_id}/pause"
+      },
+      {
+        "method": "post",
+        "path": "/harness/installations"
+      },
+      {
+        "method": "patch",
+        "path": "/harness/installations/${plugin.installation_id}"
+      },
+      {
+        "method": "post",
+        "path": "/harness/installations/${plugin.installation_id}/resume"
+      },
+      {
+        "method": "post",
+        "path": "/harness/installations/${plugin.installation_id}/preview"
+      },
+      {
+        "method": "post",
+        "path": "/harness/installations/${plugin.installation_id}/pause"
+      },
+      {
+        "method": "get",
+        "path": "/harness/installations/${plugin.installation_id}/audit"
+      },
+      {
+        "method": "del",
+        "path": "/harness/installations/${plugin.installation_id}?config_version=${plugin.config_version}"
+      },
+      {
+        "method": "get",
+        "path": "/harness/plugin-catalog"
+      }
+    ],
+    "tests": [
+      "capabilityPagePresentation.test.js",
+      "settingsPresentation.test.js"
+    ]
+  },
+  {
+    "route": "pages/settings/ai/index",
+    "files": {
+      "js": true,
+      "wxml": true,
+      "wxss": true
+    },
+    "lines": {
+      "js": 258,
+      "wxml": 65,
+      "wxss": 4
+    },
+    "entryRefs": [
+      "pages/chat/index.js",
+      "pages/settings/index.js"
+    ],
+    "apiCalls": [
+      {
+        "method": "get",
+        "path": "/users/me/ai-config"
+      },
+      {
+        "method": "get",
+        "path": "/harness/voice/status"
+      },
+      {
+        "method": "put",
+        "path": "/users/me/ai-config"
+      },
+      {
+        "method": "post",
+        "path": "/users/me/ai-config/test"
+      },
+      {
+        "method": "del",
+        "path": "/users/me/ai-config"
+      }
+    ],
+    "tests": [
+      "settingsPresentation.test.js"
+    ]
+  },
+  {
+    "route": "pages/evaluation/index",
+    "files": {
+      "js": true,
+      "wxml": true,
+      "wxss": true
+    },
+    "lines": {
+      "js": 10,
+      "wxml": 42,
+      "wxss": 5
+    },
+    "entryRefs": [
+      "pages/profile/index.js",
+      "pages/settings/index.js"
+    ],
+    "apiCalls": [
+      {
+        "method": "get",
+        "path": "/evaluation/dashboard?days=30"
+      },
+      {
+        "method": "get",
+        "path": "/agent/stats?days=30"
+      }
+    ],
+    "tests": [
+      "evaluationProvenance.test.js"
+    ]
+  },
+  {
+    "route": "pages/settings/privacy/index",
+    "files": {
+      "js": true,
+      "wxml": true,
+      "wxss": true
+    },
+    "lines": {
+      "js": 67,
+      "wxml": 14,
+      "wxss": 6
+    },
+    "entryRefs": [
+      "pages/settings/index.js"
+    ],
+    "apiCalls": [
+      {
+        "method": "get",
+        "path": "/privacy/policy"
+      },
+      {
+        "method": "get",
+        "path": "/privacy/export/preview"
+      },
+      {
+        "method": "get",
+        "path": "/privacy/cloud-media"
+      },
+      {
+        "method": "del",
+        "path": "/privacy/account"
+      }
+    ],
+    "tests": [
+      "circularControls.test.js"
+    ]
+  },
+  {
+    "route": "pages/state/index",
+    "files": {
+      "js": true,
+      "wxml": true,
+      "wxss": true
+    },
+    "lines": {
+      "js": 355,
+      "wxml": 212,
+      "wxss": 478
+    },
+    "entryRefs": [
+      "pages/home/index.js",
+      "utils/agentNavigation.js"
+    ],
+    "apiCalls": [
+      {
+        "method": "get",
+        "path": "/health/state"
+      },
+      {
+        "method": "get",
+        "path": "/agent/decision"
+      },
+      {
+        "method": "get",
+        "path": "/health/outcomes"
+      },
+      {
+        "method": "get",
+        "path": "/policy/decide"
+      },
+      {
+        "method": "get",
+        "path": "/policy/episodes/current"
+      }
+    ],
+    "tests": [
+      "statePagePresentation.test.js"
+    ]
+  }
+]

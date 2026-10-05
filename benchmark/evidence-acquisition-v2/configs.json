@@ -1,0 +1,40 @@
+{
+  "schema_version": "evidence-acquisition-v2-config-v1",
+  "seed": 20261005,
+  "window_days": 7,
+  "execution_target": 0.7,
+  "max_questions": 4,
+  "max_time_ms": 16000,
+  "execution_cost_ms": 3000,
+  "burden_cost_ms": 4000,
+  "defer_penalty": 20.0,
+  "per_hole_penalty": 5.0,
+  "burden_missing_penalty": 20.0,
+  "users": 40,
+  "episodes_per_user": 9,
+  "case_type_weights": {
+    "execution_gap": 20,
+    "paired_burden": 18,
+    "window_boundary": 10,
+    "refusal_unknown": 12,
+    "mnar": 10,
+    "source_revision": 10,
+    "knowledge_withdrawal": 8,
+    "certificate_invalidation_repair": 7,
+    "duplicate_cross_day": 5
+  },
+  "test_user_fraction": 0.30,
+  "response_model_id": "declared-mechanism-response-v2",
+  "response_models": {
+    "execution_gap": {"answered": 0.75, "unknown": 0.10, "declined": 0.05, "no_response": 0.10, "yes_given_answer": 0.58},
+    "paired_burden": {"answered": 0.68, "unknown": 0.12, "declined": 0.08, "no_response": 0.12, "yes_given_answer": 0.58},
+    "window_boundary": {"answered": 0.75, "unknown": 0.10, "declined": 0.05, "no_response": 0.10, "yes_given_answer": 0.58},
+    "refusal_unknown": {"answered": 0.35, "unknown": 0.35, "declined": 0.20, "no_response": 0.10, "yes_given_answer": 0.58},
+    "mnar": {"answered": 0.55, "unknown": 0.20, "declined": 0.10, "no_response": 0.15, "yes_given_answer": 0.50, "hidden_noncompletion_adjustment": 0.25},
+    "source_revision": {"answered": 0.75, "unknown": 0.10, "declined": 0.05, "no_response": 0.10, "yes_given_answer": 0.58},
+    "knowledge_withdrawal": {"answered": 0.70, "unknown": 0.15, "declined": 0.05, "no_response": 0.10, "yes_given_answer": 0.58},
+    "certificate_invalidation_repair": {"answered": 0.70, "unknown": 0.10, "declined": 0.05, "no_response": 0.15, "yes_given_answer": 0.58, "repair_answered": 0.70},
+    "duplicate_cross_day": {"answered": 0.75, "unknown": 0.10, "declined": 0.05, "no_response": 0.10, "yes_given_answer": 0.58}
+  },
+  "notes": "Response probabilities are declared per case type (mechanism-wise calibration not yet learned from users; sample_count=0, calibration_state=prior_only per spec A3). Latency is measured/simulated, reported as P50/P95, never presented as user-reported truth."
+}

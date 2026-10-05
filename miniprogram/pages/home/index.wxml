@@ -33,7 +33,7 @@
           <view class="voice-ring {{recording?'recording':''}}"></view>
           <view class="voice-button ui-fixed-circle tappable {{recording?'recording':''}} {{voiceWorking?'working':''}}" bindtouchstart="startVoice" bindtouchend="stopVoice" bindtouchcancel="cancelVoice" hover-class="voice-button-press" hover-start-time="0" hover-stay-time="80" aria-label="按住与健康伙伴说话"><image src="/assets/icons/mic.png" mode="aspectFit"/></view>
           <view class="voice-status">{{voiceStatus}}</view>
-          <view class="route-test-button tappable {{recording||voiceWorking?'disabled':''}}" bindtap="testPlanRouting" hover-class="tap" hover-start-time="0" hover-stay-time="80" aria-label="测试制定计划的智能体决策与路由">测试计划路由</view>
+          <view class="route-test-button tappable {{recording||voiceWorking?'disabled':''}}" bindtap="testPlanRouting" hover-class="tap" hover-start-time="0" hover-stay-time="80" aria-label="检查制定计划是否能进入计划草案">测试计划路由</view>
         </view>
         <view wx:if="{{response}}" class="voice-response">
           <view class="heard-text">“{{response.heard}}”</view>

@@ -2,6 +2,7 @@
 <page-transition/>
 <view class="page report-page ui-page-content">
   <block wx:if="{{loading}}"><view class="sk-hero shimmer"></view><view class="sk-grid"><view class="sk-card shimmer" wx:for="{{[1,2,3,4]}}" wx:key="*this"></view></view><view class="sk-chart shimmer"></view></block>
+  <view wx:elif="{{error}}" class="state-card state-card-error"><view><view class="state-title">周报暂时生成不了</view><view class="state-desc">{{error}}</view></view><button class="btn-soft compact tappable" bindtap="retry" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">重试</button></view>
   <block wx:elif="{{r}}">
     <view class="report-hero"><view class="row space"><view class="grow"><view class="kicker">WEEKLY INSIGHT · {{r.range}}</view><view class="hero-title">本周健康节奏 {{scoreText}} 分</view></view><view class="score-ring"><text class="b">{{scoreText}}</text><text class="small">/100</text></view></view><view class="hero-streak">连续打卡 {{r.streak.current}} 天 · 最长 {{r.streak.longest}} 天</view></view>
     <view class="metrics"><view class="metric card"><text class="b">{{displayAvg.sleep}}</text><text class="small">小时 · 睡眠</text></view><view class="metric card"><text class="b">{{displayAvg.exercise}}</text><text class="small">分钟 · 运动</text></view><view class="metric card"><text class="b">{{displayAvg.water}}</text><text class="small">ml · 饮水</text></view><view class="metric card"><text class="b">{{displayAvg.protein}}</text><text class="small">g · 蛋白质</text></view></view>

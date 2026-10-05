@@ -22,6 +22,7 @@ from app.models import (
     AIJob,
     DietRecord,
     FoodAnalysisSession,
+    HarnessPluginInstallation,
     HealthAgentRun,
     HealthGoalAdjustment,
     HealthPlan,
@@ -48,10 +49,22 @@ PLAN_RESULT = {
 
 def _run(engine, user_id: int) -> int:
     with Session(engine) as db:
+        installation = db.scalar(select(HarnessPluginInstallation).where(
+            HarnessPluginInstallation.user_id == user_id,
+            HarnessPluginInstallation.plugin_id == "plan_outcome",
+        ))
+        capability_binding = {
+            "plan_outcome": {
+                "installation_id": installation.id,
+                "config_version": installation.config_version,
+                "manifest_hash": installation.reviewed_manifest_hash,
+            }
+        } if installation else {}
         run = HealthAgentRun(
             user_id=user_id,
             intent="plan",
             user_message="帮我排个训练计划",
+            context_json=json.dumps({"_capability_bindings": capability_binding}),
             result_json=json.dumps(PLAN_RESULT, ensure_ascii=False),
             provider="test",
             status="completed",

@@ -149,7 +149,12 @@ def episode_view(db: Session, episode: PolicyEpisode) -> dict:
     return {"episode_id": episode.id, "strategy_unit_id": episode.unit_id, "status": episode.status, "version": episode.version, "start_at": episode.start_at.isoformat() + "Z", "end_at": episode.end_at.isoformat() + "Z", "learning_epoch": episode.learning_epoch, "stop_reason": episode.stop_reason, "review_revision": episode.review_revision, "effective_adjudication_revision": episode.effective_adjudication_revision, "context_snapshot": {"baseline_context_key": episode.baseline_context_key or episode.context_key, "followup_context_key": episode.followup_context_key or episode.context_key, "baseline_state_snapshot_hash": episode.baseline_state_snapshot_hash, "followup_state_snapshot_hash": episode.followup_state_snapshot_hash, "changed_variables": json.loads(episode.changed_variables_json or "[]")}, "opportunities": [{"id": x.id, "slot": x.slot, "scheduled_at": x.scheduled_at.isoformat() + "Z", "report_id": x.current_report_id} for x in opportunities], "reports": [{"id": x.id, "opportunity_id": x.opportunity_id, "revision": x.revision, "execution": x.execution, "burden": x.burden, "confounders": json.loads(x.confounders_json)} for x in reports], "observations": [{"endpoint": x.endpoint, "slot": x.slot, "source_type": x.source_type, "source_revision": x.source_revision, "observed_at": x.observed_at.isoformat() + "Z", "value": json.loads(x.value_json or "null"), "valid": x.valid} for x in observations], "adjudications": [{"revision": x.revision, "execution_label": x.execution_label, "support_label": x.support_label, "availability_label": x.availability_label, "conclusion": x.conclusion, "reasons": json.loads(x.reasons_json), "stale": x.stale, "valid": x.valid} for x in adjudications]}
 
 
-def report_opportunity(db: Session, user_id: int, episode_id: str, req) -> dict:
+def report_opportunity(db: Session, user_id: int, episode_id: str, req, *,
+                       actor_question_id: str | None = None,
+                       fence_acquired: bool = False) -> dict:
+    if not fence_acquired:
+        from app.services.policy_learning.acquisition.service import _fence
+        _fence(db, user_id)
     episode = db.get(PolicyEpisode, episode_id)
     if episode is None or episode.user_id != user_id:
         raise PolicyError("POLICY_NOT_FOUND", "周期不存在")
@@ -177,6 +182,8 @@ def report_opportunity(db: Session, user_id: int, episode_id: str, req) -> dict:
     episode.execution_json = _json(execution)
     episode.version += 1
     db.flush()
+    from app.services.policy_learning.acquisition.service import invalidate_episode
+    invalidate_episode(db, user_id, episode.id, except_question_id=actor_question_id)
     return episode_view(db, episode)
 
 
@@ -265,7 +272,7 @@ def _build_evidence(
     confounders = tuple(code for row in reports for code in json.loads(row.confounders_json))
     baseline = tuple(point for ref, point in resolved_points if ref.endpoint == "baseline")
     followup = tuple(point for ref, point in resolved_points if ref.endpoint == "followup")
-    return EpisodeEvidence(episode.id, episode.review_revision + 1, protocol, execution, baseline, followup, baseline_context=episode.baseline_context_key or episode.context_key, followup_context=episode.followup_context_key or episode.context_key, confounders=confounders, adverse_event=episode.status == "stopped", window_closed=True)
+    return EpisodeEvidence(episode.id, episode.review_revision + 1, protocol, execution, baseline, followup, baseline_context=episode.baseline_context_key or episode.context_key, followup_context=episode.followup_context_key or episode.context_key, confounders=confounders, adverse_event=episode.status == "stopped", window_closed=utc_now() >= episode.end_at)
 
 
 def _freeze_followup_context(db: Session, episode: PolicyEpisode) -> None:
@@ -306,6 +313,8 @@ def _evidence_refs_json(db: Session, episode: PolicyEpisode) -> str:
 
 
 def finish_episode(db: Session, user_id: int, episode_id: str, version: int) -> dict:
+    from app.services.policy_learning.acquisition.service import _fence
+    _fence(db, user_id)
     episode = db.get(PolicyEpisode, episode_id)
     if episode is None or episode.user_id != user_id:
         raise PolicyError("POLICY_NOT_FOUND", "周期不存在")
@@ -324,10 +333,14 @@ def finish_episode(db: Session, user_id: int, episode_id: str, version: int) -> 
     db.execute(delete(PolicyActiveSlot).where(PolicyActiveSlot.user_id == user_id))
     db.add(PolicyOutbox(event_id=uuid4().hex, user_id=user_id, event_type="policy.adjudicated", ref_id=episode.id, revision=revision, payload=_json({"episode_id": episode.id, "revision": revision}), status="pending"))
     db.flush()
+    from app.services.policy_learning.acquisition.service import invalidate_episode
+    invalidate_episode(db, user_id, episode.id)
     return {"episode": episode_view(db, episode), "adjudication": {"revision": revision, "execution_label": verdict.execution_label, "support_label": verdict.support_label, "availability_label": verdict.availability_label, "conclusion": verdict.conclusion, "reasons": list(verdict.reasons), "observed_score": verdict.observed_score}}
 
 
 def stop_episode(db: Session, user_id: int, episode_id: str, version: int, reason_code: str) -> dict:
+    from app.services.policy_learning.acquisition.service import _fence
+    _fence(db, user_id)
     episode = db.get(PolicyEpisode, episode_id)
     if episode is None or episode.user_id != user_id:
         raise PolicyError("POLICY_NOT_FOUND", "周期不存在")
@@ -345,6 +358,8 @@ def stop_episode(db: Session, user_id: int, episode_id: str, version: int, reaso
     db.add(PolicyAdjudication(id=uuid4().hex, user_id=user_id, episode_id=episode.id, revision=revision, learning_epoch=episode.learning_epoch, execution_label=verdict.execution_label, support_label=None, availability_label=None, conclusion="stopped", reasons_json=_json((reason_code,) + verdict.reasons), evidence_refs_json=_evidence_refs_json(db, episode), source_hash=hashlib.sha256(_json(verdict.__dict__).encode()).hexdigest(), algorithm_version="egpl-v1.0.0", gate_version="evidence-gate-v1.0.0"))
     db.add(PolicyOutbox(event_id=uuid4().hex, user_id=user_id, event_type="policy.adjudicated", ref_id=episode.id, revision=revision, payload=_json({"episode_id": episode.id, "revision": revision}), status="pending"))
     db.flush()
+    from app.services.policy_learning.acquisition.service import invalidate_episode
+    invalidate_episode(db, user_id, episode.id)
     return {"episode": episode_view(db, episode), "adjudication": {"revision": revision, "execution_label": verdict.execution_label, "support_label": None, "availability_label": None, "conclusion": "stopped", "reasons": [reason_code, *verdict.reasons]}}
 
 

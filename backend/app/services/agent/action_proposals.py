@@ -42,7 +42,7 @@ TYPED_CONFIRMATION_REQUIRED: dict[str, str] = {
 
 # Actions the model may never propose (spec §8.4).
 MODEL_FORBIDDEN_ACTIONS: frozenset[str] = frozenset(
-    {"experiment.start", "experiment.finish", "experiment.cancel", "policy.episode.start", "policy.episode.finish", "policy.episode.stop", "policy.memory.reset"}
+    {"experiment.start", "experiment.finish", "experiment.cancel", "policy.episode.start", "policy.episode.finish", "policy.episode.stop", "policy.episode.rereview", "policy.memory.reset"}
 )
 
 
@@ -123,6 +123,13 @@ class PolicyEpisodeStopArgs(PolicyEpisodeFinishArgs):
     reason_code: str = Field(min_length=1, max_length=120)
 
 
+class PolicyEpisodeRereviewArgs(ActionArguments):
+    episode_id: str = Field(min_length=1, max_length=64)
+    episode_version: int = Field(ge=1)
+    expected_adjudication_revision: int = Field(ge=1)
+    expected_evidence_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
 class PolicyMemoryResetArgs(ActionArguments):
     strategy_id: str | None = Field(default=None, max_length=100)
     scope: str = Field(default="strategy", pattern="^(strategy|all)$")
@@ -142,6 +149,7 @@ ARGUMENT_SCHEMAS: dict[str, type[ActionArguments]] = {
     "policy.episode.start": PolicyEpisodeStartArgs,
     "policy.episode.finish": PolicyEpisodeFinishArgs,
     "policy.episode.stop": PolicyEpisodeStopArgs,
+    "policy.episode.rereview": PolicyEpisodeRereviewArgs,
     "policy.memory.reset": PolicyMemoryResetArgs,
 }
 

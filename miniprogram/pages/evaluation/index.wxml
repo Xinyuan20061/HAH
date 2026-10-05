@@ -35,7 +35,7 @@
     </block>
     <view class="section-title">离线 Benchmark</view>
     <view wx:if="{{!benchmarks.length}}" class="state-card"><view><view class="state-title">还没有标注集评测</view><view class="state-desc">录入固定测试集结果后显示。</view></view></view>
-    <view wx:else class="card benchmark-list"><view class="bench" wx:for="{{benchmarks}}" wx:key="metric_name"><view class="row space"><view><view class="bench-name">{{item.metric_name}}</view><view class="muted">{{item.task_type}} · n={{item.sample_size}}</view></view><view class="bench-value">{{item.value}}{{item.unit}}</view></view><view wx:if="{{item.notes}}" class="bench-note">{{item.notes}}</view></view></view>
+    <view wx:else class="card benchmark-list"><view class="bench" wx:for="{{benchmarks}}" wx:key="metric_name"><view class="row space"><view><view class="bench-name">{{item.metric_name}}</view><view class="muted">{{item.task_type}} · n={{item.sample_size}}</view></view><view class="bench-value">{{item.value}}{{item.unit}}</view></view><view class="bench-note" wx:if="{{item.dataset || item.evidenceLabel || item.retriever_version}}">数据集 {{item.dataset || '未标注'}} · {{item.evidenceLabel}} · 版本 {{item.retriever_version || '未标注'}} · {{item.measuredDate}}</view><view wx:if="{{item.notes}}" class="bench-note">{{item.notes}}</view></view></view>
     <view class="evidence card"><view class="info-title">评测口径</view><view wx:for="{{dash.notes}}" wx:key="*this" class="evidence-row">• {{item}}</view></view>
   </block>
 </view>

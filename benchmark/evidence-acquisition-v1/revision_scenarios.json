@@ -1,0 +1,12 @@
+{
+  "schema_version": "evidence-revision-scenarios-v1",
+  "scenarios": [
+    {"id": "execution_report_correction", "event": "completed_to_not_completed", "expected": "episode version changes; old certificate is stale before reuse"},
+    {"id": "result_source_deletion", "event": "delete_observation_source", "expected": "dependent adjudication and certificate become stale synchronously"},
+    {"id": "source_revision", "event": "source_version_increment", "expected": "source identity/revision mismatch blocks old evidence"},
+    {"id": "context_change", "event": "frozen_context_hash_changes", "expected": "existing certificate binding no longer matches"},
+    {"id": "authorization_tightened", "event": "required_scope_removed", "expected": "certificate cannot be consumed"},
+    {"id": "out_of_order_retry", "event": "same_key_different_body_or_stale_version", "expected": "conflict without duplicate write"}
+  ],
+  "synthetic_replay_case": "A deletion event invalidates one known execution report; the harness verifies binding mismatch before any certificate read, then permits one repair prompt if budget remains."
+}

@@ -5,7 +5,7 @@ import json
 import pytest
 from fastapi import HTTPException
 
-from app.models import User
+from app.models import HarnessPluginInstallation, User
 from app.services.agent.evaluation import evaluate_agent_cases, validate_cases
 from app.services.agent.orchestrator import detect_intent
 from app.services.agent import orchestrator
@@ -48,6 +48,25 @@ class FailProvider:
 
     async def chat(self, system: str, message: str) -> AIResult:
         raise HTTPException(503, "评测注入故障")
+
+
+def _grant_reviewed_capabilities(db, user_id: int) -> None:
+    from app.harness.plugins import BUILTIN_PLUGINS
+    for manifest in BUILTIN_PLUGINS:
+        db.add(HarnessPluginInstallation(
+            user_id=user_id,
+            plugin_id=manifest.plugin_id,
+            plugin_version=manifest.version,
+            enabled=True,
+            config_json=json.dumps({
+                "goal": manifest.goals[0][0] if manifest.goals else "daily_guidance",
+                "data_scopes": [key for key, _ in manifest.scope_definitions],
+                "allow_action_proposals": bool(manifest.may_propose_actions),
+                "notification_frequency": "on_request",
+            }, ensure_ascii=False),
+            config_version=1,
+            reviewed_manifest_hash=manifest.manifest_hash(),
+        ))
 
 
 INTENT_CASES = [
@@ -172,6 +191,7 @@ def test_agent_respond_plan_structure_with_mock_provider(api, monkeypatch):
     with Session(main.engine) as db:
         db.add(user)
         db.flush()
+        _grant_reviewed_capabilities(db, user.id)
 
         async def run():
             return await orchestrator.respond(db, user, "这周怎么练比较好？")
@@ -197,6 +217,7 @@ def test_agent_respond_rules_fallback_on_provider_failure(api, monkeypatch):
     with Session(main.engine) as db:
         db.add(user)
         db.flush()
+        _grant_reviewed_capabilities(db, user.id)
 
         async def run():
             return await orchestrator.respond(db, user, "给我安排一个训练计划")

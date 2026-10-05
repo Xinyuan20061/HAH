@@ -63,7 +63,11 @@ def _enable_personal_policy(api):
 
 def test_active_legacy_experiment_blocks_policy_start(api, migrated_engine):
     _enable_personal_policy(api)
-    compiled = api.post("/api/v1/policy/compile", json={"template_id": "session_duration", "parameters": {"variant": "session_15m"}}).json()
+    compiled = api.post(
+        "/api/v1/policy/compile",
+        json={"template_id": "session_duration", "parameters": {"variant": "session_15m"}},
+        headers={"Idempotency-Key": "legacy-experiment-policy-compile"},
+    ).json()
     _force_compiled(migrated_engine, api.user_id, compiled)
     with Session(migrated_engine) as db:
         db.add(AgentMicroExperiment(user_id=api.user_id, decision_id=uuid4().hex, insight_code="x", title="x", primary_metric="x", start_date="2026-10-01", end_date="2026-10-07", status="active"))

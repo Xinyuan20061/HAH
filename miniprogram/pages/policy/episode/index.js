@@ -1,5 +1,6 @@
 const api = require('../../../utils/request')
 const journey = require('../../../utils/policyJourney')
+const acquisitionApi = require('../../../utils/policyAcquisition')
 
 function localDate() {
   const d = new Date()
@@ -60,10 +61,43 @@ Page({
     value: '',
     metricVersion: 'burden-v1',
     canReview: false,
-    canStop: false
+    canStop: false,
+    acquisition: null,
+    acquisitionConsent: false,
+    acquisitionBudget: { daily_prompt_limit: 2, episode_prompt_limit: 14, estimated_daily_seconds: 30 },
+    dailyBudgetOptions: ['0 次', '1 次', '2 次'],
+    episodeBudgetOptions: ['0 次', '7 次', '14 次'],
+    timeBudgetOptions: ['0 秒', '15 秒', '30 秒'],
+    dailyBudgetIndex: 2,
+    episodeBudgetIndex: 2,
+    timeBudgetIndex: 2,
+    acquisitionBusy: false,
+    acquisitionError: '',
+    pendingAcquisitionAnswer: null,
+    acquisitionBurdenValue: '',
+    acquisitionBurdenDate: '',
+    acquisitionBurdenDateMin: '',
+    acquisitionBurdenDateMax: ''
   },
 
-  onLoad(options) { this.episodeId = options && options.id; this.load() },
+  onLoad(options) { this._pageVisible = true; this.episodeId = options && options.id; this.load() },
+  onShow() {
+    this._pageVisible = true
+    if (this._activeAcquisitionClock) {
+      acquisitionApi.elapsedClock.start(this._activeAcquisitionClock.sessionId,
+        this._activeAcquisitionClock.itemId)
+    }
+    if (this.episodeId && this.data.episode && !this.data.busy && !this.data.acquisitionBusy) {
+      this.refreshAcquisition()
+    }
+  },
+  onHide() {
+    this._pageVisible = false
+    if (this._activeAcquisitionClock) {
+      acquisitionApi.elapsedClock.pause(this._activeAcquisitionClock.sessionId,
+        this._activeAcquisitionClock.itemId)
+    }
+  },
   onPullDownRefresh() { this.load().then(() => wx.stopPullDownRefresh()) },
 
   async load() {
@@ -123,8 +157,274 @@ Page({
       })
       this.clearResolvedPendingObservation(episode)
       this.restorePendingObservation(episode)
+      this.pageLoaded = true
+      await this.loadAcquisition(episode)
     } catch (error) {
       this.setData({ loading: false, error: error.message || '周期记录暂时无法读取' })
+    }
+  },
+
+  async loadAcquisition(episode) {
+    if (!episode || episode.status !== 'active') {
+      this.syncAcquisitionClock(null, null)
+      this.setData({ acquisition: null, pendingAcquisitionAnswer: null })
+      return
+    }
+    try {
+      const history = await acquisitionApi.getHistory(episode.episode_id)
+      if (!history.session_id) {
+        this.syncAcquisitionClock(null, null)
+        this.setData({ acquisition: null, pendingAcquisitionAnswer: null, acquisitionError: '' })
+        return
+      }
+      const state = await acquisitionApi.getSession(history.session_id)
+      const question = state.decision && state.decision.question
+      const repairScope = `repair:${state.session_id}`
+      const pendingRepair = state.decision && state.decision.action === 'needs_repair'
+        ? acquisitionApi.getPending(repairScope) : null
+      if (!pendingRepair) acquisitionApi.clearPending(repairScope)
+      if (state.decision && state.decision.action === 'needs_repair' && !pendingRepair) {
+        this.repairStartedAt = Date.now()
+      }
+      let pendingAnswer = null
+      if (question) {
+        const scope = `answer:${state.session_id}:${question.question_id}:${state.session_version}:${state.episode_version}`
+        const pending = acquisitionApi.getPending(scope)
+        if (pending) pendingAnswer = pending.body
+      }
+      const isBaseline = question && question.kind === 'burden_baseline'
+      const isFollowup = question && question.kind === 'burden_followup'
+      const start = new Date(episode.start_at)
+      const end = new Date(episode.end_at)
+      const min = isBaseline ? new Date(start.getTime() - 30 * 86400000)
+        : isFollowup ? new Date(start) : new Date()
+      const max = isBaseline ? new Date(start.getTime() - 86400000)
+        : isFollowup ? new Date(Math.min(Date.now(), end.getTime() + 86400000)) : new Date()
+      this.setData({
+        acquisition: state, pendingAcquisitionAnswer: pendingAnswer,
+        pendingAcquisitionRepair: pendingRepair && pendingRepair.body || null,
+        acquisitionError: '',
+        acquisitionBurdenValue: '', acquisitionBurdenDate: '',
+        acquisitionBurdenDateMin: localDateFrom(min), acquisitionBurdenDateMax: localDateFrom(max)
+      })
+      this.syncAcquisitionClock(state.session_id,
+        question ? question.question_id : state.decision && state.decision.action === 'needs_repair' ? 'repair' : null)
+    } catch (error) {
+      this.setData({ acquisitionError: error.message || '低负担核查状态暂时无法刷新' })
+    }
+  },
+
+  refreshAcquisition() {
+    return this.loadAcquisition(this.data.episode)
+  },
+
+  syncAcquisitionClock(sessionId, itemId) {
+    const previous = this._activeAcquisitionClock
+    if (previous && (!itemId || previous.sessionId !== sessionId || previous.itemId !== itemId)) {
+      this.clearAcquisitionClock(previous.sessionId, previous.itemId)
+    }
+    if (!itemId || !sessionId) return
+    this._activeAcquisitionClock = { sessionId, itemId }
+    if (this._pageVisible !== false) acquisitionApi.elapsedClock.start(sessionId, itemId)
+  },
+
+  clearAcquisitionClock(sessionId, itemId) {
+    acquisitionApi.elapsedClock.clear(sessionId, itemId)
+    const active = this._activeAcquisitionClock
+    if (active && active.sessionId === sessionId && active.itemId === itemId) {
+      this._activeAcquisitionClock = null
+    }
+  },
+
+  acquisitionElapsedMs(sessionId, itemId) {
+    return Math.min(600000, Math.max(0, acquisitionApi.elapsedClock.elapsed(sessionId, itemId)))
+  },
+
+  toggleAcquisitionConsent(e) {
+    this.setData({ acquisitionConsent: !!(e.detail.value || []).length })
+  },
+
+  chooseAcquisitionBudget(e) {
+    const dimension = e.currentTarget.dataset.dimension
+    const index = Number(e.detail.value)
+    const choices = {
+      daily: { path: 'daily_prompt_limit', values: [0, 1, 2], indexKey: 'dailyBudgetIndex' },
+      episode: { path: 'episode_prompt_limit', values: [0, 7, 14], indexKey: 'episodeBudgetIndex' },
+      time: { path: 'estimated_daily_seconds', values: [0, 15, 30], indexKey: 'timeBudgetIndex' }
+    }
+    const selected = choices[dimension]
+    if (!selected || !Number.isInteger(index) || index < 0 || index >= selected.values.length) return
+    this.setData({
+      [`acquisitionBudget.${selected.path}`]: selected.values[index],
+      [selected.indexKey]: index
+    })
+  },
+
+  async startAcquisition() {
+    const episode = this.data.episode
+    if (!episode || !this.data.acquisitionConsent || this.data.acquisitionBusy) return
+    this.setData({ acquisitionBusy: true, acquisitionError: '' })
+    try {
+      const state = await acquisitionApi.start(episode.episode_id, {
+        expected_episode_version: episode.version,
+        consent_to_questions: true,
+        budget: this.data.acquisitionBudget
+      })
+      this.setData({ acquisition: state, acquisitionConsent: false })
+      await this.load()
+      wx.showToast({ title: '已开启按需核查', icon: 'success' })
+    } catch (error) {
+      this.setData({ acquisitionError: error.message || '无法开启按需核查' })
+      if (error.statusCode === 409) await this.load()
+    } finally {
+      this.setData({ acquisitionBusy: false })
+    }
+  },
+
+  async nextAcquisitionQuestion() {
+    const state = this.data.acquisition
+    const episode = this.data.episode
+    if (!state || !episode || this.data.acquisitionBusy) return
+    this.setData({ acquisitionBusy: true, acquisitionError: '' })
+    try {
+      const result = await acquisitionApi.next(state.session_id, {
+        expected_session_version: state.session_version,
+        expected_episode_version: episode.version
+      })
+      this.setData({ acquisition: result, pendingAcquisitionAnswer: null })
+      await this.load()
+    } catch (error) {
+      this.setData({ acquisitionError: error.message || '暂时无法继续核查' })
+      if (error.statusCode === 409) await this.load()
+    } finally {
+      this.setData({ acquisitionBusy: false })
+    }
+  },
+
+  async repairAcquisition() {
+    const state = this.data.acquisition
+    const episode = this.data.episode
+    if (!state || !episode || this.data.acquisitionBusy || state.decision.action !== 'needs_repair') return
+    const scope = `repair:${state.session_id}`
+    const pending = acquisitionApi.getPending(scope)
+    const body = pending && pending.body || {
+      expected_session_version: state.session_version,
+      expected_episode_version: episode.version,
+      client_elapsed_ms: this.acquisitionElapsedMs(state.session_id, 'repair')
+    }
+    this.setData({ acquisitionBusy: true, acquisitionError: '' })
+    try {
+      const result = await acquisitionApi.repair(state.session_id, body)
+      this.clearAcquisitionClock(state.session_id, 'repair')
+      this.setData({ acquisition: result, pendingAcquisitionRepair: null })
+      await this.load()
+    } catch (error) {
+      const saved = acquisitionApi.getPending(scope)
+      this.setData({ acquisitionError: error.message || '当前依据未能重新核验',
+        pendingAcquisitionRepair: saved && saved.body || null })
+      if (error.statusCode === 409) await this.load()
+    } finally {
+      this.setData({ acquisitionBusy: false })
+    }
+  },
+
+  async answerAcquisition(e) {
+    const state = this.data.acquisition
+    const episode = this.data.episode
+    const question = state && state.decision && state.decision.question
+    if (!state || !episode || !question || this.data.acquisitionBusy) return
+    const response = e.currentTarget.dataset.response
+    const executionValue = e.currentTarget.dataset.value
+    let confirmation = false
+    let burdenValue = null
+    let observedAt = null
+    if (response === 'answered') {
+      if (question.kind === 'burden_baseline' || question.kind === 'burden_followup') {
+        const raw = this.data.acquisitionBurdenValue
+        burdenValue = Number(raw)
+        if (!raw || !isFinite(burdenValue) || burdenValue < 0 || burdenValue > 10 || !this.data.acquisitionBurdenDate) {
+          wx.showToast({ title: '请填写 0–10 自评并选择真实发生日期', icon: 'none' })
+          return
+        }
+        const [year, month, day] = this.data.acquisitionBurdenDate.split('-').map(Number)
+        observedAt = this.data.acquisitionBurdenDate === localDate()
+          ? new Date().toISOString()
+          : new Date(year, month - 1, day, 12, 0, 0).toISOString()
+      }
+      confirmation = await new Promise(resolve => wx.showModal({
+        title: '确认这条本人记录',
+        content: question.kind === 'execution_confirmation'
+          ? (executionValue === 'completed' ? '你确认这次训练已经完成？' : '你确认这次训练没有完成？系统只记录你的确认，不代表健康效果。')
+          : `你确认这条训练负担自评为 ${burdenValue} / 10，发生于 ${this.data.acquisitionBurdenDate}？系统会标记为本人自报，不代表健康结论。`,
+        confirmText: '确认记录', cancelText: '再想一下',
+        success: result => resolve(!!result.confirm), fail: () => resolve(false)
+      }))
+      if (!confirmation) return
+    }
+    const body = {
+      expected_session_version: state.session_version,
+      expected_episode_version: episode.version,
+      response,
+      confirmation,
+      execution_value: response === 'answered' && question.kind === 'execution_confirmation' ? executionValue : null,
+      burden_value: response === 'answered' && question.kind !== 'execution_confirmation' ? burdenValue : null,
+      observed_at: response === 'answered' && question.kind !== 'execution_confirmation' ? observedAt : null,
+      client_elapsed_ms: this.acquisitionElapsedMs(state.session_id, question.question_id)
+    }
+    await this.submitAcquisitionAnswer(question, body)
+  },
+
+  inputAcquisitionBurden(e) { this.setData({ acquisitionBurdenValue: e.detail.value }) },
+  chooseAcquisitionBurdenDate(e) { this.setData({ acquisitionBurdenDate: e.detail.value }) },
+
+  async submitAcquisitionAnswer(question, body) {
+    const state = this.data.acquisition
+    if (!state || !question || this.data.acquisitionBusy) return
+    this.setData({ acquisitionBusy: true, acquisitionError: '' })
+    try {
+      const result = await acquisitionApi.answer(state.session_id, question.question_id, body)
+      this.clearAcquisitionClock(state.session_id, question.question_id)
+      this.setData({ acquisition: result, pendingAcquisitionAnswer: null })
+      await this.load()
+      wx.showToast({ title: '答复已保存', icon: 'success' })
+    } catch (error) {
+      const scope = `answer:${state.session_id}:${question.question_id}:${body.expected_session_version}:${body.expected_episode_version}`
+      const pending = acquisitionApi.getPending(scope)
+      this.setData({ acquisitionError: error.message || '答复结果未确认', pendingAcquisitionAnswer: pending && pending.body || null })
+      if (error.statusCode === 409 || error.statusCode === 410) await this.load()
+    } finally {
+      this.setData({ acquisitionBusy: false })
+    }
+  },
+
+  retryAcquisitionAnswer() {
+    const state = this.data.acquisition
+    const question = state && state.decision && state.decision.question
+    if (question && this.data.pendingAcquisitionAnswer) {
+      this.submitAcquisitionAnswer(question, this.data.pendingAcquisitionAnswer)
+    }
+  },
+
+  async setAcquisitionPaused(paused) {
+    if (paused && typeof paused === 'object') paused = String(paused.currentTarget.dataset.paused) === 'true'
+    const state = this.data.acquisition
+    const episode = this.data.episode
+    if (!state || !episode || this.data.acquisitionBusy) return
+    this.setData({ acquisitionBusy: true, acquisitionError: '' })
+    try {
+      const result = paused
+        ? await acquisitionApi.pause(state.session_id, { expected_session_version: state.session_version })
+        : await acquisitionApi.resume(state.session_id, {
+            expected_session_version: state.session_version,
+            expected_episode_version: episode.version
+          })
+      this.setData({ acquisition: result, pendingAcquisitionAnswer: null })
+      await this.load()
+    } catch (error) {
+      this.setData({ acquisitionError: error.message || '状态更新失败' })
+      if (error.statusCode === 409) await this.load()
+    } finally {
+      this.setData({ acquisitionBusy: false })
     }
   },
 

@@ -397,7 +397,7 @@
   align-items: center;
   min-height: 72rpx;
   margin-top: 12rpx;
-  padding: 0 18rpx;
+  padding: 0 16rpx;
   border-radius: 14rpx;
   color: #506336;
   background: #e9efd9;

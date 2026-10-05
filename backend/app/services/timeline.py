@@ -38,6 +38,45 @@ def add_event(
     return e
 
 
+def add_state_event(
+    db: Session,
+    user_id: int,
+    event_type: str,
+    payload: dict,
+    source="manual",
+    ref_type="",
+    ref_id=None,
+    occurred_at=None,
+):
+    """State-toggle event (done/reopened/checkin …) is idempotent per business
+    record: re-submitting the same state adds nothing, and flipping the state
+    rewrites the single latest event instead of piling up duplicates
+    (spec §13.5 — editing should rewrite the same event, not append).
+    """
+    if ref_type and ref_id is not None:
+        existing = db.scalar(
+            select(HealthTimelineEvent)
+            .where(
+                HealthTimelineEvent.user_id == user_id,
+                HealthTimelineEvent.ref_type == ref_type,
+                HealthTimelineEvent.ref_id == ref_id,
+            )
+            .order_by(HealthTimelineEvent.occurred_at.desc())
+        )
+        if existing is not None:
+            if existing.event_type == event_type:
+                return existing  # same state re-submitted: nothing new to record
+            existing.event_type = event_type
+            existing.source = source
+            existing.payload_json = json.dumps(payload, ensure_ascii=False, default=str)
+            existing.occurred_at = occurred_at or utc_now()
+            return existing
+    return add_event(
+        db, user_id, event_type, payload, source=source,
+        ref_type=ref_type, ref_id=ref_id, occurred_at=occurred_at,
+    )
+
+
 def unified_timeline(db: Session, user_id: int, days: int = 7):
     since = utc_now() - timedelta(days=days)
     rows = db.scalars(

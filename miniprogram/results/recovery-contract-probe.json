@@ -1,0 +1,282 @@
+[
+  {
+    "route": "pages/home/index",
+    "hasLoading": true,
+    "hasError": true,
+    "hasRetry": true,
+    "hasEmpty": false,
+    "writeCalls": 0,
+    "busyGuard": false,
+    "toastFeedback": true
+  },
+  {
+    "route": "pages/insights/index",
+    "hasLoading": true,
+    "hasError": true,
+    "hasRetry": true,
+    "hasEmpty": false,
+    "writeCalls": 4,
+    "busyGuard": false,
+    "toastFeedback": true
+  },
+  {
+    "route": "pages/scan/index",
+    "hasLoading": true,
+    "hasError": true,
+    "hasRetry": true,
+    "hasEmpty": false,
+    "writeCalls": 2,
+    "busyGuard": true,
+    "toastFeedback": true
+  },
+  {
+    "route": "pages/workout/index",
+    "hasLoading": true,
+    "hasError": false,
+    "hasRetry": false,
+    "hasEmpty": false,
+    "writeCalls": 0,
+    "busyGuard": false,
+    "toastFeedback": true
+  },
+  {
+    "route": "pages/exercise-detail/index",
+    "hasLoading": false,
+    "hasError": false,
+    "hasRetry": false,
+    "hasEmpty": false,
+    "writeCalls": 0,
+    "busyGuard": false,
+    "toastFeedback": false
+  },
+  {
+    "route": "pages/report/index",
+    "hasLoading": true,
+    "hasError": false,
+    "hasRetry": false,
+    "hasEmpty": false,
+    "writeCalls": 0,
+    "busyGuard": false,
+    "toastFeedback": false
+  },
+  {
+    "route": "pages/media/index",
+    "hasLoading": false,
+    "hasError": true,
+    "hasRetry": false,
+    "hasEmpty": true,
+    "writeCalls": 5,
+    "busyGuard": true,
+    "toastFeedback": true
+  },
+  {
+    "route": "pages/chat/index",
+    "hasLoading": false,
+    "hasError": true,
+    "hasRetry": false,
+    "hasEmpty": false,
+    "writeCalls": 3,
+    "busyGuard": false,
+    "toastFeedback": true
+  },
+  {
+    "route": "pages/records/index",
+    "hasLoading": true,
+    "hasError": true,
+    "hasRetry": true,
+    "hasEmpty": true,
+    "writeCalls": 0,
+    "busyGuard": false,
+    "toastFeedback": false
+  },
+  {
+    "route": "pages/plan/index",
+    "hasLoading": false,
+    "hasError": true,
+    "hasRetry": false,
+    "hasEmpty": false,
+    "writeCalls": 6,
+    "busyGuard": true,
+    "toastFeedback": true
+  },
+  {
+    "route": "pages/goals/index",
+    "hasLoading": true,
+    "hasError": false,
+    "hasRetry": false,
+    "hasEmpty": false,
+    "writeCalls": 2,
+    "busyGuard": true,
+    "toastFeedback": true
+  },
+  {
+    "route": "pages/profile/index",
+    "hasLoading": true,
+    "hasError": true,
+    "hasRetry": true,
+    "hasEmpty": true,
+    "writeCalls": 1,
+    "busyGuard": true,
+    "toastFeedback": true
+  },
+  {
+    "route": "pages/profile/edit",
+    "hasLoading": false,
+    "hasError": false,
+    "hasRetry": false,
+    "hasEmpty": false,
+    "writeCalls": 1,
+    "busyGuard": false,
+    "toastFeedback": true
+  },
+  {
+    "route": "pages/records/diet",
+    "hasLoading": true,
+    "hasError": true,
+    "hasRetry": true,
+    "hasEmpty": true,
+    "writeCalls": 2,
+    "busyGuard": true,
+    "toastFeedback": true
+  },
+  {
+    "route": "pages/records/exercise",
+    "hasLoading": false,
+    "hasError": false,
+    "hasRetry": false,
+    "hasEmpty": true,
+    "writeCalls": 2,
+    "busyGuard": false,
+    "toastFeedback": true
+  },
+  {
+    "route": "pages/policy/overview/index",
+    "hasLoading": true,
+    "hasError": true,
+    "hasRetry": true,
+    "hasEmpty": false,
+    "writeCalls": 0,
+    "busyGuard": false,
+    "toastFeedback": false
+  },
+  {
+    "route": "pages/policy/protocol/index",
+    "hasLoading": true,
+    "hasError": true,
+    "hasRetry": true,
+    "hasEmpty": false,
+    "writeCalls": 2,
+    "busyGuard": true,
+    "toastFeedback": false
+  },
+  {
+    "route": "pages/policy/episode/index",
+    "hasLoading": true,
+    "hasError": true,
+    "hasRetry": true,
+    "hasEmpty": true,
+    "writeCalls": 3,
+    "busyGuard": true,
+    "toastFeedback": true
+  },
+  {
+    "route": "pages/policy/review/index",
+    "hasLoading": true,
+    "hasError": true,
+    "hasRetry": true,
+    "hasEmpty": false,
+    "writeCalls": 2,
+    "busyGuard": true,
+    "toastFeedback": true
+  },
+  {
+    "route": "pages/policy/history/index",
+    "hasLoading": true,
+    "hasError": true,
+    "hasRetry": true,
+    "hasEmpty": true,
+    "writeCalls": 1,
+    "busyGuard": true,
+    "toastFeedback": true
+  },
+  {
+    "route": "pages/checkin/index",
+    "hasLoading": false,
+    "hasError": false,
+    "hasRetry": false,
+    "hasEmpty": false,
+    "writeCalls": 1,
+    "busyGuard": true,
+    "toastFeedback": true
+  },
+  {
+    "route": "pages/trends/index",
+    "hasLoading": true,
+    "hasError": false,
+    "hasRetry": false,
+    "hasEmpty": true,
+    "writeCalls": 0,
+    "busyGuard": false,
+    "toastFeedback": false
+  },
+  {
+    "route": "pages/settings/index",
+    "hasLoading": true,
+    "hasError": true,
+    "hasRetry": true,
+    "hasEmpty": false,
+    "writeCalls": 0,
+    "busyGuard": false,
+    "toastFeedback": false
+  },
+  {
+    "route": "pages/settings/capabilities/index",
+    "hasLoading": true,
+    "hasError": true,
+    "hasRetry": true,
+    "hasEmpty": true,
+    "writeCalls": 7,
+    "busyGuard": true,
+    "toastFeedback": true
+  },
+  {
+    "route": "pages/settings/ai/index",
+    "hasLoading": false,
+    "hasError": false,
+    "hasRetry": false,
+    "hasEmpty": true,
+    "writeCalls": 3,
+    "busyGuard": true,
+    "toastFeedback": true
+  },
+  {
+    "route": "pages/evaluation/index",
+    "hasLoading": true,
+    "hasError": true,
+    "hasRetry": true,
+    "hasEmpty": true,
+    "writeCalls": 0,
+    "busyGuard": false,
+    "toastFeedback": false
+  },
+  {
+    "route": "pages/settings/privacy/index",
+    "hasLoading": true,
+    "hasError": true,
+    "hasRetry": false,
+    "hasEmpty": false,
+    "writeCalls": 1,
+    "busyGuard": false,
+    "toastFeedback": false
+  },
+  {
+    "route": "pages/state/index",
+    "hasLoading": true,
+    "hasError": true,
+    "hasRetry": true,
+    "hasEmpty": true,
+    "writeCalls": 0,
+    "busyGuard": false,
+    "toastFeedback": false
+  }
+]

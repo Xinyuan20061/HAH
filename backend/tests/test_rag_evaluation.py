@@ -4,6 +4,7 @@ import subprocess
 import sys
 
 import pytest
+from sqlalchemy import delete
 from sqlalchemy.orm import Session
 
 from app.models import KnowledgeDocument
@@ -106,6 +107,10 @@ def test_rag_metrics_validate_queries_and_provenance():
 
 def test_rag_database_evaluation_uses_stable_source_keys(api, migrated_engine):
     with Session(migrated_engine) as db:
+        # This evaluator contract is intentionally isolated to exactly the two
+        # documents below; the application database also contains migration
+        # seeds used by production RAG and the acquisition knowledge contract.
+        db.execute(delete(KnowledgeDocument))
         db.add_all(
             [
                 KnowledgeDocument(

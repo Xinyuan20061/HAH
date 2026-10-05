@@ -1,1 +1,2 @@
 @import "../shared.wxss";
+.policy-repair-form{margin-top:18rpx;padding-top:18rpx;border-top:1rpx solid #eeeee6}

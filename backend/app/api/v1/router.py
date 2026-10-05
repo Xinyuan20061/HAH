@@ -25,6 +25,7 @@ from . import (
     capabilities,
     food,
     policy,
+    policy_acquisition,
 )
 
 api_router = APIRouter()
@@ -63,6 +64,7 @@ _routers = [
     # Interactive Food 2.0: questions, deterministic calculation, priors (§6).
     food.router,
     policy.router,
+    policy_acquisition.router,
     # The media package owns four routers; include each exactly once.
     media.router,
     media.admin_router,  # /admin/motion-analyses/{id}/diagnostics

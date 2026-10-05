@@ -17,6 +17,9 @@ class BenchmarkIn(BaseModel):
     unit: str = Field(default="%", max_length=30)
     sample_size: int = Field(default=0, ge=0, le=1000000)
     notes: str = Field(default="", max_length=1000)
+    dataset: str = Field(default="", max_length=120)
+    evidence_level: str = Field(default="", max_length=40)
+    retriever_version: str = Field(default="", max_length=60)
 
 
 @router.get("/dashboard")

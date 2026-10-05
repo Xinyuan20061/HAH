@@ -32,7 +32,7 @@ from app.services.agent.specialists import (
     build_specialist_instruction,
     build_conversation_memory,
 )
-from app.services.timeline import add_event
+from app.services.timeline import add_event, add_state_event
 from app.services.safety import (
     MEDICAL_DISCLAIMER,
     audit_decision,
@@ -1146,7 +1146,7 @@ def update_plan_item(db: Session, user_id: int, item_id: int, done: bool):
     item.done = done
     item.completed_at = utc_now() if done else None
     db.add(item)
-    add_event(
+    add_state_event(
         db,
         user_id,
         "plan_item_completed" if done else "plan_item_reopened",

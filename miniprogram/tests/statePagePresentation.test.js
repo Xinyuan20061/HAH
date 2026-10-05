@@ -163,3 +163,33 @@ test('no dead styles: every declared class is rendered somewhere', () => {
   })
   assert.deepEqual(missing, [], `WXSS 中未被 WXML 使用的类: ${missing.join(', ')}`)
 })
+
+test('today next-step is mapped into the three categories with a direct CTA', () => {
+  const js = script()
+  const view0 = view()
+  // 三类映射必须存在：可行动 / 等待暂缓 / 需修复
+  assert.match(js, /category: 'actionable'/)
+  assert.match(js, /category: 'waiting'/)
+  assert.match(js, /category: 'needs_repair'/)
+  assert.match(js, /categoryLabel: '可行动'/)
+  assert.match(js, /categoryLabel: '等待暂缓'/)
+  assert.match(js, /categoryLabel: '需修复'/)
+  // 主 CTA 直达页面，而不是显示内部 ID
+  assert.match(js, /goNextStep\(\)/)
+  assert.match(js, /step\.route/, 'CTA 必须使用页面路由直达')
+  assert.doesNotMatch(js, /episode\.episode_id/, '不得把内部周期 ID 当 CTA')
+  assert.match(view0, /下一步：\{\{nextStep\.label\}\}/)
+  assert.match(view0, /bindtap="goNextStep"/)
+  assert.match(view0, /category-\{\{nextStep\.category\}\}/)
+})
+
+test('next-step mapping is driven by real state, never fabricated on the client', () => {
+  const js = script()
+  // 三类聚合必须从后端状态推导：策略 kind、周期 status、决策建议
+  assert.match(js, /policyKind === 'needs_repair'/)
+  assert.match(js, /statusKey === 'active'/)
+  assert.match(js, /statusKey === 'awaiting_review'/)
+  assert.match(js, /this\.data\.nextAction/)
+  // 等待态不能谎称可行动：没有建议、周期在观察窗口时必须归入等待/暂缓
+  assert.match(js, /categoryLabel: '等待暂缓', label: '暂无进行中的行动协议'/)
+})
