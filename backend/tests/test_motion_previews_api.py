@@ -101,7 +101,7 @@ class FakeMediaStorage:
             raise InvalidPreviewSignature("bad signature")
         return user_id
 
-    def read_preview_bytes(self, asset_id):
+    def read_preview_bytes(self, asset_id, *, run_id=None):
         if asset_id not in self.bytes:
             raise PreviewNotFound(asset_id)
         return self.bytes[asset_id]

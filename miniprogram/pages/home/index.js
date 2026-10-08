@@ -1,5 +1,6 @@
 const api = require('../../utils/request')
 const { ensureLogin } = require('../../utils/auth')
+const { NAVIGATION_TARGETS, openAction } = require('../../utils/agentNavigation')
 
 const COMPANIONS = [
   { id: 'xiaojian', name: '小健', space: '健身房', icon: '/assets/characters/xiaojian-portrait-v1.png' },
@@ -34,14 +35,6 @@ const PLAN_ROUTE_TEST_PROMPT = '给我制定一个计划'
 
 // The server sends semantic targets, never page URLs. Keeping the mapping here
 // makes model/provider text unable to navigate to an arbitrary destination.
-const NAVIGATION_TARGETS = {
-  plan_preview: { route: '/pages/plan/index', label: '查看计划草案' },
-  capability_setup: { route: '/pages/settings/capabilities/index?focus=plan_outcome', label: '开启计划能力' },
-  records: { route: '/pages/records/index', label: '打开记录' },
-  workout: { route: '/pages/workout/index', label: '打开训练' },
-  health_state: { route: '/pages/state/index', label: '查看状态' }
-}
-
 function weekFallback() {
   const labels = ['日', '一', '二', '三', '四', '五', '六']
   const result = []
@@ -510,12 +503,7 @@ Page({
   },
 
   navigateAction(action) {
-    const url = safeActionUrl(action)
-    if (!url) return
-    wx.navigateTo({
-      url,
-      fail: () => wx.showToast({ title: '页面暂时打不开', icon: 'none' })
-    })
+    openAction(action)
   },
 
   runResponseAction() {

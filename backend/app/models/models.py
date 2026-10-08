@@ -14,10 +14,11 @@ from sqlalchemy import (
     Boolean,
     CheckConstraint,
     UniqueConstraint,
+    LargeBinary,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.core.database import Base
-from sqlalchemy.dialects.mysql import MEDIUMTEXT
+from sqlalchemy.dialects.mysql import MEDIUMTEXT, MEDIUMBLOB
 
 
 class TimestampMixin:
@@ -1131,6 +1132,20 @@ class MotionEvidenceFrame(Base):
         DateTime, nullable=True, index=True
     )
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+
+
+class MotionPreviewObject(Base):
+    """Short-lived JPEG bytes shared by all API replicas, scoped to one run."""
+
+    __tablename__ = "motion_preview_objects"
+    __table_args__ = (UniqueConstraint("run_id", "asset_id", name="uq_motion_preview_run_asset"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    run_id: Mapped[int] = mapped_column(ForeignKey("motion_analysis_runs.id", ondelete="CASCADE"), nullable=False, index=True)
+    asset_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    image_bytes: Mapped[bytes] = mapped_column(LargeBinary().with_variant(MEDIUMBLOB(), "mysql"), nullable=False)
+    sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, nullable=False)
 
 
 class MotionStageTask(Base):

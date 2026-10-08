@@ -149,11 +149,12 @@ test('home companion selector uses concise square portraits and dynamic spaces',
 
 test('gym consumes trusted presentation directives instead of guessing intent from text', () => {
   const script = read('pages/home/index.js')
+  const navigation = read('utils/agentNavigation.js')
   assert.match(script, /result\.presentation/)
   assert.match(script, /healthmate\.presentation\.v1/)
   assert.match(script, /'plan\.compose': 'planning'/)
   assert.match(script, /navigation\.mode === 'after_animation'/)
-  assert.match(script, /plan_preview:\s*\{\s*route:\s*'\/pages\/plan\/index'/)
+  assert.match(navigation, /plan_preview:\s*\{\s*route:\s*'\/pages\/plan\/index'/)
   assert.match(script, /mode=preview&run_id=/)
   assert.match(script, /function structuredPlanFallback/)
   assert.match(script, /result\.intent !== 'plan'/)
@@ -161,7 +162,7 @@ test('gym consumes trusted presentation directives instead of guessing intent fr
   assert.match(script, /queuePendingNavigation/)
   assert.match(script, /completePendingNavigation/)
   assert.match(script, /capability_setup/)
-  assert.match(script, /const NAVIGATION_TARGETS/)
+  assert.match(script, /const \{ NAVIGATION_TARGETS, openAction \} = require\('\.\.\/\.\.\/utils\/agentNavigation'\)/)
   assert.doesNotMatch(script, /function nextAction/)
   assert.doesNotMatch(script, /result\.ui_directive|result\.ui_directives/)
   assert.doesNotMatch(script, /\/记录\|饮食|\/训练\|动作/, '不得通过回复文案正则猜测路由')

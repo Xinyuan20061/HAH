@@ -226,6 +226,17 @@ def test_t06_frames_sorted_by_real_timestamp_ascending():
     assert phases[9.3] != phases[0.9] or phases[9.3]
 
 
+def test_distant_pose_event_never_displaces_a_real_preview_frame():
+    evidence = [_evidence_entry(0.0), _evidence_entry(1800.0)]
+    events = [{"timestamp": 9.0, "event": "squat_bottom", "reason": "stale event"}]
+    selected = motion_unified._select_timeline_frames(
+        evidence, events, display_count=2, duration=2.0
+    )
+    assert selected
+    assert all(frame.get("bgr") is not None for frame in selected)
+    assert all(frame["timestamp_ms"] <= 1800 for frame in selected)
+
+
 # ---------------------------------------------------------------------------
 # T09: cloud off still yields previews + timeline, zero external calls
 # ---------------------------------------------------------------------------

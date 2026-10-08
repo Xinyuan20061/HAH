@@ -1,4 +1,5 @@
 const api = require('../../utils/request')
+const { normalizeNavigation, persistPlanHandoff, safeActionUrl, TAB_ROUTES } = require('../../utils/agentNavigation')
 
 const SPECIALIST_NAMES = {
   planner: '计划规划',
@@ -98,6 +99,7 @@ Page({
     this._unloaded = true
     this.stopGeneration(true)
     if (this._scrollTimer) clearTimeout(this._scrollTimer)
+    if (this._routeTimer) clearTimeout(this._routeTimer)
   },
 
   async loadHarnessManifest() {
@@ -241,6 +243,8 @@ Page({
   finishResponse(done) {
     if (this._streamStopped) return
     const r = done && done.result || {}
+    const navigation = normalizeNavigation(r)
+    persistPlanHandoff(r, navigation.action)
     const index = this.data.messages.length - 1
     const messages = this.data.messages.slice()
     messages[index] = Object.assign({}, messages[index], {
@@ -250,7 +254,8 @@ Page({
       resources: r.resources || [],
       knowledgeSources: r.knowledge_sources || [],
       exerciseRecommendations: r.exercise_recommendations && r.exercise_recommendations.items || [],
-      trace: presentTrace(r.trace, r.decision_explanation),
+      trace: r.intent === 'navigation' ? null : presentTrace(r.trace, r.decision_explanation),
+      navigationAction: navigation.action && navigation.action.target !== 'plan_preview' ? navigation.action : null,
       runId: r.run_id,
       applied: false,
       safetyLevel: r.safety_level || 'normal',
@@ -277,6 +282,26 @@ Page({
     })
     this._pendingChannel = null
     this.scrollBottom()
+    if (navigation.autoNavigate && navigation.action && navigation.action.target !== 'plan_preview') {
+      this._routeTimer = setTimeout(() => this.openNavigationAction(navigation.action), 720)
+    }
+  },
+
+  tapNavigationAction(e) {
+    const index = Number(e.currentTarget.dataset.index)
+    const message = this.data.messages[index]
+    this.openNavigationAction(message && message.navigationAction)
+  },
+
+  openNavigationAction(action) {
+    const url = safeActionUrl(action)
+    if (!url || this._unloaded) return
+    if (this._routeTimer) clearTimeout(this._routeTimer)
+    this._routeTimer = null
+    const route = url.split('?')[0]
+    const fail = () => wx.showToast({ title: '页面暂时打不开', icon: 'none' })
+    if (TAB_ROUTES.has(route)) wx.switchTab({ url: route, fail })
+    else wx.navigateTo({ url, fail })
   },
 
   async handleStreamError(error, q, agentId, channel) {

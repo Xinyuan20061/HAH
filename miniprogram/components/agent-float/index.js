@@ -1,6 +1,6 @@
 const api = require('../../utils/request')
 const { getSession, saveSession } = require('../../utils/floatingAgentSession')
-const { normalizeNavigation, persistPlanHandoff, safeActionUrl } = require('../../utils/agentNavigation')
+const { normalizeNavigation, persistPlanHandoff, safeActionUrl, TAB_ROUTES } = require('../../utils/agentNavigation')
 
 const AGENTS = {
   xiaojian: { id: 'xiaojian', name: '小健', icon: '/assets/characters/xiaojian-portrait-v1.png', greeting: '我在。训练、记录和计划都可以直接告诉我。' },
@@ -427,6 +427,10 @@ Component({
       const pages = getCurrentPages()
       const current = pages[pages.length - 1]
       const path = url.split('?')[0].replace(/^\//, '')
+      if (TAB_ROUTES.has(`/${path}`)) {
+        wx.switchTab({ url: `/${path}` })
+        return
+      }
       if (current && current.route === path) {
         wx.redirectTo({ url })
         return

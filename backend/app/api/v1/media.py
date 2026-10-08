@@ -1021,28 +1021,10 @@ def _strip_internal(result: dict | None) -> dict | None:
 
 
 def build_media_storage(db: Session):
-    """Build the B-package MediaStorage used by the previews endpoint.
+    """Use the same preview store for upload, evidence and review reads."""
+    from app.services.motion.media_storage import configured_media_storage
 
-    Production wiring (real PreviewStore root + motion_evidence_frames table).
-    Tests monkeypatch this to inject an InMemoryEvidenceFrameStore-backed double
-    so no real filesystem/network is touched.
-    """
-    from app.services.motion.media_storage import (
-        LocalPreviewStore,
-        MediaStorage,
-        SqlEvidenceFrameStore,
-    )
-
-    table = None
-    try:
-        from app.core.database import Base
-
-        table = Base.metadata.tables.get("motion_evidence_frames")
-    except Exception:  # pragma: no cover - defensive
-        table = None
-    store = LocalPreviewStore(Path(settings.upload_dir) / "motion-previews")
-    evidence = SqlEvidenceFrameStore(db, table) if table is not None else None
-    return MediaStorage(store, evidence, secret=settings.secret_key or "local-dev")
+    return configured_media_storage(db)
 
 
 @router.post("/motion-analyses", status_code=202)
@@ -1521,7 +1503,7 @@ async def motion_preview(
             if ev is None or not ev.preview_asset_id:
                 return _motion_error(request, 404, "FRAME_NOT_FOUND", "该帧不存在")
             try:
-                data = storage.read_preview_bytes(ev.preview_asset_id)
+                data = storage.read_preview_bytes(ev.preview_asset_id, run_id=analysis_id)
             except PreviewNotFound:
                 return _motion_error(request, 404, "PREVIEW_GONE", "预览已被清理")
             return Response(content=data, media_type="image/jpeg")
@@ -1552,7 +1534,7 @@ async def motion_preview(
         # Production MediaStorage exposes read_preview_bytes, not get_preview.
         # Ownership was already enforced by _owned_run above, so the descriptor
         # is built from the stored evidence row (never leaks another user's).
-        storage.read_preview_bytes(ev.preview_asset_id)
+        storage.read_preview_bytes(ev.preview_asset_id, run_id=run.id)
     except PreviewNotFound:
         return _motion_error(request, 404, "PREVIEW_GONE", "预览已被清理")
     return {
@@ -1582,10 +1564,13 @@ async def put_preview(
         validated = storage.validate_upload_signature(params)
     except InvalidPreviewSignature:
         return _motion_error(request, 403, "INVALID_UPLOAD_SIGNATURE", "上传签名无效或已过期")
+    if validated["asset_id"] != asset_id:
+        return _motion_error(request, 403, "INVALID_UPLOAD_SIGNATURE", "上传签名与画面不匹配")
     body = await request.body()
     storage.save_preview(
         asset_id, body, user_id=validated["user_id"], run_id=validated["run_id"]
     )
+    db.commit()
     return {"asset_id": asset_id, "size": len(body)}
 
 
@@ -1636,7 +1621,7 @@ def motion_analysis_evidence(
                     # The result JSON is not an asset receipt. Verify the real
                     # object before minting a URL, otherwise a stale worker id
                     # becomes a broken image loop in the mini-program.
-                    storage.read_preview_bytes(ev.preview_asset_id)
+                    storage.read_preview_bytes(ev.preview_asset_id, run_id=run.id)
                 except PreviewNotFound:
                     unavailable_reason = "object_missing"
                 except Exception:  # pragma: no cover - storage provider boundary

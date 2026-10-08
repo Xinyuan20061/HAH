@@ -42,6 +42,7 @@ from app.models import (
     MotionAnalysisRun,
     MotionAnalysisFeedback,
     MotionEvidenceFrame,
+    MotionPreviewObject,
     MotionGoldEvaluation,
     MotionStageTask,
     MotionUserFeedback,
@@ -381,6 +382,7 @@ def delete_account_data(
     if motion_run_ids:
         # These short-lived rows intentionally have no owner column of their
         # own; remove them through the user's run IDs before deleting the run.
+        db.execute(delete(MotionPreviewObject).where(MotionPreviewObject.run_id.in_(motion_run_ids)))
         db.execute(delete(MotionEvidenceFrame).where(MotionEvidenceFrame.run_id.in_(motion_run_ids)))
         db.execute(delete(MotionStageTask).where(MotionStageTask.run_id.in_(motion_run_ids)))
         # Re-analysis runs form a self-FK chain. Break only the links inside

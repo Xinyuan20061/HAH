@@ -50,7 +50,16 @@
   "compileType": "miniprogram",
   "srcMiniprogramRoot": "miniprogram/",
   "packOptions": {
-    "ignore": [],
+    "ignore": [
+      { "type": "folder", "value": "tests" },
+      { "type": "folder", "value": "results" },
+      { "type": "folder", "value": "scripts" },
+      { "type": "file", "value": "assets/home-hero.jpg" },
+      { "type": "file", "value": "assets/characters/xiaojian-idle-curl-v1.png" },
+      { "type": "file", "value": "assets/characters/xiaojian-idle-curl-v2.png" },
+      { "type": "file", "value": "assets/characters/xiaokang-idle-read-v1.png" },
+      { "type": "file", "value": "assets/characters/xiaokang-idle-read-v2.png" }
+    ],
     "include": []
   },
   "editorSetting": {

@@ -157,6 +157,38 @@ function upload(url, filePath, name = 'file', retried = false) {
   }))
 }
 
+// Signed evidence URLs may contain Cloud Run's internal origin. <image> cannot
+// attach our cloud-container transport, so fetch the JPEG through that same
+// private transport and render a page-scoped local file instead.
+function signedMotionPreviewPath(previewUrl, analysisId, frameId) {
+  const target = `/api/v1/media/motion-analyses/${encodeURIComponent(String(analysisId))}/previews/${encodeURIComponent(String(frameId))}`
+  const source = String(previewUrl || '')
+  const index = source.indexOf(target)
+  const path = index < 0 ? '' : source.slice(index)
+  if (!path.startsWith(target + '?') || !/[?&]sig=/.test(path)) throw new Error('关键帧地址无效')
+  return path
+}
+
+async function downloadMotionPreview(previewUrl, analysisId, frameId) {
+  const path = signedMotionPreviewPath(previewUrl, analysisId, frameId)
+  const res = isCloud()
+    ? await cloudCall({ path, method: 'GET', header: headers({ Accept: 'image/jpeg' }), responseType: 'arraybuffer' })
+    : await new Promise((resolve, reject) => wx.request({
+      url: previewUrl, method: 'GET', header: headers({ Accept: 'image/jpeg' }),
+      responseType: 'arraybuffer', timeout: config.REQUEST_TIMEOUT,
+      success: resolve, fail: reject
+    }))
+  if (res.statusCode < 200 || res.statusCode >= 300) throw httpError(res, path)
+  const data = res.data
+  if (!(data instanceof ArrayBuffer)) throw new Error('关键帧不是图片数据')
+  const bytes = new Uint8Array(data)
+  if (bytes.length < 4 || bytes[0] !== 0xff || bytes[1] !== 0xd8) throw new Error('关键帧图片格式无效')
+  const safeFrameId = String(frameId).replace(/[^a-zA-Z0-9_-]/g, '_')
+  const filePath = `${wx.env.USER_DATA_PATH}/healthmate-motion-${analysisId}-${safeFrameId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.jpg`
+  await new Promise((resolve, reject) => wx.getFileSystemManager().writeFile({ filePath, data, success: resolve, fail: reject }))
+  return filePath
+}
+
 function parseChunk(onMeta, onDelta, onDone, onStage) {
   let textBuffer = '', decoder = typeof TextDecoder !== 'undefined' ? new TextDecoder('utf-8') : null
   const decode = ab => { if (decoder) return decoder.decode(new Uint8Array(ab), { stream: true }); const u = new Uint8Array(ab); let s = ''; for (let i = 0; i < u.length; i++) s += String.fromCharCode(u[i]); try { return decodeURIComponent(escape(s)) } catch (e) { return s } }
@@ -252,7 +284,7 @@ module.exports = {
   patch: (url, data, headers) => request({ url, method: 'PATCH', data, headers }),
   put: (url, data) => request({ url, method: 'PUT', data }),
   del: (url, data={}, headers) => request({ url, method: 'DELETE', data, headers }),
-  downloadPost, upload, streamPost, health, ensureToken, idempotencyKey,
+  downloadPost, downloadMotionPreview, upload, streamPost, health, ensureToken, idempotencyKey,
   getBaseUrl: baseUrl, isCloud, getTransport: config.getTransport,
   setBaseUrl: config.setApiBaseUrl, clearBaseUrl: config.clearApiBaseUrl
 }

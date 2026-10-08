@@ -18,6 +18,7 @@ from app.models import (
     MotionAnalysisFeedback,
     MotionAnalysisRun,
     MotionEvidenceFrame,
+    MotionPreviewObject,
 )
 
 
@@ -237,7 +238,11 @@ def purge_expired_motion_previews(db: Session, *, now=None, limit: int = 100) ->
             db.add(fb)
             changed += 1
 
-    # --- expired generic evidence frames (reference-only rows) ------------------
+    # --- shared preview bytes and reference-only evidence rows -------------------
+    deleted_blobs = db.execute(
+        delete(MotionPreviewObject).where(MotionPreviewObject.expires_at < now)
+    ).rowcount
+    changed += int(deleted_blobs or 0)
     deleted = db.execute(
         delete(MotionEvidenceFrame).where(MotionEvidenceFrame.expires_at < now)
     ).rowcount

@@ -5,7 +5,41 @@ const NAVIGATION_TARGETS = {
   capability_setup: { route: '/pages/settings/capabilities/index?focus=plan_outcome', label: '开启计划能力' },
   records: { route: '/pages/records/index', label: '打开记录' },
   workout: { route: '/pages/workout/index', label: '打开训练' },
-  health_state: { route: '/pages/state/index', label: '查看状态' }
+  health_state: { route: '/pages/state/index', label: '查看状态' },
+  plan_home: { route: '/pages/plan/index', label: '打开计划' },
+  food_scan: { route: '/pages/scan/index', label: '拍照识别' },
+  motion_analysis: { route: '/pages/media/index', label: '动作分析' },
+  trends: { route: '/pages/trends/index', label: '七日趋势' },
+  insights: { route: '/pages/insights/index', label: '健康洞察' },
+  goals: { route: '/pages/goals/index', label: '健康目标' },
+  checkin: { route: '/pages/checkin/index', label: '今日打卡' },
+  report: { route: '/pages/report/index', label: '健康报告' },
+  profile: { route: '/pages/profile/index', label: '打开我的' },
+  profile_edit: { route: '/pages/profile/edit', label: '编辑档案' },
+  settings: { route: '/pages/settings/index', label: '打开设置' },
+  ai_settings: { route: '/pages/settings/ai/index', label: 'AI 设置' },
+  privacy_settings: { route: '/pages/settings/privacy/index', label: '隐私设置' },
+  capability_center: { route: '/pages/settings/capabilities/index', label: '能力中心' },
+  evaluation: { route: '/pages/evaluation/index', label: '能力评估' },
+  diet_records: { route: '/pages/records/diet', label: '饮食记录' },
+  exercise_records: { route: '/pages/records/exercise', label: '运动记录' },
+  policy_center: { route: '/pages/policy/overview/index', label: '个人策略' },
+  policy_protocol: { route: '/pages/policy/protocol/index', label: '策略协议' },
+  policy_history: { route: '/pages/policy/history/index', label: '策略历史' },
+  home: { route: '/pages/home/index', label: '回到首页' },
+  steward: { route: '/pages/chat/index', label: '打开小管家' }
+}
+
+const TAB_ROUTES = new Set(['/pages/home/index', '/pages/chat/index'])
+
+function openAction(action, options = {}) {
+  const url = safeActionUrl(action)
+  if (!url) return false
+  const fail = options.fail || (() => wx.showToast({ title: '页面暂时打不开', icon: 'none' }))
+  const route = url.split('?')[0]
+  if (TAB_ROUTES.has(route)) wx.switchTab({ url: route, fail })
+  else wx.navigateTo({ url, fail })
+  return true
 }
 
 function safeRunId(value) {
@@ -99,4 +133,4 @@ function safeActionUrl(action) {
   return `${destination.route}?mode=preview&run_id=${runId}&agent_id=${actorId}`
 }
 
-module.exports = { NAVIGATION_TARGETS, normalizeNavigation, persistPlanHandoff, safeActionUrl }
+module.exports = { NAVIGATION_TARGETS, normalizeNavigation, persistPlanHandoff, safeActionUrl, openAction, TAB_ROUTES }

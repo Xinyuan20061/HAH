@@ -1,12 +1,6 @@
 const DEFAULT_API_BASE_URL = 'http://127.0.0.1:8000/api/v1'
 const API_BASE_STORAGE_KEY = 'healthmate_api_base_url'
 
-// ── 首页英雄区背景图（预留位置）──────────────────────────────
-// 把图片放到 miniprogram/assets/home-hero.jpg 即可自动生效，无需改代码。
-// 建议尺寸 1500×2000px 以上、竖版；会被 aspectFill 裁切铺满上半屏。
-// 文件不存在或加载失败时自动回退到内置深绿渐变，不会报错、不会留白。
-const HOME_HERO_IMAGE = '/assets/home-hero.jpg'
-
 // Competition deployment: fill these two values after creating the WeChat Cloud Run service.
 // When CLOUD_ENV_ID is configured, normal API requests automatically use wx.cloud.callContainer.
 const CLOUD_ENV_ID = 'cloud1-d7gv5f8xpf862595e'
@@ -50,7 +44,6 @@ module.exports = {
   DEFAULT_API_BASE_URL,
   PUBLIC_API_BASE_URL,
   API_BASE_STORAGE_KEY,
-  HOME_HERO_IMAGE,
   CLOUD_ENV_ID,
   CLOUDRUN_SERVICE_NAME,
   cloudReady,

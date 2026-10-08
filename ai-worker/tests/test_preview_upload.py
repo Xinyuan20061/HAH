@@ -92,9 +92,10 @@ def test_upload_failure_degrades_without_blocking_receipt(monkeypatch, tmp_path)
     # Mint still happened, but every PUT raised -> no remote ids.
     assert api.mint is not None
     assert api.puts == []
-    # Receipt still valid: frames kept their local staging asset_id.
+    # Local staging assets are not remotely readable and must not masquerade
+    # as uploaded previews in the receipt.
     for f in frames:
-        assert f["preview_asset_id"].startswith("preview_")
+        assert f["preview_asset_id"] is None
         assert "preview_sha256" in f
 
 

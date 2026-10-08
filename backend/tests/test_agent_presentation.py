@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import json
 
+from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
+from app.core.database import Base
 from app.models import HealthAgentRun, HealthPlan, User
 from app.services.agent.presentation import (
     NavigationTarget,
@@ -11,7 +13,9 @@ from app.services.agent.presentation import (
     build_plan_preview,
     build_presentation,
     is_plan_result_eligible,
+    requested_navigation_target,
 )
+from app.services.agent.orchestrator import detect_intent, respond
 
 
 PLAN = {
@@ -58,6 +62,67 @@ def test_plan_presentation_uses_whitelist_and_never_claims_a_write():
             "confirmation_required": True,
         },
     }
+
+
+def test_explicit_navigation_covers_non_plan_pages_without_model_chosen_urls():
+    cases = {
+        "小康，打开记录页": NavigationTarget.RECORDS,
+        "带我去饮食记录": NavigationTarget.DIET_RECORDS,
+        "切换到七日趋势": NavigationTarget.TRENDS,
+        "打开动作分析": NavigationTarget.MOTION_ANALYSIS,
+        "去 AI 设置": NavigationTarget.AI_SETTINGS,
+        "进入能力中心": NavigationTarget.CAPABILITY_CENTER,
+        "回到养生馆": NavigationTarget.HOME,
+        "打开小管家": NavigationTarget.STEWARD,
+        "打开计划": NavigationTarget.PLAN_HOME,
+    }
+    for message, target in cases.items():
+        assert requested_navigation_target(message) == target
+        assert detect_intent(message) == "navigation"
+        view = build_presentation(
+            intent="navigation", specialist="general", agent_id="xiaokang",
+            run_id=15, result={"safety_level": "normal", "plan": None},
+            message=message,
+        )
+        assert view["navigation"] == {"target": target.value, "mode": "after_animation", "params": {}}
+        assert view["write"]["automatic"] is False
+    assert requested_navigation_target("今天训练计划怎么安排？") is None
+    assert detect_intent("今天训练计划怎么安排？") == "plan"
+    assert requested_navigation_target("不要打开记录页") is None
+    assert requested_navigation_target("过去七天的运动记录怎么样？") is None
+    assert requested_navigation_target("制定计划后打开计划页") is None
+
+
+def test_navigation_is_blocked_by_safety_response():
+    view = build_presentation(
+        intent="safety", specialist="safety_guardian", agent_id="xiaojian",
+        run_id=16, result={"safety_level": "critical", "plan": None},
+        message="打开记录页",
+    )
+    assert view["navigation"]["target"] is None
+
+
+def test_navigation_short_circuit_runs_without_llm_or_migration_fixture():
+    engine = create_engine("sqlite+pysqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    try:
+        with Session(engine) as db:
+            user = User(openid="navigation-smoke")
+            db.add(user)
+            db.commit()
+            turn = respond(db, user, "小康，打开七日趋势", agent_id="xiaokang")
+            try:
+                turn.send(None)
+            except StopIteration as completed:
+                response = completed.value
+            else:
+                raise AssertionError("明确页面导航不应等待模型或外部服务")
+            assert response["intent"] == "navigation"
+            assert response["provider"] == "navigation-rule"
+            assert response["trace"]["model_calls"] == 0
+            assert response["presentation"]["navigation"]["target"] == "trends"
+    finally:
+        engine.dispose()
 
 
 def test_safety_presentation_has_no_navigation_even_if_result_contains_plan():
@@ -158,6 +223,23 @@ def test_respond_and_stream_done_include_deterministic_presentation(api):
     done = next(item for item in events if item["type"] == "done")
     assert done["result"]["presentation"]["cue"] == "safety.pause"
     assert done["result"]["presentation"]["write"]["automatic"] is False
+
+
+def test_xiaokang_routes_to_a_non_plan_page_without_model_call(api):
+    response = api.post(
+        "/api/v1/agent/respond",
+        json={"message": "小康，打开七日趋势", "agent_id": "xiaokang"},
+    )
+    assert response.status_code == 200, response.text
+    result = response.json()
+    assert result["intent"] == "navigation"
+    assert result["provider"] == "navigation-rule"
+    assert result["trace"]["model_calls"] == 0
+    assert result["presentation"]["navigation"] == {
+        "target": NavigationTarget.TRENDS.value,
+        "mode": "after_animation",
+        "params": {},
+    }
 
 
 def test_run_detail_exposes_owned_read_only_plan_preview(api, migrated_engine):

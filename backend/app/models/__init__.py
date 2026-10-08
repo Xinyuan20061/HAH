@@ -47,6 +47,7 @@ from .models import (
     ProviderConnectionCheck,
     VoiceUsageDaily,
     MotionEvidenceFrame,
+    MotionPreviewObject,
     MotionStageTask,
     MotionUserFeedback,
     MotionGoldEvaluation,

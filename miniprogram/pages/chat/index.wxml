@@ -54,6 +54,10 @@
             <text>{{msg.content}}</text><text wx:if="{{streaming&&msgIndex===messages.length-1}}" class="cursor"></text>
           </view>
 
+          <view wx:if="{{msg.navigationAction}}" class="navigation-link tappable content-reveal" data-index="{{msgIndex}}" bindtap="tapNavigationAction" hover-class="tap" hover-start-time="0" hover-stay-time="80">
+            <text>{{msg.navigationAction.label}}</text><image src="/assets/icons/chevron.png" mode="aspectFit"/>
+          </view>
+
           <!-- Confirm cards come ONLY from actions[] (spec §8.5). -->
           <view wx:if="{{msg.actions&&msg.actions.length}}" class="action-cards">
             <view wx:for="{{msg.actions}}" wx:key="proposalId" class="action-card content-reveal">

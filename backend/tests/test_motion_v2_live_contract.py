@@ -86,7 +86,7 @@ class FakeMediaStorage:
             f"?user_id={user_id}&exp={expiry_ts}&sig={self._sig(msg)}"
         )
 
-    def read_preview_bytes(self, asset_id):
+    def read_preview_bytes(self, asset_id, *, run_id=None):
         from app.services.motion.media_storage import PreviewNotFound
 
         if asset_id not in self.bytes:

@@ -46,7 +46,7 @@
       <view class="block-title">动作时间轴</view>
       <view wx:if="{{activeFrame}}" class="frame-detail-card">
         <image wx:if="{{activeFrame.previewUrl && !brokenImgs[activeFrame.id]}}" src="{{activeFrame.previewUrl}}" mode="aspectFit" class="frame-hero-img" data-id="{{activeFrame.id}}" binderror="onFrameImgError"/>
-        <view wx:elif="{{!(activeFrame.previewUrl && !brokenImgs[activeFrame.id])}}" class="frame-hero-placeholder">{{activeFrame.previewState==='expired'?'画面已过期，文字讲解仍可查看':'暂无可用画面，文字讲解见下'}}</view>
+        <view wx:elif="{{!(activeFrame.previewUrl && !brokenImgs[activeFrame.id])}}" class="frame-hero-placeholder">{{activeFrame.previewState==='loading'?'正在加载画面…':activeFrame.previewState==='expired'?'画面已过期，文字讲解仍可查看':'暂无可用画面，文字讲解见下'}}</view>
         <view class="frame-detail-head">
           <view class="frame-detail-title">{{activeFrame.timeLabel}}<text wx:if="{{activeFrame.phase}}"> · {{activeFrame.phase}}</text></view>
           <view wx:if="{{playableUrl}}" class="replay-btn tappable" bindtap="replayFrame" hover-class="tap" hover-start-time="0" hover-stay-time="80">回看这一刻</view>

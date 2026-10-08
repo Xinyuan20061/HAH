@@ -29,6 +29,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import math
+import time
 from pathlib import Path
 from typing import Callable
 
@@ -72,8 +73,10 @@ def make_preview_uploader(api, job_id: int) -> Callable[[list[dict]], dict]:
         if not items:
             return {}
         frame_ids = [item["frame_id"] for item in items]
+        # Asset IDs must differ between runs even when they choose the same
+        # f_000..f_007 frame names; the server scopes reads by run as well.
         asset_prefix = hashlib.sha1(
-            "".join(frame_ids).encode()
+            f"{job_id}:{','.join(frame_ids)}".encode()
         ).hexdigest()[:16]
         resp = api.request_preview_upload_urls(
             job_id, frame_ids=frame_ids, asset_prefix=asset_prefix
@@ -88,8 +91,17 @@ def make_preview_uploader(api, job_id: int) -> Callable[[list[dict]], dict]:
             desc = by_frame.get(item["frame_id"])
             if not desc or not desc.get("upload_url"):
                 continue
-            api.put_preview(desc["upload_url"], item["bytes"])
-            out[item["frame_id"]] = desc["asset_id"]
+            for attempt in range(3):
+                try:
+                    api.put_preview(desc["upload_url"], item["bytes"])
+                except Exception as exc:  # noqa: BLE001 - other frames can still upload
+                    if attempt < 2:
+                        time.sleep(0.2 * (attempt + 1))
+                        continue
+                    logger.warning("preview_upload_failed frame=%s error=%s", item["frame_id"], exc)
+                else:
+                    out[item["frame_id"]] = desc["asset_id"]
+                    break
         return out
 
     return _upload
@@ -458,23 +470,9 @@ def _select_timeline_frames(
                 nearest["skeleton"] = event["skeleton"]
                 nearest["visible_regions"] = _visible_regions(event["skeleton"])
             _addup(nearest)
-        else:
-            orphan = {
-                "timestamp_ms": round(ts_ms),
-                "bgr": None,
-                "width": 0,
-                "height": 0,
-                "event": str(event.get("event") or "pose_event"),
-                "phase": str(event.get("stage") or "动作证据"),
-                "finding": str(event.get("finding") or event.get("reason") or "关键姿态"),
-                "advice": str(event.get("advice") or "结合关节角度复核"),
-                "skeleton": event.get("skeleton"),
-                "visible_regions": [],
-                "subject_bbox": None,
-                "motion_delta": 0.0,
-                "blur_var": 0.0,
-            }
-            _addup(orphan)
+        # A pose event without a nearby decoded frame cannot produce a real
+        # preview. Leave its slot for generic decoded evidence instead of
+        # showing a text-only "keyframe" with no image.
 
     # 2) Fill remaining slots from the generic evidence pool: weight by time
     # coverage (spread across the video) and motion change.
@@ -523,11 +521,10 @@ def analyze_motion_unified(
 ) -> dict:
     """Run the unified motion chain and return a MotionWorkerResultV2-shaped dict.
 
-    ``preview_uploader`` optionally uploads rendered JPEGs to the backend signed
-    store (see :func:`make_preview_uploader`). When None (default) or when the
-    ``preview_upload_enabled`` setting is off, frames stay at their local staging
-    asset_id and no upload happens. Upload failures degrade to a warning and never
-    block the receipt.
+    ``preview_uploader`` uploads rendered JPEGs to the backend signed store.
+    Local staging IDs are used only when ``preview_out_dir`` is explicitly
+    provided; they are never advertised as remotely readable on production.
+    Upload failures degrade to a warning and never block the receipt.
     """
     video_path = Path(video_path)
     if requested_exercise != "auto" and requested_exercise not in SUPPORTED_EXERCISES:
@@ -673,7 +670,7 @@ def analyze_motion_unified(
         row = {
             "frame_id": f"f_{n:03d}",
             "timestamp_ms": round(ts_ms),
-            "preview_asset_id": asset_id,
+            "preview_asset_id": asset_id if preview_out_dir is not None else None,
             "subject_id": "s_01" if entry.get("subject_bbox") else None,
             "visible_regions": list(entry.get("visible_regions") or []),
             "blur": "ok" if float(entry.get("blur_var") or 50.0) >= 40.0 else "blurry",
@@ -736,19 +733,16 @@ def analyze_motion_unified(
         rows.append(row)
 
     # --- Signed-URL upload of rendered JPEGs (byte chain) -------------------
-    # Upload failure MUST NOT block the receipt: degrade to the local staging
-    # asset_id and record a warning. Zero external calls when no uploader is set.
+    # Local staging IDs are never a valid server receipt. If a PUT fails, keep
+    # the timeline text but mark that frame as lacking a remote preview.
     if preview_uploader is not None and settings.preview_upload_enabled and upload_items:
         try:
             remote_ids = preview_uploader(upload_items) or {}
         except Exception as exc:  # noqa: BLE001 - upload is best-effort
-            logger.warning("preview_upload_failed keeping_local_asset_ids: %s", exc)
+            logger.warning("preview_upload_failed: %s", exc)
             remote_ids = {}
-        if remote_ids:
-            for row in rows:
-                rid = remote_ids.get(row["frame_id"])
-                if rid:
-                    row["preview_asset_id"] = rid
+        for row in rows:
+            row["preview_asset_id"] = remote_ids.get(row["frame_id"])
 
     if progress:
         progress(92, "assemble_result")

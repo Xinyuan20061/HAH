@@ -23,13 +23,11 @@ import json
 import logging
 import uuid
 from datetime import datetime, timedelta
-from pathlib import Path
 from typing import Callable
 
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
-from app.core.config import settings
 from app.core.time import utc_now
 from app.models import (
     AIJob,
@@ -435,27 +433,13 @@ def _frames_for_review(db: Session, run: MotionAnalysisRun) -> list:
     text-only observation so the model can answer from the whitelisted facts;
     the reviewer must tolerate frames without image bytes.
     """
-    from app.services.motion.media_storage import (
-        LocalPreviewStore,
-        MediaStorage,
-        PreviewNotFound,
-        SqlEvidenceFrameStore,
-    )
-    from app.core.database import Base as app_base
+    from app.services.motion.media_storage import PreviewNotFound, configured_media_storage
 
-    table = app_base.metadata.tables.get("motion_evidence_frames")
     storage = None
-    if table is not None:
-        try:
-            store = LocalPreviewStore(
-                Path(settings.upload_dir) / "motion-previews"
-            )
-            storage = MediaStorage(
-                store, SqlEvidenceFrameStore(db, table),
-                secret=settings.secret_key or "local-dev",
-            )
-        except Exception:  # noqa: BLE001 - never break review on storage errors
-            storage = None
+    try:
+        storage = configured_media_storage(db)
+    except Exception:  # noqa: BLE001 - never break review on storage errors
+        storage = None
 
     rows = db.scalars(
         select(MotionEvidenceFrame)
@@ -472,7 +456,7 @@ def _frames_for_review(db: Session, run: MotionAnalysisRun) -> list:
         jpeg: bytes | None = None
         if storage is not None and row.preview_asset_id:
             try:
-                jpeg = storage.read_preview_bytes(row.preview_asset_id)
+                jpeg = storage.read_preview_bytes(row.preview_asset_id, run_id=run.id)
             except (PreviewNotFound, LookupError):
                 jpeg = None
         frames.append(

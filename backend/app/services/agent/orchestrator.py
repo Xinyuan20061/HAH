@@ -25,6 +25,8 @@ from app.services.agent.presentation import (
     build_plan_preview,
     build_presentation,
     is_plan_result_eligible,
+    navigation_label,
+    requested_navigation_target,
 )
 from app.services.agent.specialists import (
     SPECIALIST_VERSION,
@@ -69,6 +71,8 @@ def detect_intent(message: str) -> str:
     d = evaluate_message(message)
     if d.action != "allow":
         return "safety"
+    if requested_navigation_target(message) is not None:
+        return "navigation"
     if any(x in message for x in PLAN_WORDS):
         return "plan"
     if recommendable_exercise_query(message):
@@ -403,6 +407,35 @@ async def respond(
             "safety",
             trace={"rule": decision.category, "level": decision.level},
         )
+    elif intent == "navigation":
+        target = requested_navigation_target(message)
+        recorder.start_stage("router", provider="navigation-rule")
+        recorder.finish_stage("router", provider="navigation-rule", trace={"target": target.value, "model_call_skipped": True})
+        recorder.start_stage("decision", provider="navigation-rule")
+        recorder.finish_stage("decision", provider="navigation-rule", trace={"target": target.value, "write_proposed": False})
+        provider = "navigation-rule"
+        result = {
+            "reply": f"好，带你去{navigation_label(target, message)}。",
+            "plan": None,
+            "facts_used": [],
+            "safety_level": "normal",
+            "agent": persona.public_dict(),
+            "actions": [],
+            "trace": {
+                "specialist_version": SPECIALIST_VERSION,
+                "specialist": "general",
+                "routing": "明确页面指令，由白名单直接路由",
+                "harness_version": HARNESS_VERSION,
+                "collaboration_version": MULTI_AGENT_VERSION,
+                "agent_id": persona.id,
+                "agent_name": persona.name,
+                "loop": "navigation-short-circuit",
+                "tool_calls": [],
+                "model_calls": 0,
+                "budget": budget.trace(),
+                "stages": recorder.stage_views(),
+            },
+        }
     else:
         provider = "rules-fallback"
         recorder.start_stage("router", provider="rules")
@@ -718,6 +751,7 @@ async def respond(
         agent_id=persona.id,
         run_id=run.id,
         result=result,
+        message=message,
     )
     elapsed = (time.perf_counter() - started) * 1000
     run.intent = intent

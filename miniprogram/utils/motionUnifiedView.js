@@ -118,13 +118,13 @@ function buildPreviewMap(evidence) {
   for (const e of list) {
     if (!e) continue
     const fid = e.frame_id || e.id
-    const url = e.preview_url || e.previewUrl || e.url
+    const url = (e.preview && e.preview.url) || e.preview_url || e.previewUrl || e.url
     if (fid && url) map[fid] = url
   }
   return map
 }
 
-// 结果帧已带 preview_url 时优先用；为空的才用 evidence 映射补齐（不覆盖已有 URL）。
+// /evidence 核验了真实对象和有效期，是预览可用性的最终依据。
 function mergeEvidencePreviews(frames, evidence) {
   const list = (evidence && (evidence.frames || evidence.evidence)) || (Array.isArray(evidence) ? evidence : [])
   const map = buildPreviewMap(evidence)
@@ -138,8 +138,8 @@ function mergeEvidencePreviews(frames, evidence) {
   if (!Object.keys(map).length && !Object.keys(states).length) return frames
   let changed = false
   const merged = frames.map(f => {
-    const previewUrl = f.previewUrl || map[f.id] || ''
-    const previewState = states[f.id] || (previewUrl ? 'available' : f.previewState)
+    const previewState = states[f.id] || (map[f.id] ? 'available' : f.previewState)
+    const previewUrl = previewState === 'available' ? (map[f.id] || f.previewUrl || '') : ''
     if (previewUrl !== f.previewUrl || previewState !== f.previewState) changed = true
     return { ...f, previewUrl, previewState }
   })

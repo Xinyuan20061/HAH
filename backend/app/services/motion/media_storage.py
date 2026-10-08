@@ -11,15 +11,9 @@ Ownership (work package B,复验 1/3 字节链路):
   * Preview access is private to the owning user: signature validation enforces
     the bound user_id; another user's signature is rejected (403/400).
 
-Object-storage deployment note (this round ships the disk LocalPreviewStore):
-    The method signatures here are the contract F/D code against; cloud object
-    storage (S3/CloudBase) swaps :class:`PreviewStore` for a signed-PUT
-    implementation without changing mint/validate/save/read callers. Upload URLs
-    then point at the object-store presigned PUT instead of the internal path.
-
-The ``motion_evidence_frames`` table is created by migration 0025 (package E).
-This module encodes the contract DDL in :class:`SqlEvidenceFrameStore` but never
-imports/edits ``models.py``. Tests inject :class:`InMemoryEvidenceFrameStore`.
+Production bytes are shared in ``motion_preview_objects`` (migration 0045), so
+Cloud Run replicas can read a frame uploaded to another instance. Local disk is
+development-only. The evidence table remains the source of frame metadata.
 """
 
 from __future__ import annotations
@@ -130,6 +124,62 @@ class LocalPreviewStore:
             path.unlink()
 
 
+class SqlPreviewStore:
+    """Shared, short-lived preview store for Cloud Run's stateless replicas."""
+
+    def __init__(self, db, table):
+        self.db = db
+        self.table = table
+
+    def save(self, data: bytes, rec: PreviewRecord) -> None:
+        from sqlalchemy import select
+
+        predicate = (
+            (self.table.c.run_id == rec.run_id)
+            & (self.table.c.asset_id == rec.asset_id)
+        )
+        existing = self.db.execute(select(self.table.c.id).where(predicate)).scalar_one_or_none()
+        values = {
+            "image_bytes": data,
+            "sha256": rec.sha256,
+            "expires_at": _to_dt(rec.expires_at),
+        }
+        if existing is None:
+            self.db.execute(self.table.insert().values(
+                run_id=rec.run_id, asset_id=rec.asset_id,
+                created_at=_to_dt(rec.created_at), **values,
+            ))
+        else:
+            self.db.execute(self.table.update().where(predicate).values(**values))
+
+    def read(self, rec: PreviewRecord) -> bytes:
+        from sqlalchemy import select
+
+        row = self.db.execute(
+            select(self.table.c.image_bytes, self.table.c.expires_at).where(
+                self.table.c.run_id == rec.run_id,
+                self.table.c.asset_id == rec.asset_id,
+            )
+        ).first()
+        if row is None:
+            raise PreviewNotFound(rec.asset_id)
+        expiry = row.expires_at
+        if expiry.tzinfo is None:
+            from datetime import timezone
+            expiry = expiry.replace(tzinfo=timezone.utc)
+        if expiry.timestamp() <= time.time():
+            raise PreviewNotFound(rec.asset_id)
+        return bytes(row.image_bytes)
+
+    def delete(self, rec: PreviewRecord) -> None:
+        from sqlalchemy import delete
+
+        self.db.execute(delete(self.table).where(
+            self.table.c.run_id == rec.run_id,
+            self.table.c.asset_id == rec.asset_id,
+        ))
+
+
 class EvidenceFrameStore(Protocol):
     """Rows of ``motion_evidence_frames`` (contract DDL, (run_id, frame_id) unique)."""
 
@@ -137,7 +187,7 @@ class EvidenceFrameStore(Protocol):
 
     def list_for_run(self, run_id: int) -> list[dict]: ...
 
-    def find_by_asset(self, asset_id: str) -> Optional[dict]: ...
+    def find_by_asset(self, asset_id: str, run_id: int | None = None) -> Optional[dict]: ...
 
     def find_frame(self, run_id: int, frame_id: str) -> Optional[dict]: ...
 
@@ -160,9 +210,9 @@ class InMemoryEvidenceFrameStore:
     def all_rows(self) -> list[dict]:
         return [dict(r) for r in self._rows.values()]
 
-    def find_by_asset(self, asset_id: str) -> Optional[dict]:
+    def find_by_asset(self, asset_id: str, run_id: int | None = None) -> Optional[dict]:
         for row in self._rows.values():
-            if row.get("preview_asset_id") == asset_id:
+            if row.get("preview_asset_id") == asset_id and (run_id is None or int(row["run_id"]) == run_id):
                 return dict(row)
         return None
 
@@ -240,12 +290,13 @@ class SqlEvidenceFrameStore:
         rows = self.db.execute(select(self.table)).all()
         return [self._norm(r) for r in rows]
 
-    def find_by_asset(self, asset_id: str) -> Optional[dict]:
+    def find_by_asset(self, asset_id: str, run_id: int | None = None) -> Optional[dict]:
         from sqlalchemy import select
 
-        row = self.db.execute(
-            select(self.table).where(self.table.c.preview_asset_id == str(asset_id))
-        ).first()
+        query = select(self.table).where(self.table.c.preview_asset_id == str(asset_id))
+        if run_id is not None:
+            query = query.where(self.table.c.run_id == int(run_id))
+        row = self.db.execute(query).first()
         return self._norm(row)
 
     def find_frame(self, run_id: int, frame_id: str) -> Optional[dict]:
@@ -453,9 +504,9 @@ class MediaStorage:
             "expires_at": rec.expires_at,
         }
 
-    def read_preview_bytes(self, asset_id: str) -> bytes:
+    def read_preview_bytes(self, asset_id: str, *, run_id: int | None = None) -> bytes:
         """Return raw JPEG bytes; raise PreviewNotFound when absent."""
-        row = self._evidence.find_by_asset(asset_id)
+        row = self._evidence.find_by_asset(asset_id, run_id=run_id)
         if row is None:
             raise PreviewNotFound(asset_id)
         rec = PreviewRecord(
@@ -483,3 +534,25 @@ class MediaStorage:
             )
             self._store.delete(rec)
         return self._evidence.delete_expired(now)
+
+
+def configured_media_storage(db) -> MediaStorage:
+    """Use shared DB bytes in production; local files are development-only."""
+    from app.core.config import settings
+    from app.core.database import Base
+
+    evidence_table = Base.metadata.tables.get("motion_evidence_frames")
+    if evidence_table is None:
+        raise RuntimeError("motion_evidence_frames migration is required")
+    if settings.is_production:
+        preview_table = Base.metadata.tables.get("motion_preview_objects")
+        if preview_table is None:
+            raise RuntimeError("motion_preview_objects migration is required")
+        store = SqlPreviewStore(db, preview_table)
+    else:
+        store = LocalPreviewStore(Path(settings.upload_dir) / "motion-previews")
+    return MediaStorage(
+        store, SqlEvidenceFrameStore(db, evidence_table),
+        secret=settings.secret_key or "local-dev",
+        preview_ttl_seconds=settings.motion_preview_retention_days * 24 * 60 * 60,
+    )

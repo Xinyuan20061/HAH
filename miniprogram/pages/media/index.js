@@ -67,7 +67,14 @@ Page({
       await this.loadCapabilities()
     } catch (e) { this.setData({ jobStatus: e.message || '请先登录' }) }
   },
-  onUnload() { this._unloaded = true },
+  onUnload() {
+    this._unloaded = true
+    for (const filePath of this._previewFiles || []) this.removePreviewFile(filePath)
+    this._previewFiles = []
+  },
+  removePreviewFile(filePath) {
+    if (filePath && wx.getFileSystemManager) wx.getFileSystemManager().unlink({ filePath, fail: () => {} })
+  },
   async onShow() { if (this.data.cloudMode) await this.refreshWorkerStatus() },
   changeExercise(e) {
     if (this.data.analyzing) return
@@ -233,12 +240,16 @@ Page({
       const raw = (result.recognition || result.timeline || result.keyframes) ? result : body
       const vm = buildViewModel(raw)
       vm.localOnly = !this.data.consentDeepseek
+      const displayFrames = this.data.cloudMode
+        ? vm.timelineFrames.map(f => ({ ...f, previewUrl: '', previewState: 'loading' }))
+        : vm.timelineFrames
       this.setData({
         vm, jobStatus: STAGE_LABELS[status] || status, traceInfo: null, traceLoaded: false,
-        timelineFrames: vm.timelineFrames, activeFrame: vm.activeFrame, playableUrl: '', playbackExpiresAt: '', brokenImgs: {}
+        timelineFrames: displayFrames, activeFrame: displayFrames[0] || null,
+        playableUrl: '', playbackExpiresAt: '', brokenImgs: {}
       })
       if (status === 'completed') pending.forget('motion')
-      // 结果帧未带 preview_url 时，只读拉一次 /evidence 补齐缩略图（不计费、不调模型）。
+      // /evidence 核验图片是否存在；云托管模式再通过私有通道取回 JPEG。
       this.fillEvidencePreviews()
       this.loadPlaybackUrl()
     } catch (e) {
@@ -272,26 +283,65 @@ Page({
       if (!this._unloaded) this.setData({ playableUrl: '', playbackExpiresAt: '' })
     }
   },
-  // 结果帧已带 preview_url 时直接用；有空缺帧则只读拉一次 /evidence 补齐 frame_id→preview_url。
-  // 该 GET 只读、不计费、不调模型；缩略图点击仍只本地选中。失败则降级占位，不阻塞文字讲解。
+  // /evidence 只读、不计费、不调模型。云托管的签名 URL 可能含内部地址，
+  // 图片组件无法走 callContainer，因此转成页面内的本地 JPEG 再展示。
   async fillEvidencePreviews() {
     const id = this.data.analysisId
     const frames = this.data.timelineFrames || []
     if (!id || !frames.length) return
-    if (frames.every(f => f.previewUrl)) return
     try {
       const evidence = await api.get(`/media/motion-analyses/${id}/evidence`, { allowCache: false })
-      if (this._unloaded) return
+      if (this._unloaded || this.data.analysisId !== id) return
       const merged = mergeEvidencePreviews(frames, evidence)
-      if (merged === frames) return
       const cur = this.data.activeFrame
-      const activeFrame = cur ? (merged.find(f => f.id === cur.id) || cur) : (merged[0] || null)
+      if (!this.data.cloudMode) {
+        const activeFrame = cur ? (merged.find(f => f.id === cur.id) || cur) : (merged[0] || null)
+        this.setData({ timelineFrames: merged, activeFrame })
+        return
+      }
+      const localFrames = merged.map(f => f.previewUrl && f.previewState === 'available'
+        ? { ...f, previewUrl: '', previewState: 'loading' }
+        : f.previewState === 'loading' ? { ...f, previewState: 'unavailable' } : f)
+      const activeFrame = cur ? (localFrames.find(f => f.id === cur.id) || cur) : (localFrames[0] || null)
       this.setData({
-        timelineFrames: merged,
+        timelineFrames: localFrames,
         activeFrame
       })
+      await Promise.all(merged.map(async (frame, index) => {
+        if (!frame.previewUrl || frame.previewState !== 'available') return
+        let filePath = ''
+        try {
+          filePath = await api.downloadMotionPreview(frame.previewUrl, id, frame.id)
+          if (this._unloaded || this.data.analysisId !== id) return this.removePreviewFile(filePath)
+          this._previewFiles = this._previewFiles || []
+          this._previewFiles.push(filePath)
+          const next = {
+            [`timelineFrames[${index}].previewUrl`]: filePath,
+            [`timelineFrames[${index}].previewState`]: 'available',
+            brokenImgs: { ...this.data.brokenImgs, [frame.id]: false }
+          }
+          if (this.data.activeFrame && this.data.activeFrame.id === frame.id) {
+            next.activeFrame = { ...this.data.activeFrame, previewUrl: filePath, previewState: 'available' }
+          }
+          this.setData(next)
+        } catch (e) {
+          if (this._unloaded || this.data.analysisId !== id) return
+          const next = { [`timelineFrames[${index}].previewState`]: 'unavailable' }
+          if (this.data.activeFrame && this.data.activeFrame.id === frame.id) {
+            next.activeFrame = { ...this.data.activeFrame, previewState: 'unavailable' }
+          }
+          this.setData(next)
+        }
+      }))
     } catch (e) {
-      // /evidence 不可用：保留占位，文字讲解照常展示。
+      // /evidence 不可用：保留文字讲解，不让加载占位一直转圈。
+      if (!this._unloaded && this.data.analysisId === id) {
+        const unavailable = (this.data.timelineFrames || []).map(f => f.previewState === 'loading'
+          ? { ...f, previewState: 'unavailable' } : f)
+        const active = this.data.activeFrame
+        this.setData({ timelineFrames: unavailable,
+          activeFrame: active ? (unavailable.find(f => f.id === active.id) || active) : null })
+      }
     }
   },
   // 帧图加载失败：标记该帧为 broken，显示占位，不崩溃、不影响讲解。

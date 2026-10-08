@@ -100,7 +100,7 @@ docker run --rm --env-file .\production.env healthmate-api alembic current
 
 连接云内数据库需要相应网络路径；本机 Docker 不会自动获得云内访问能力。可使用平台当前支持的单次执行环境或受控同网段主机运行迁移，不假定控制台提供某个具体按钮。
 
-4. 用 `python -m alembic heads` 查看源码 head；迁移完成后用 `python -m alembic current` 确认目标数据库 revision 与源码 head 一致。当前源码单一 head 为 `0043_mobile_media_upload_sessions`。对新库和已有 Alembic 旧库都执行 upgrade，不要用 stamp 掩盖缺表问题。
+4. 用 `python -m alembic heads` 查看源码 head；迁移完成后用 `python -m alembic current` 确认目标数据库 revision 与源码 head 一致。当前源码单一 head 为 `0045_motion_preview_shared_store`。对新库和已有 Alembic 旧库都执行 upgrade，不要用 stamp 掩盖缺表问题。该迁移新增跨云托管实例共享的短期关键帧图片表；必须先迁移、再发布新版 API 和 Worker。旧任务若从未成功上传图片，需要重新分析原视频才能生成真实关键帧。
 5. 发布默认启动命令的 Web 版本；先单实例检查，再扩容。
 6. 验证 live 200、ready 200，并检查 `deployment_profile=dual_client_cloud`、两个移动开关为 true、`database_backend=mysql`、`storage_backend=cloud_ref`、`mobile_upload_backend=s3`。小程序继续使用 CloudBase；Android 新上传走独立 COS 路由。
 7. 日志应含脱敏摘要 env/db/storage/port/worker；不能出现 SQLiteImpl 或每次重启 Running upgrade。

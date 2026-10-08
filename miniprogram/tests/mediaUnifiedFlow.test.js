@@ -204,7 +204,7 @@ test('结果帧自带 preview_url 时直接映射为 previewUrl', () => {
   assert.equal(vm.timelineFrames[1].previewUrl, '')
 })
 
-test('/evidence 兜底：frame_id→preview_url 映射只补空帧，不覆盖已有 URL', () => {
+test('/evidence 是已核验图片的权威来源，会替换旧 URL', () => {
   const vm = buildViewModel({
     recognition: { state: 'identified', display_name: '深蹲' },
     timeline: { frames: [
@@ -220,8 +220,12 @@ test('/evidence 兜底：frame_id→preview_url 映射只补空帧，不覆盖�
   const merged = mergeEvidencePreviews(vm.timelineFrames, evidence)
   // 空帧被补齐
   assert.equal(merged[1].previewUrl, 'https://signed/b.jpg?user_id=1&exp=999&sig=abc')
-  // 已有 URL 不被覆盖
-  assert.equal(merged[0].previewUrl, 'https://signed/a.jpg')
+  assert.equal(merged[0].previewUrl, 'https://signed/should-not-overwrite.jpg')
+  const unavailable = mergeEvidencePreviews(merged, { frames: [
+    { id: 'a', preview: { state: 'unavailable', url: null } }
+  ] })
+  assert.equal(unavailable[0].previewUrl, '')
+  assert.equal(unavailable[0].previewState, 'unavailable')
 })
 
 test('buildPreviewMap 兼容 id/frame_id 键与顶层数组', () => {
@@ -233,8 +237,8 @@ test('buildPreviewMap 兼容 id/frame_id 键与顶层数组', () => {
 
 test('/evidence 拉取路径已接线：只读 GET，失败不阻塞，点击仍本地选中', () => {
   assert.match(js, /\/media\/motion-analyses\/\$\{id\}\/evidence/)
-  // 有空缺帧才拉；已有 preview_url 不拉
-  assert.match(js, /frames\.every\(f => f\.previewUrl\)/)
+  // 云托管图片必须通过私有接口取回，不能直接把内部地址交给 image。
+  assert.match(js, /api\.downloadMotionPreview/)
   // 图片加载失败占位
   assert.match(wxml, /binderror="onFrameImgError"/)
   assert.match(js, /onFrameImgError/)

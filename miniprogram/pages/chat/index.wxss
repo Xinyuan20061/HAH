@@ -98,6 +98,8 @@
 .safety-pill {margin-left: 4rpx;padding: 4rpx 12rpx;border-radius: 999rpx;color: #9b5b00;background: #fff7df;font-size: 17rpx;}
 .response-text {padding-left: 48rpx;color: #111613;font-size: 29rpx;line-height: 1.82;white-space: pre-wrap;}
 .cursor {display: inline-block;width: 4rpx;height: 30rpx;margin-left: 8rpx;border-radius: 999rpx;background: #506336;vertical-align: -4rpx;animation: cursorPulse .8s ease-in-out infinite;}
+.navigation-link {display: inline-flex;align-items: center;gap: 8rpx;margin: 18rpx 0 0 48rpx;padding: 12rpx 18rpx;border-radius: 999rpx;background: #eaf1d8;color: #394c2d;font-size: 21rpx;font-weight: 700;}
+.navigation-link image {width: 22rpx;height: 22rpx;opacity: .7;}
 
 .thinking-state {display: flex;align-items: center;gap: 16rpx;padding: 12rpx 0 12rpx 48rpx;color: #5f665f;font-size: 22rpx;}
 .thinking-dots {display: flex;align-items: center;gap: 8rpx;height: 24rpx;}
