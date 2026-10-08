@@ -1,0 +1,23 @@
+:root {
+  color-scheme: light;
+  --page-bg: #f7f7f2;
+  --surface: #ffffff;
+  --accent: #c4e267;
+  --accent-soft: #e9efd9;
+  --ink: #111613;
+  --muted: #5f665f;
+  --brand-ink: #506336;
+  --divider: #eeeee6;
+  --danger: #c0392b;
+  --warning: #9b5b00;
+  --card-shadow: 0 4px 13px rgba(17, 22, 19, .035);
+  --page-gutter: 16px;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+  color: var(--ink);
+  background: var(--page-bg);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}

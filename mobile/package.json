@@ -1,0 +1,61 @@
+{
+  "name": "hah-mobile",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "baseline:routes": "node scripts/sync-route-map.mjs",
+    "assets:sync": "node scripts/sync-assets.mjs",
+    "prebuild": "npm run assets:sync",
+    "build": "vue-tsc --noEmit && vite build",
+    "build:debug": "vue-tsc --noEmit && vite build --mode development",
+    "typecheck": "vue-tsc --noEmit",
+    "lint": "eslint src tests scripts vite.config.ts capacitor.config.ts eslint.config.js",
+    "test:unit": "vitest run tests/unit",
+    "test:contract": "vitest run tests/contracts",
+    "test:component": "vitest run tests/components",
+    "test": "vitest run",
+    "cap:sync": "cross-env CAPACITOR_MODE=production cap sync android",
+    "cap:sync:local": "cross-env CAPACITOR_MODE=debug cap sync android",
+    "android:debug": "npm run assets:sync && npm run build:debug && npm run cap:sync:local && node scripts/android-gradle.mjs assembleDebug",
+    "package:debug": "node scripts/package-debug.mjs",
+    "verify:cloud-contract": "node scripts/verify-cloud-contract.mjs",
+    "verify:release": "node scripts/verify-release.mjs",
+    "android:release": "npm run build && npm run verify:release && npm run cap:sync && node scripts/android-gradle.mjs assembleRelease"
+  },
+  "dependencies": {
+    "@capacitor/android": "8.5.2",
+    "@capacitor/app": "8.1.2",
+    "@capacitor/camera": "^8.2.5",
+    "@capacitor/core": "8.5.2",
+    "@capacitor/filesystem": "8.1.4",
+    "@capacitor/preferences": "8.0.1",
+    "@capacitor/share": "8.0.3",
+    "@capacitor/splash-screen": "8.0.2",
+    "@cloudbase/js-sdk": "^3.10.1",
+    "pinia": "4.0.3",
+    "vue": "3.5.43",
+    "vue-router": "5.3.1"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "8.5.2",
+    "@eslint/js": "^10.0.1",
+    "@types/node": "26.6.4",
+    "@vitejs/plugin-vue": "6.0.9",
+    "@vue/test-utils": "^2.5.1",
+    "cross-env": "10.1.0",
+    "eslint": "^10.12.0",
+    "eslint-plugin-vue": "^10.11.1",
+    "globals": "^17.13.0",
+    "happy-dom": "^20.14.5",
+    "typescript": "5.9.3",
+    "typescript-eslint": "^8.71.1",
+    "vite": "8.3.3",
+    "vitest": "^5.0.3",
+    "vue-tsc": "3.3.12"
+  }
+}

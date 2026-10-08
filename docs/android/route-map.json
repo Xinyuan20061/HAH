@@ -1,0 +1,146 @@
+{
+  "source": "miniprogram/app.json",
+  "sourceCommit": "generated-from-current-worktree",
+  "routes": [
+    {
+      "mini": "pages/home/index",
+      "android": "/home",
+      "phase": "WP3"
+    },
+    {
+      "mini": "pages/insights/index",
+      "android": "/insights",
+      "phase": "WP5"
+    },
+    {
+      "mini": "pages/scan/index",
+      "android": "/scan",
+      "phase": "WP4"
+    },
+    {
+      "mini": "pages/workout/index",
+      "android": "/workout",
+      "phase": "WP4"
+    },
+    {
+      "mini": "pages/exercise-detail/index",
+      "android": "/exercise-detail",
+      "phase": "WP4"
+    },
+    {
+      "mini": "pages/report/index",
+      "android": "/report",
+      "phase": "WP5"
+    },
+    {
+      "mini": "pages/media/index",
+      "android": "/media",
+      "phase": "WP4"
+    },
+    {
+      "mini": "pages/chat/index",
+      "android": "/chat",
+      "phase": "WP3"
+    },
+    {
+      "mini": "pages/records/index",
+      "android": "/records",
+      "phase": "WP4"
+    },
+    {
+      "mini": "pages/plan/index",
+      "android": "/plan",
+      "phase": "WP3"
+    },
+    {
+      "mini": "pages/goals/index",
+      "android": "/goals",
+      "phase": "WP5"
+    },
+    {
+      "mini": "pages/profile/index",
+      "android": "/profile",
+      "phase": "WP5"
+    },
+    {
+      "mini": "pages/profile/edit",
+      "android": "/profile/edit",
+      "phase": "WP5"
+    },
+    {
+      "mini": "pages/records/diet",
+      "android": "/records/diet",
+      "phase": "WP4"
+    },
+    {
+      "mini": "pages/records/exercise",
+      "android": "/records/exercise",
+      "phase": "WP4"
+    },
+    {
+      "mini": "pages/policy/overview/index",
+      "android": "/policy",
+      "phase": "WP5"
+    },
+    {
+      "mini": "pages/policy/protocol/index",
+      "android": "/policy/protocol",
+      "phase": "WP5"
+    },
+    {
+      "mini": "pages/policy/episode/index",
+      "android": "/policy/episode",
+      "phase": "WP5"
+    },
+    {
+      "mini": "pages/policy/review/index",
+      "android": "/policy/review",
+      "phase": "WP5"
+    },
+    {
+      "mini": "pages/policy/history/index",
+      "android": "/policy/history",
+      "phase": "WP5"
+    },
+    {
+      "mini": "pages/checkin/index",
+      "android": "/checkin",
+      "phase": "WP4"
+    },
+    {
+      "mini": "pages/trends/index",
+      "android": "/trends",
+      "phase": "WP4"
+    },
+    {
+      "mini": "pages/settings/index",
+      "android": "/settings",
+      "phase": "WP5"
+    },
+    {
+      "mini": "pages/settings/capabilities/index",
+      "android": "/settings/capabilities",
+      "phase": "WP5"
+    },
+    {
+      "mini": "pages/settings/ai/index",
+      "android": "/settings/ai",
+      "phase": "WP5"
+    },
+    {
+      "mini": "pages/evaluation/index",
+      "android": "/evaluation",
+      "phase": "WP5"
+    },
+    {
+      "mini": "pages/settings/privacy/index",
+      "android": "/settings/privacy",
+      "phase": "WP5"
+    },
+    {
+      "mini": "pages/state/index",
+      "android": "/state",
+      "phase": "WP5"
+    }
+  ]
+}

@@ -168,9 +168,20 @@ def _episode(db: Session, user_id: int, episode_id: str) -> PolicyEpisode:
     return row
 
 
-def _session(db: Session, user_id: int, session_id: str) -> PolicyAcquisitionSession:
-    row = db.scalar(select(PolicyAcquisitionSession).where(
-        PolicyAcquisitionSession.id == session_id, PolicyAcquisitionSession.user_id == user_id))
+def _session(
+    db: Session,
+    user_id: int,
+    session_id: str,
+    *,
+    for_update: bool = False,
+) -> PolicyAcquisitionSession:
+    statement = select(PolicyAcquisitionSession).where(
+        PolicyAcquisitionSession.id == session_id,
+        PolicyAcquisitionSession.user_id == user_id,
+    )
+    if for_update:
+        statement = statement.with_for_update()
+    row = db.scalar(statement)
     if row is None:
         raise AcquisitionError(404, "ACQUISITION_NOT_FOUND", "取证记录不存在")
     return row
@@ -448,7 +459,10 @@ def _issue_certificate(db: Session, session: PolicyAcquisitionSession, episode: 
     if proof.label is None:
         raise AcquisitionError(409, "CERTIFICATE_NOT_READY", "执行记录尚不能确定冻结门槛")
     predecessor = session.latest_certificate_id
-    expires = utc_now() + timedelta(minutes=10)
+    # MySQL DATETIME columns without fractional precision truncate microseconds.
+    # Hash the exact value that will be persisted so a fresh read does not
+    # invalidate a certificate immediately on MySQL.
+    expires = (utc_now() + timedelta(minutes=10)).replace(microsecond=0)
     purpose = "execution_endpoint" if snapshot["window_closed"] else "execution_progress"
     binding = _binding(db, episode, snapshot, contract)
     proof_json = proof_dict(proof)
@@ -534,6 +548,14 @@ def _current_certificate(db: Session, session: PolicyAcquisitionSession,
 def _new_event(db: Session, session: PolicyAcquisitionSession, event_type: str,
                reason: str = "", question_id: str | None = None,
                elapsed_ms: int | None = None, payload: dict | None = None) -> None:
+    # Sequence allocation is protected by the owning row, not by MAX(sequence)
+    # alone. This serializes concurrent requests on MySQL while remaining a
+    # no-op lock on SQLite, and keeps the unique session/sequence key reliable.
+    db.scalar(
+        select(PolicyAcquisitionSession.id)
+        .where(PolicyAcquisitionSession.id == session.id)
+        .with_for_update()
+    )
     sequence = (db.scalar(select(func.max(PolicyAcquisitionEvent.sequence)).where(
         PolicyAcquisitionEvent.session_id == session.id)) or 0) + 1
     db.add(PolicyAcquisitionEvent(
@@ -1154,7 +1176,7 @@ def issue_next_question(db: Session, *, user_id: int, session_id: str,
     digest, replay = _command(db, user_id, idempotency_key, "POST", route, body)
     if replay is not None:
         return replay
-    session = _session(db, user_id, session_id)
+    session = _session(db, user_id, session_id, for_update=True)
     episode = _episode(db, user_id, session.episode_id)
     if session.status != "active" or episode.status != "active":
         raise AcquisitionError(409, "ACQUISITION_SESSION_NOT_ACTIVE", "取证已暂停或结束")

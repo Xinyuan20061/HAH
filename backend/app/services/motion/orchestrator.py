@@ -453,8 +453,6 @@ def _local_summary_text(
             break
 
     text = "".join(parts)
-    if decision.reason_code == "LOCAL_RELIABLE":
-        text += "本次使用动作轨迹分析，AI 补充讲解暂未完成。"
     return text, primary, "local_fallback"
 
 
@@ -933,7 +931,7 @@ def _build_result(
     notices: list[dict] = []
     if review_status == REVIEW_STATUS_UNAVAILABLE and rec.state != "unknown":
         notices.append(
-            {"kind": "cloud_review_incomplete", "text": "本次使用动作轨迹分析，AI 补充讲解暂未完成。"}
+            {"kind": "cloud_review_incomplete", "text": "动作已完成基础分析，详细讲解暂不可用。结果仅供参考。"}
         )
     if rec.state != "unknown" and not decision.scoreable:
         notices.append(

@@ -52,26 +52,38 @@ def migrated_engine(tmp_path_factory):
 @pytest.fixture
 def api(migrated_engine, monkeypatch, request):
     with migrated_engine.begin() as connection:
-        for table in reversed(Base.metadata.sorted_tables):
-            # Immutable migration seed data, not per-test/user state. Keep it just
-            # as a deployed database would.
-            # ``food_references`` belongs here too: it is the audited nutrition
-            # table shipped with the application, and wiping it silently broke every
-            # dependent calculation (deterministic totals fell back to zero).
-            if table.name in {
-                "fitness_relations",
-                "fitness_concepts",
-                "dataset_registry",
-                "model_registry",
-                "food_references",
-                "knowledge_documents",
-            }:
-                continue
-            connection.execute(table.delete())
-        knowledge_table = Base.metadata.tables["knowledge_documents"]
-        connection.execute(knowledge_table.delete())
-        if _KNOWLEDGE_MIGRATION_SEED:
-            connection.execute(knowledge_table.insert(), _KNOWLEDGE_MIGRATION_SEED)
+        mysql_fk_checks = connection.dialect.name == "mysql"
+        if mysql_fk_checks:
+            # MySQL rejects DELETE FROM a table with self-referential rows even
+            # when the whole table is being reset. This fixture only targets the
+            # dedicated healthmate_audit_tests schema, so suspend checks on this
+            # connection while clearing mutable test rows and restore them before
+            # any API request uses the engine.
+            connection.exec_driver_sql("SET FOREIGN_KEY_CHECKS=0")
+        try:
+            for table in reversed(Base.metadata.sorted_tables):
+                # Immutable migration seed data, not per-test/user state. Keep it just
+                # as a deployed database would.
+                # ``food_references`` belongs here too: it is the audited nutrition
+                # table shipped with the application, and wiping it silently broke every
+                # dependent calculation (deterministic totals fell back to zero).
+                if table.name in {
+                    "fitness_relations",
+                    "fitness_concepts",
+                    "dataset_registry",
+                    "model_registry",
+                    "food_references",
+                    "knowledge_documents",
+                }:
+                    continue
+                connection.execute(table.delete())
+            knowledge_table = Base.metadata.tables["knowledge_documents"]
+            connection.execute(knowledge_table.delete())
+            if _KNOWLEDGE_MIGRATION_SEED:
+                connection.execute(knowledge_table.insert(), _KNOWLEDGE_MIGRATION_SEED)
+        finally:
+            if mysql_fk_checks:
+                connection.exec_driver_sql("SET FOREIGN_KEY_CHECKS=1")
     import app.core.diagnostics as diagnostics
     import app.main as main
 
@@ -90,6 +102,10 @@ def api(migrated_engine, monkeypatch, request):
     # Keep repository-local deployment settings from leaking into isolated tests.
     # Test media fixtures deliberately use the synthetic test.env CloudBase id.
     monkeypatch.setattr(settings, "cloudbase_env_id", "test.env")
+    # Route tests exercise Android endpoints under an explicitly enabled test
+    # profile; production defaults remain disabled until deployment config opts in.
+    monkeypatch.setattr(settings, "mobile_auth_enabled", True)
+    monkeypatch.setattr(settings, "mobile_upload_enabled", True)
 
     # Each request uses an independent transaction/session, matching deployed FastAPI.
     def dependency():

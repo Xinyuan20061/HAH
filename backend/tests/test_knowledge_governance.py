@@ -103,6 +103,9 @@ def test_serialized_document_carries_review_audit_fields(api, migrated_engine):
 
 def test_claims_and_conflict_status_advisory_only(migrated_engine):
     with Session(migrated_engine) as db:
+        # This test owns its source rows; it must not depend on a preceding test
+        # having left the same synthetic documents in the shared audit database.
+        _seed_documents(db)
         claim_a = KnowledgeClaim(
             claim_id="claim-a", source_key="gov-who",
             behavior="每周有氧活动", outcome="心肺健康改善", direction="increase",

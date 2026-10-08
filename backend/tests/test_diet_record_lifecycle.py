@@ -257,6 +257,9 @@ def test_diet_delete_removes_timeline_and_marks_session(api, db):
     session_id = session.id
 
     assert api.delete(f"{RECORDS}/{created['id']}").status_code == 200
+    # The API uses a separate connection; release this session's MySQL
+    # REPEATABLE READ snapshot before checking the committed deletion.
+    db.rollback()
 
     rows = db.scalars(
         select(HealthTimelineEvent).where(

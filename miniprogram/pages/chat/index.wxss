@@ -128,9 +128,9 @@
 .trace-default {margin-top: 16rpx;color: #5f665f;font-size: 20rpx;line-height: 1.6;}
 .trace-detail,.trace-limitations,.trace-alternatives,.trace-load {margin-top:16rpx;color:#5f665f;font-size:19rpx;line-height:1.55;}
 .trace-detail-label {color:#8e9389;font-size:16rpx;font-weight:650;}
-.trace-limitations {padding:14rpx;border-radius:14rpx;background:#fff8e8;color:#755f35;}
-.trace-limitations view+view,.trace-alternatives view+view {margin-top:6rpx;}
-.trace-alternatives>view:not(.trace-detail-label) {margin-top:10rpx;padding-top:10rpx;border-top:1rpx solid #f0f0e9;}
+.trace-limitations {padding:16rpx;border-radius:14rpx;background:#fff8e8;color:#755f35;}
+.trace-limitations view+view,.trace-alternatives view+view {margin-top:8rpx;}
+.trace-alternatives>view:not(.trace-detail-label) {margin-top:12rpx;padding-top:12rpx;border-top:1rpx solid #f0f0e9;}
 .trace-alternatives text {color:#30372f;font-weight:650;}
 .trace-alternatives>view>view {color:#7a8076;font-size:17rpx;}
 .trace-load {color:#506336;font-weight:650;}

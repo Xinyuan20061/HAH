@@ -1,0 +1,191 @@
+import org.gradle.api.DefaultTask
+import org.gradle.api.file.DirectoryProperty
+import org.gradle.api.provider.Property
+import org.gradle.api.tasks.Input
+import org.gradle.api.tasks.OutputDirectory
+import org.gradle.api.tasks.TaskAction
+
+abstract class GenerateWechatEntryActivity extends DefaultTask {
+    @Input
+    abstract Property<String> getApplicationPackage()
+
+    @OutputDirectory
+    abstract DirectoryProperty getOutputDirectory()
+
+    @TaskAction
+    void generate() {
+        String appPackage = applicationPackage.get()
+        File source = new File(outputDirectory.get().asFile, "${appPackage.replace('.', '/')}/wxapi/WXEntryActivity.java")
+        source.parentFile.mkdirs()
+        source.text = """package ${appPackage}.wxapi;
+
+import android.app.Activity;
+import android.content.Intent;
+import android.os.Bundle;
+
+import com.hah.healthmate.dev.BuildConfig;
+import com.hah.healthmate.dev.auth.WechatAuthPlugin;
+import com.tencent.mm.opensdk.modelbase.BaseReq;
+import com.tencent.mm.opensdk.modelbase.BaseResp;
+import com.tencent.mm.opensdk.modelmsg.SendAuth;
+import com.tencent.mm.opensdk.openapi.IWXAPI;
+import com.tencent.mm.opensdk.openapi.IWXAPIEventHandler;
+import com.tencent.mm.opensdk.openapi.WXAPIFactory;
+
+public class WXEntryActivity extends Activity implements IWXAPIEventHandler {
+    private IWXAPI api;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        api = WXAPIFactory.createWXAPI(this, BuildConfig.WECHAT_MOBILE_APP_ID, false);
+        if (!api.handleIntent(getIntent(), this)) finish();
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        if (api == null) api = WXAPIFactory.createWXAPI(this, BuildConfig.WECHAT_MOBILE_APP_ID, false);
+        if (!api.handleIntent(intent, this)) finish();
+    }
+
+    @Override
+    public void onReq(BaseReq request) {
+        finish();
+    }
+
+    @Override
+    public void onResp(BaseResp response) {
+        String code = response instanceof SendAuth.Resp ? ((SendAuth.Resp) response).code : null;
+        String state = response instanceof SendAuth.Resp ? ((SendAuth.Resp) response).state : null;
+        WechatAuthPlugin.deliverAuthResult(response.errCode, code, state);
+        finish();
+    }
+}
+"""
+    }
+}
+
+apply plugin: 'com.android.application'
+
+def wechatMobileAppId = providers.gradleProperty('WECHAT_MOBILE_APP_ID')
+    .orElse(providers.environmentVariable('WECHAT_MOBILE_APP_ID'))
+    .orElse('').get().trim()
+def releaseApplicationId = providers.gradleProperty('ANDROID_RELEASE_APPLICATION_ID')
+    .orElse(providers.environmentVariable('ANDROID_RELEASE_APPLICATION_ID'))
+    .orElse('').get().trim()
+def baseApplicationId = releaseApplicationId ?: 'com.hah.healthmate'
+def releaseStoreFile = providers.environmentVariable('ANDROID_RELEASE_STORE_FILE').orElse('').get().trim()
+def releaseStorePassword = providers.environmentVariable('ANDROID_RELEASE_STORE_PASSWORD').orElse('').get()
+def releaseKeyAlias = providers.environmentVariable('ANDROID_RELEASE_KEY_ALIAS').orElse('').get().trim()
+def releaseKeyPassword = providers.environmentVariable('ANDROID_RELEASE_KEY_PASSWORD').orElse('').get()
+def releaseSigningReady = [releaseStoreFile, releaseStorePassword, releaseKeyAlias, releaseKeyPassword]
+    .every { it != null && !it.toString().trim().isEmpty() }
+if (wechatMobileAppId && !(wechatMobileAppId ==~ /[A-Za-z0-9_-]{1,64}/)) {
+    throw new GradleException('WECHAT_MOBILE_APP_ID must contain only letters, numbers, underscores, or hyphens.')
+}
+if (releaseApplicationId && !(releaseApplicationId ==~ /[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*){1,}/)) {
+    throw new GradleException('ANDROID_RELEASE_APPLICATION_ID must be a valid Android application ID.')
+}
+
+android {
+    namespace = "com.hah.healthmate.dev"
+    compileSdk = rootProject.ext.compileSdkVersion
+    defaultConfig {
+        applicationId baseApplicationId
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
+        versionCode 1
+        versionName "1.0"
+        buildConfigField "String", "WECHAT_MOBILE_APP_ID", "\"${wechatMobileAppId}\""
+        manifestPlaceholders = [wechatCallbackActivity: "${baseApplicationId}.dev.wxapi.WXEntryActivity"]
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        aaptOptions {
+             // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
+             // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
+            ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
+        }
+    }
+    buildFeatures { buildConfig true }
+    signingConfigs {
+        release {
+            if (releaseSigningReady) {
+                storeFile file(releaseStoreFile)
+                storePassword releaseStorePassword
+                keyAlias releaseKeyAlias
+                keyPassword releaseKeyPassword
+            }
+        }
+    }
+    buildTypes {
+        debug {
+            applicationIdSuffix ".dev"
+        }
+        release {
+            manifestPlaceholders = [wechatCallbackActivity: "${baseApplicationId}.wxapi.WXEntryActivity"]
+            resValue "string", "app_name", "HAH 健康助手"
+            resValue "string", "title_activity_main", "HAH 健康助手"
+            resValue "string", "package_name", baseApplicationId
+            resValue "string", "custom_url_scheme", baseApplicationId
+            if (releaseSigningReady) signingConfig signingConfigs.release
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+    }
+}
+
+androidComponents {
+    onVariants(selector().all()) { variant ->
+        def generatedSource = layout.buildDirectory.dir("generated/source/wechatEntry/${variant.name}")
+        def generateEntry = tasks.register("generate${variant.name.capitalize()}WechatEntry", GenerateWechatEntryActivity) {
+            applicationPackage.set(variant.applicationId)
+            outputDirectory.set(generatedSource)
+        }
+        variant.sources.java.addGeneratedSourceDirectory(generateEntry) { it.outputDirectory }
+    }
+}
+
+repositories {
+    flatDir{
+        dirs '../capacitor-cordova-android-plugins/src/main/libs', 'libs'
+    }
+}
+
+dependencies {
+    implementation fileTree(include: ['*.jar'], dir: 'libs')
+    implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
+    implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
+    implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
+    implementation project(':capacitor-android')
+    implementation 'com.tencent.mm.opensdk:wechat-sdk-android:6.8.40'
+    testImplementation "junit:junit:$junitVersion"
+    androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
+    androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
+    implementation project(':capacitor-cordova-android-plugins')
+}
+
+apply from: 'capacitor.build.gradle'
+
+tasks.register('verifyAndroidReleaseConfiguration') {
+    doLast {
+        if (!releaseApplicationId) throw new GradleException('Set ANDROID_RELEASE_APPLICATION_ID to the package registered for the release app.')
+        if (!wechatMobileAppId) throw new GradleException('Set WECHAT_MOBILE_APP_ID for the release app.')
+        if (!releaseSigningReady) throw new GradleException('Provide the release keystore and passwords through the ANDROID_RELEASE_* environment variables.')
+        if (!file(releaseStoreFile).isFile()) throw new GradleException('ANDROID_RELEASE_STORE_FILE does not point to a readable keystore file.')
+        if (releaseApplicationId.endsWith('.dev')) throw new GradleException('A development application ID cannot be used for release.')
+    }
+}
+
+tasks.matching { it.name in ['assembleRelease', 'bundleRelease'] }.configureEach {
+    dependsOn tasks.named('verifyAndroidReleaseConfiguration')
+}
+
+try {
+    def servicesJSON = file('google-services.json')
+    if (servicesJSON.text) {
+        apply plugin: 'com.google.gms.google-services'
+    }
+} catch(Exception e) {
+    logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
+}

@@ -37,6 +37,7 @@ from app.models import (
     HealthStateFeature,
     HealthStateSnapshot,
     MediaAsset,
+    MobileMediaUploadSession,
     MotionAnalysisJob,
     MotionAnalysisRun,
     MotionAnalysisFeedback,
@@ -53,6 +54,8 @@ from app.models import (
     ProviderInvocation,
     SafetyEvent,
     User,
+    UserIdentity,
+    UserIdentityLinkCode,
     UserAIConfig,
     UserFoodPrior,
     UserPreferenceMemory,
@@ -84,7 +87,7 @@ from app.models import (
     HarnessPluginInstallation,
     HarnessCapabilityAudit,
 )
-from app.services.storage import get_storage
+from app.services.storage import S3Storage, get_storage
 from fastapi import HTTPException
 
 
@@ -109,6 +112,7 @@ TABLES = [
     ("evaluation_benchmarks", EvaluationBenchmark),
     ("safety_events", SafetyEvent),
     ("media_assets", MediaAsset),
+    ("mobile_media_upload_sessions", MobileMediaUploadSession),
     ("ai_jobs", AIJob),
     ("motion_scores", MotionScore),
     ("motion_events", MotionEvent),
@@ -245,6 +249,9 @@ def build_export_zip(db: Session, user_id: int) -> bytes:
                 # Download URLs are short-lived credentials and are not part of a portable export.
                 if model is MediaAsset:
                     item["source_url"] = ""
+                if model is MobileMediaUploadSession:
+                    item["staging_key"] = None
+                    item["request_id"] = ""
                 rows.append(item)
             data["data"][name] = rows
     sessions = db.scalars(
@@ -297,10 +304,10 @@ def _delete_non_cloud_media(assets: list[MediaAsset]) -> int:
     deletable = [a for a in assets if a.storage_backend != "cloudbase"]
     if not deletable:
         return 0
-    storage = get_storage()
     deleted = 0
     for asset in deletable:
         try:
+            storage = S3Storage() if asset.storage_backend == "s3" else get_storage()
             storage.delete(asset.storage_key)
             deleted += 1
         except Exception:
@@ -310,14 +317,41 @@ def _delete_non_cloud_media(assets: list[MediaAsset]) -> int:
     return deleted
 
 
-def delete_account_data(db: Session, user_id: int):
+def delete_account_data(
+    db: Session, user_id: int, *, media_objects_already_handled: bool = False
+):
     assets = db.scalars(select(MediaAsset).where(MediaAsset.user_id == user_id)).all()
+    upload_sessions = db.scalars(
+        select(MobileMediaUploadSession).where(
+            MobileMediaUploadSession.user_id == user_id,
+            MobileMediaUploadSession.staging_key.is_not(None),
+            MobileMediaUploadSession.cleanup_completed_at.is_(None),
+        )
+    ).all()
+    if not media_objects_already_handled and upload_sessions:
+        from app.services.media_reconciliation import enqueue_deletion
+
+        for session in upload_sessions:
+            session.status = "cancelled"
+            task = enqueue_deletion(
+                db,
+                user_id=user_id,
+                media_asset_id=session.media_asset_id,
+                storage_backend="s3",
+                storage_key=session.staging_key,
+                reason="account_deletion_upload_staging",
+            )
+            task.next_attempt_at = session.cleanup_after
+            db.add(task)
+        db.commit()
     cloud_files = [
         a.cloud_file_id
         for a in assets
         if a.storage_backend == "cloudbase" and a.cloud_file_id
     ]
-    deleted_non_cloud = _delete_non_cloud_media(assets)
+    deleted_non_cloud = (
+        0 if media_objects_already_handled else _delete_non_cloud_media(assets)
+    )
 
     session_ids = [
         x.id
@@ -355,7 +389,7 @@ def delete_account_data(db: Session, user_id: int):
         db.execute(update(MotionAnalysisRun).where(
             MotionAnalysisRun.user_id == user_id).values(parent_run_id=None))
 
-    # Children before parents. CloudBase binaries must already have been removed by wx.cloud.deleteFile.
+    # Children before parents. Remote media deletion is handled before this row set is removed.
     order = [
         FoodAnalysisCorrection,
         FoodClarificationQuestion,
@@ -401,6 +435,7 @@ def delete_account_data(db: Session, user_id: int):
         MotionScore,
         AIJob,
         MotionAnalysisJob,
+        MobileMediaUploadSession,
         FoodAnalysisSession,
         MediaAsset,
         WeeklyReportSnapshot,
@@ -430,11 +465,17 @@ def delete_account_data(db: Session, user_id: int):
         if hasattr(model, "user_id"):
             db.execute(delete(model).where(model.user_id == user_id))
 
+    db.execute(
+        delete(UserIdentityLinkCode).where(
+            UserIdentityLinkCode.source_user_id == user_id
+        )
+    )
+    db.execute(delete(UserIdentity).where(UserIdentity.user_id == user_id))
     user = db.get(User, user_id)
     if user:
         db.delete(user)
     db.commit()
     return {
         "deleted_non_cloud_media_objects": deleted_non_cloud,
-        "cloud_media_objects_expected_deleted_by_client": len(cloud_files),
+        "cloud_media_objects_expected_deleted": len(cloud_files),
     }

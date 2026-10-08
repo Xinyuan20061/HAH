@@ -22,7 +22,7 @@ from __future__ import annotations
 import json
 import logging
 import uuid
-from datetime import timedelta
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Callable
 
@@ -82,6 +82,21 @@ def _json(payload: dict | None) -> str:
     return json.dumps(payload or {}, ensure_ascii=False, default=str)
 
 
+def _database_datetime(value: datetime, *, round_up: bool = False) -> datetime:
+    """Match the migration's second-precision DATETIME columns.
+
+    SQLite preserves the microseconds from ``utc_now()``, but MySQL's migrated
+    ``DATETIME`` column has no fractional precision and rounds fractional values.
+    Flooring an immediately available task prevents it from briefly landing in
+    the future; ceiling lease and retry deadlines ensures those guarantees are
+    never shortened by the database conversion.
+    """
+    if value.microsecond == 0:
+        return value
+    rounded = value.replace(microsecond=0)
+    return rounded + timedelta(seconds=1) if round_up else rounded
+
+
 def next_version(db: Session, *, run_id: int, stage: str) -> int:
     current = db.scalar(
         select(MotionStageTask.version)
@@ -117,7 +132,7 @@ def enqueue_stage(
         status=STATUS_QUEUED,
         lease_token="",
         attempts=0,
-        available_at=utc_now(),
+        available_at=_database_datetime(utc_now()),
         error_code=None,
         payload_json=_json(payload),
     )
@@ -167,7 +182,9 @@ def claim_stage(
             status=STATUS_PROCESSING,
             lease_token=lease_token,
             attempts=MotionStageTask.attempts + 1,
-            available_at=now + timedelta(seconds=lease_seconds),
+            available_at=_database_datetime(
+                now + timedelta(seconds=lease_seconds), round_up=True
+            ),
         ),
         execution_options={"synchronize_session": False},
     ).rowcount
@@ -246,7 +263,9 @@ def fail_stage(
             status=STATUS_QUEUED,
             error_code=error_code,
             lease_token="",
-            available_at=now + timedelta(seconds=retry_seconds),
+            available_at=_database_datetime(
+                now + timedelta(seconds=retry_seconds), round_up=True
+            ),
         ),
         execution_options={"synchronize_session": False},
     ).rowcount

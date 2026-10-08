@@ -7,11 +7,11 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import current_user
 from app.core.config import settings
-from app.core.database import get_db
-from app.core.database import engine
+from app.core.database import engine, get_db
 from app.models import PrivacyAudit
 from app.schemas.errors import ApiException
 from app.services.agent.actions import ACTION_REGISTRY, execute_action
+from app.services.cloudbase_storage import CloudBaseStorageAdmin
 from app.services.media_reconciliation import (
     deletion_summary,
     finalize_account_deletion,
@@ -29,22 +29,22 @@ router = APIRouter(prefix="/privacy", tags=["privacy"])
 def privacy_policy(user=Depends(current_user)):
     backend = settings.storage_backend.lower()
     if backend == "cloud_ref":
-        media_storage = "微信 CloudBase 云存储（后端仅保存 fileID 与短期下载地址）"
+        media_storage = "微信云存储"
     elif backend == "s3":
-        media_storage = "S3 兼容对象存储"
+        media_storage = "云端对象存储"
     else:
-        media_storage = "本地开发存储（生产环境请切换 CloudBase）"
+        media_storage = "本地测试存储"
     return {
-        "database": "MySQL 持久化"
+        "database": "微信云托管服务"
         if engine.dialect.name == "mysql"
-        else "SQLite 本地开发库",
+        else "本地测试服务",
         "media_storage": media_storage,
-        "api_key": "仅服务端密文保存；接口只返回是否已配置和脱敏提示，不回传明文。",
-        "ai_processing": "动作视频由授权的本地 AI Worker 处理；识餐图片会先在 Worker 校验和压缩，并按 VLM_PROVIDER 发送到本地模型或 DeepSeek 视觉服务。Worker 不持有数据库密码或用户 JWT。动作证据预览默认 7 天后自动清除图片，仅保留结构化事件。",
-        "logs": "请求日志不记录 body、Authorization、Cookie、API Key、媒体临时 URL 或原始聊天内容。",
-        "export": "用户可导出结构化个人数据；导出包不包含 API Key 明文、临时下载 URL 和服务端密钥。",
-        "deletion": "二次确认后删除账户数据库记录；CloudBase 媒体先由小程序调用 wx.cloud.deleteFile 删除。",
-        "medical": "HealthMate 不执行疾病诊断、处方或药物调整。",
+        "api_key": "你设置的服务密钥会加密保存在服务端，不会在应用中显示。",
+        "ai_processing": "餐食图片和动作视频按当前服务设置处理。开启云端动作复核前会单独征求同意；动作预览图片最多保留 7 天。",
+        "logs": "服务日志用于排查故障，不记录聊天内容、访问令牌或服务密钥。",
+        "export": "可以导出个人资料、记录、计划和处理历史；导出文件不含服务密钥、媒体文件或临时访问链接。",
+        "deletion": "确认后会删除账户记录，并检查关联的云端媒体；尚未完成的项目会继续重试。",
+        "medical": "用于日常健康管理，不提供疾病诊断、处方或药物调整。",
     }
 
 
@@ -111,13 +111,7 @@ def export_data(
 def delete_account(
     body: ConfirmIn, user=Depends(current_user), db: Session = Depends(get_db)
 ):
-    """Delete the account with a server-verifiable media ledger (spec §10.2).
-
-    The typed confirmation is mandatory — a generic ``confirmation=true`` cannot
-    authorize this action. CloudBase objects cannot be removed without the user's
-    WeChat session, so whatever the server cannot itself verify is reported as
-    ``manual_review`` instead of a blanket success.
-    """
+    """Delete the account with a server-verifiable media ledger (spec §10.2)."""
     if body.confirmation != "DELETE MY DATA":
         raise ApiException(
             422,
@@ -131,23 +125,43 @@ def delete_account(
             500, "DELETION_POLICY_MISCONFIGURED", "删除策略配置异常"
         )
     files = cloud_file_ids(db, user.id)
-    if set(files) != set(body.cloud_files_deleted):
-        raise ApiException(
-            409,
-            "CLOUD_MEDIA_NOT_DELETED",
-            "请先由小程序删除全部关联 CloudBase 文件，再提交删除确认；"
-            "后端无法替您删除云文件",
-            details={"status": "client_deletion_incomplete"},
-        )
-    result = finalize_account_deletion(db, user_id=user.id, reason="user_request")
+    cloudbase_admin = CloudBaseStorageAdmin()
+    client_reported: set[str] = set()
+    if files and not cloudbase_admin.configured:
+        if set(files) != set(body.cloud_files_deleted):
+            raise ApiException(
+                409,
+                "CLOUD_MEDIA_NOT_DELETED",
+                "服务端 CloudBase 删除凭据未配置，请先在微信端删除全部关联文件后重试",
+                details={"status": "client_deletion_incomplete"},
+            )
+        client_reported = set(body.cloud_files_deleted)
+    result = finalize_account_deletion(
+        db,
+        user_id=user.id,
+        reason="user_request",
+        client_reported_cloud_file_ids=client_reported,
+    )
+    if not files:
+        cloud_media_state = "no_cloud_files"
+    elif client_reported:
+        cloud_media_state = "client_reported"
+    elif result.get("cloud_media_objects_verified") == len(files):
+        cloud_media_state = "server_verified"
+    elif result.get("cloud_media_objects_pending"):
+        cloud_media_state = "pending"
+    else:
+        cloud_media_state = "partial"
+    result["cloud_media_deletion"] = cloud_media_state
+    result["message"] = (
+        "账户与关联数据已删除，媒体删除仍在安全重试。"
+        if result.get("verification") == "pending"
+        else "账户与关联健康数据已删除，当前登录凭证将不再有效。"
+    )
     return {
         "ok": True,
         "deleted": True,
-        # Kept for one release cycle: the client still reads this value, and it
-        # is genuinely a *client* report — it is not the deletion verification.
-        "cloud_media_deletion": "client_reported" if files else "no_cloud_files",
         **result,
-        "message": "账户与关联健康数据已删除，当前登录凭证将不再有效。",
     }
 
 

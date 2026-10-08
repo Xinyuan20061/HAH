@@ -94,6 +94,7 @@ def test_fail_job_advances_run_to_failed(api, db):
     assert resp.json()["status"] == "failed"
     assert resp.json()["retrying"] is False
 
+    db.rollback()
     job = db.get(AIJob, job_id)
     run = db.get(MotionAnalysisRun, run_id)
     assert job.status == "failed"
@@ -113,6 +114,7 @@ def test_fail_retryable_keeps_run_active(api, db):
     assert resp.json()["status"] == "queued"
     assert resp.json()["retrying"] is True
 
+    db.rollback()
     db.expire_all()
     job = db.get(AIJob, job_id)
     run = db.get(MotionAnalysisRun, run_id)

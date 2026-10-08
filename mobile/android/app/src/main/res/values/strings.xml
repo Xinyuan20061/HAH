@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">HAH 开发版</string>
+    <string name="title_activity_main">HAH 开发版</string>
+    <string name="package_name">com.hah.healthmate.dev</string>
+    <string name="custom_url_scheme">com.hah.healthmate.dev</string>
+</resources>

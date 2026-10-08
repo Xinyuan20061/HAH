@@ -29,14 +29,14 @@
       <view wx:if="{{plugin.expanded}}" class="config-panel">
         <view class="panel-heading">希望它优先帮你</view>
         <view class="choice-list">
-          <view wx:for="{{plugin.config_schema.goals}}" wx:for-item="choice" wx:key="id" class="choice-row {{plugin.config.goal===choice.id?'choice-selected':''}}" data-plugin="{{plugin.plugin_id}}" data-field="goal" data-value="{{choice.id}}" bindtap="changeChoice">
+          <view wx:for="{{plugin.config_schema.goals}}" wx:for-item="choice" wx:key="id" class="choice-row {{plugin.config.goal===choice.id?'choice-selected':''}} tappable" data-plugin="{{plugin.plugin_id}}" data-field="goal" data-value="{{choice.id}}" bindtap="changeChoice" hover-class="tap-card" hover-start-time="0" hover-stay-time="80">
             <view class="choice-dot">{{plugin.config.goal===choice.id?'✓':''}}</view><text>{{choice.label}}</text>
           </view>
         </view>
 
         <view class="panel-heading source-heading">允许使用的数据</view>
         <view class="scope-list">
-          <view wx:for="{{plugin.scope_options}}" wx:for-item="scope" wx:key="id" class="scope-row" data-plugin="{{plugin.plugin_id}}" data-scope="{{scope.id}}" bindtap="changeScope">
+          <view wx:for="{{plugin.scope_options}}" wx:for-item="scope" wx:key="id" class="scope-row tappable" data-plugin="{{plugin.plugin_id}}" data-scope="{{scope.id}}" bindtap="changeScope" hover-class="tap-card" hover-start-time="0" hover-stay-time="80">
             <view class="scope-check {{scope.selected?'scope-checked':''}}">{{scope.selected?'✓':''}}</view>
             <view class="scope-label">{{scope.label}}</view><view class="scope-state">{{scope.selected?'允许':'不使用'}}</view>
           </view>
@@ -45,15 +45,15 @@
 
         <view class="panel-heading source-heading">回答方式</view>
         <view class="option-row">
-          <view wx:for="{{plugin.config_schema.output_styles}}" wx:for-item="choice" wx:key="id" class="option-chip {{plugin.config.output_style===choice.id?'option-selected':''}}" data-plugin="{{plugin.plugin_id}}" data-field="output_style" data-value="{{choice.id}}" bindtap="changeChoice">{{choice.label}}</view>
+          <view wx:for="{{plugin.config_schema.output_styles}}" wx:for-item="choice" wx:key="id" class="option-chip {{plugin.config.output_style===choice.id?'option-selected':''}} tappable" data-plugin="{{plugin.plugin_id}}" data-field="output_style" data-value="{{choice.id}}" bindtap="changeChoice" hover-class="tap-chip" hover-start-time="0" hover-stay-time="80">{{choice.label}}</view>
         </view>
         <view class="setting-row"><view><view class="setting-title">触发时机</view><view class="setting-desc">{{plugin.config_schema.triggers[0].label}}</view></view><view class="fixed-tag">按需</view></view>
         <view class="setting-row"><view><view class="setting-title">提醒偏好</view><view class="setting-desc">按需提示只会出现在相关对话中；不会发送后台通知。</view></view></view>
         <view class="option-row frequency-row">
-          <view wx:for="{{plugin.config_schema.notification_frequencies}}" wx:for-item="choice" wx:key="id" class="option-chip {{plugin.config.notification_frequency===choice.id?'option-selected':''}}" data-plugin="{{plugin.plugin_id}}" data-field="notification_frequency" data-value="{{choice.id}}" bindtap="changeChoice">{{choice.label}}</view>
+          <view wx:for="{{plugin.config_schema.notification_frequencies}}" wx:for-item="choice" wx:key="id" class="option-chip {{plugin.config.notification_frequency===choice.id?'option-selected':''}} tappable" data-plugin="{{plugin.plugin_id}}" data-field="notification_frequency" data-value="{{choice.id}}" bindtap="changeChoice" hover-class="tap-chip" hover-start-time="0" hover-stay-time="80">{{choice.label}}</view>
         </view>
 
-        <view wx:if="{{plugin.safety.may_propose_action}}" class="proposal-setting" data-plugin="{{plugin.plugin_id}}" bindtap="changeProposal">
+        <view wx:if="{{plugin.safety.may_propose_action}}" class="proposal-setting tappable" data-plugin="{{plugin.plugin_id}}" bindtap="changeProposal" hover-class="tap-chip" hover-start-time="0" hover-stay-time="80">
           <view class="proposal-check {{plugin.config.allow_action_proposals?'proposal-checked':''}}">{{plugin.config.allow_action_proposals?'✓':''}}</view>
           <view class="grow"><view class="setting-title">允许提出行动申请</view><view class="setting-desc">开启后也只会生成待你确认的申请，不会自动执行。</view></view>
         </view>
@@ -65,8 +65,8 @@
         <view wx:elif="{{plugin.installation_id}}" class="paused-note">已关闭 · 历史记录保留，可随时重新开启。</view>
 
         <view class="management-row">
-          <view class="audit-link tappable" data-plugin="{{plugin.plugin_id}}" bindtap="showAudit">{{plugin.show_audit?'收起使用记录':'查看使用记录'}}</view>
-          <view wx:if="{{plugin.installation_id}}" class="delete-link tappable" data-plugin="{{plugin.plugin_id}}" bindtap="remove">删除能力配置</view>
+          <view class="audit-link tappable tappable" data-plugin="{{plugin.plugin_id}}" bindtap="showAudit" hover-class="tap-chip" hover-start-time="0" hover-stay-time="80">{{plugin.show_audit?'收起使用记录':'查看使用记录'}}</view>
+          <view wx:if="{{plugin.installation_id}}" class="delete-link tappable tappable" data-plugin="{{plugin.plugin_id}}" bindtap="remove" hover-class="tap-chip" hover-start-time="0" hover-stay-time="80">删除能力配置</view>
         </view>
         <view wx:if="{{plugin.show_audit}}" class="audit-list">
           <view wx:if="{{!plugin.audit.length}}" class="audit-empty">还没有使用记录。</view>

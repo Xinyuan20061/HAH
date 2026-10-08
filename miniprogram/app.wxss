@@ -47,6 +47,7 @@ page {background: #f7f7f2;color: #111613;font-family: -apple-system, BlinkMacSys
 .btn-primary, .btn-soft {min-height: 100rpx;border-radius: 18rpx !important;font-size: 31rpx !important;font-weight: 650 !important;letter-spacing: .2rpx; }
 .btn-primary {color:#111613 !important;background: #c4e267 !important; }
 .btn-soft {color: #111613 !important;background: #e9efd9 !important; }
+.btn-soft.compact {min-height: 64rpx;padding: 0 20rpx;font-size: 22rpx !important;line-height: 64rpx;}
 .btn-primary::after, .btn-soft::after {border: 0; }
 button[disabled] {opacity: .45; }
 

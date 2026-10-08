@@ -1,4 +1,4 @@
 @import "../shared.wxss";
 .policy-input-row picker{flex:1;color:#111613}
-.policy-consent{display:flex;align-items:flex-start;gap:12rpx;margin-top:18rpx;color:#506336;font-size:20rpx;line-height:1.6}
-.policy-acquisition-question{margin-top:20rpx;padding-top:18rpx;border-top:1rpx solid #eeeee6}
+.policy-consent{display:flex;align-items:flex-start;gap:12rpx;margin-top:20rpx;color:#506336;font-size:20rpx;line-height:1.6}
+.policy-acquisition-question{margin-top:20rpx;padding-top:20rpx;border-top:1rpx solid #eeeee6}

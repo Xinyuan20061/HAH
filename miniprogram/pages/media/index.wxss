@@ -84,6 +84,7 @@
 .frame-thumb-placeholder{width:228rpx;height:150rpx;border-radius:16rpx;background:#f7f7f2}
 .frame-detail-head{margin-bottom:0}
 .replay-btn{flex:none;font-size:20rpx;font-weight:700;color:#506336;background:#e9efd9;padding:12rpx 20rpx;border-radius:99rpx}
+.replay-btn.disabled{opacity:.46}
 .frame-phase{font-size:18rpx;color:#5f665f;margin-top:4rpx;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .frame-explanation b{font-size:23rpx}
 .frame-explanation text{font-size:23rpx;color:#111613}

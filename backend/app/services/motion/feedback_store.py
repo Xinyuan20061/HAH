@@ -21,9 +21,15 @@ from __future__ import annotations
 from typing import Iterable, Optional
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.models import MotionAnalysisFeedback, MotionAnalysisRun, MotionEvidenceFrame, MotionUserFeedback
+from app.models import (
+    MotionAnalysisFeedback,
+    MotionAnalysisRun,
+    MotionEvidenceFrame,
+    MotionUserFeedback,
+)
 
 # R13 / contract §6: closed kind vocabulary.
 FEEDBACK_KINDS = frozenset(
@@ -43,6 +49,10 @@ class FeedbackValidationError(ValueError):
         self.code = code
         self.message = message
         self.retryable = retryable
+
+
+class FeedbackIdempotencyConflict(ValueError):
+    """An idempotency key was reused for a different feedback payload."""
 
 
 def _snapshot_frame_ids(result: dict) -> set[str]:
@@ -123,14 +133,35 @@ def record_feedback(
     frame_id: Optional[str] = None,
     corrected_label: Optional[str] = None,
     comment: Optional[str] = None,
+    idempotency_key: Optional[str] = None,
 ) -> MotionUserFeedback:
-    """Insert ONE durable feedback row. Never overwrites the result snapshot."""
+    """Insert one durable feedback row, reusing it for a matching request key."""
     kind = validate_kind(kind)
     frame_id = validate_frame_membership(db, run, frame_id)
     corrected_label = (
         str(corrected_label).strip()[:120] if corrected_label else None
     )
     comment = str(comment).strip()[:2000] if comment else None
+    idempotency_key = str(idempotency_key).strip()[:120] if idempotency_key else None
+    if idempotency_key:
+        existing = db.scalar(
+            select(MotionUserFeedback).where(
+                MotionUserFeedback.run_id == run.id,
+                MotionUserFeedback.user_id == user_id,
+                MotionUserFeedback.idempotency_key == idempotency_key,
+            )
+        )
+        if existing is not None:
+            if (
+                existing.kind != kind
+                or existing.frame_id != frame_id
+                or existing.corrected_label != corrected_label
+                or existing.comment != comment
+            ):
+                raise FeedbackIdempotencyConflict(
+                    "同一幂等键不能提交不同的反馈内容"
+                )
+            return existing
     row = MotionUserFeedback(
         run_id=run.id,
         user_id=user_id,
@@ -138,9 +169,38 @@ def record_feedback(
         frame_id=frame_id,
         corrected_label=corrected_label,
         comment=comment,
+        idempotency_key=idempotency_key,
     )
-    db.add(row)
-    db.flush()
+    if idempotency_key:
+        try:
+            # A savepoint lets a concurrent duplicate recover the row without
+            # rolling back unrelated work in the request's outer transaction.
+            with db.begin_nested():
+                db.add(row)
+                db.flush()
+        except IntegrityError:
+            existing = db.scalar(
+                select(MotionUserFeedback).where(
+                    MotionUserFeedback.run_id == run.id,
+                    MotionUserFeedback.user_id == user_id,
+                    MotionUserFeedback.idempotency_key == idempotency_key,
+                )
+            )
+            if existing is None:
+                raise
+            if (
+                existing.kind != kind
+                or existing.frame_id != frame_id
+                or existing.corrected_label != corrected_label
+                or existing.comment != comment
+            ):
+                raise FeedbackIdempotencyConflict(
+                    "同一幂等键不能提交不同的反馈内容"
+                )
+            return existing
+    else:
+        db.add(row)
+        db.flush()
     return row
 
 
@@ -188,6 +248,7 @@ def coerce_legacy_feedback(
 __all__: Iterable[str] = [
     "FEEDBACK_KINDS",
     "FeedbackValidationError",
+    "FeedbackIdempotencyConflict",
     "run_frame_ids",
     "validate_kind",
     "validate_frame_membership",

@@ -1,0 +1,22 @@
+<script setup lang="ts">
+import { onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
+import { confirmUserAction, createPolicyMemoryResetProposal, readPolicyHistory } from '../services/api'
+import { useAuthStore } from '../stores/auth'
+
+const router = useRouter(); const auth = useAuthStore()
+const rows = ref<Array<Record<string, any>>>([]); const cursor = ref<string | null>(null); const loading = ref(true); const busy = ref(false); const error = ref('')
+async function load(append = false) { loading.value = true; error.value = ''; try { const page = await readPolicyHistory(auth.accessToken, append ? cursor.value : null); rows.value = append ? rows.value.concat(page.items) : page.items; cursor.value = page.next_cursor || null } catch (cause) { error.value = cause instanceof Error ? cause.message : '历史周期暂时无法读取' } finally { loading.value = false } }
+function status(value: string) { return ({ active:'进行中', awaiting_review:'等待复查', reviewed:'已复查', stopped:'已停止', completed:'已完成' } as Record<string,string>)[value] || '状态待更新' }
+function conclusion(row: Record<string, any>) { return row.conclusion_valid ? row.conclusion || '尚无最终结论' : row.conclusion ? '来源已变化，旧结论已撤回' : '未形成最终结论' }
+async function resetMemory() { if (busy.value || !window.confirm('重置个人策略经验？历史周期和原始健康记录会保留，旧结论不会改写。')) return; busy.value = true; error.value = ''; try { const proposal = await createPolicyMemoryResetProposal(auth.accessToken); if (window.confirm(`${proposal.title || '最后确认重置'}\n\n${proposal.summary || '只重置个人策略经验；周期和原始记录保留。'}`)) { await confirmUserAction(auth.accessToken, proposal.proposal_id, proposal.version || 1); window.alert('个人策略经验已重置。') } } catch (cause) { error.value = cause instanceof Error ? cause.message : '重置请求没有完成' } finally { busy.value = false } }
+onMounted(() => void load())
+</script>
+
+<template>
+  <section class="page policy-history"><header class="page-heading"><button class="back-button" aria-label="返回" @click="router.back()">‹</button><div><p class="eyebrow">个人记录</p><h1>历史周期</h1></div><button class="refresh" @click="load(false)">刷新</button></header><p class="intro">这里会保留每个周期的记录和复查结果。记录有变化时，旧结论会提示重新核对。</p><div v-if="loading && !rows.length" class="card-surface message">正在读取历史…</div><div v-else-if="error && !rows.length" class="card-surface message">{{ error }} <button @click="load(false)">重试</button></div><div v-else-if="!rows.length" class="card-surface message">还没有历史周期。完成或停止个人周期后会显示在这里。</div><div class="history-list"><article v-for="row in rows" :key="row.episode_id" class="card-surface history-row"><button @click="router.push({ path: '/policy/review', query: { id: row.episode_id } })"><span><b>{{ new Date(row.started_at).toLocaleString('zh-CN') }}</b><small>{{ status(row.status) }}</small></span><strong>{{ conclusion(row) }}</strong></button></article></div><button v-if="cursor" class="load-more" :disabled="loading" @click="load(true)">{{ loading ? '读取中…' : '加载更多' }}</button><section class="card-surface reset-card"><b>个人策略经验</b><p>重置后，之后的建议会从中性状态重新开始。历史周期和记录会保留，过往结论也不会改写。</p><button :disabled="busy" @click="resetMemory">{{ busy ? '处理中…' : '重置个人策略经验' }}</button></section><p v-if="error" class="error">{{ error }}</p></section>
+</template>
+
+<style scoped>
+.policy-history{padding:9px 0 24px}.page-heading{display:flex;align-items:center;gap:9px;margin-bottom:10px}.page-heading>div{flex:1}.page-heading h1{margin:3px 0 0;font-size:22px}.back-button{width:35px;height:35px;border:0;border-radius:50%;background:#fff;font-size:24px}.refresh{padding:7px 10px;border:0;border-radius:10px;background:#e9efd9;color:#506336;font-size:9px}.intro,.message{color:#737a70;font-size:10px;line-height:1.5}.message{padding:14px}.message button{padding:6px 9px;border:0;border-radius:9px;background:#e9efd9}.history-list{display:grid;gap:7px}.history-row{padding:0 12px}.history-row button{display:flex;width:100%;justify-content:space-between;gap:8px;padding:11px 0;border:0;text-align:left;background:transparent}.history-row span{display:flex;flex-direction:column;gap:4px}.history-row b,.history-row strong{font-size:10px}.history-row small{color:#737a70;font-size:9px}.load-more,.reset-card button{width:100%;min-height:38px;margin-top:9px;border:0;border-radius:11px;background:#e9efd9;color:#506336;font-size:10px}.reset-card{margin-top:13px;padding:13px}.reset-card b{font-size:11px}.reset-card p{color:#737a70;font-size:9px;line-height:1.5}.reset-card button{background:#f8e7e4;color:#8f3028}.error{color:#8f3028;font-size:10px}
+</style>

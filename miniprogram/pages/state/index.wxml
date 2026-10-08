@@ -71,7 +71,7 @@
     <view class="card policy-card" wx:if="{{policyDecision || policyEpisode || errors.policy}}">
       <view class="policy-title">个人策略验证</view>
       <view wx:if="{{errors.policy}}" class="state-desc">{{errors.policy}}</view>
-      <view class="policy-row next-step tappable" wx:if="{{nextStep}}" bindtap="goNextStep" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">
+      <view class="policy-row tappable" wx:if="{{nextStep}}" bindtap="goNextStep" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">
         <text class="policy-name">下一步：{{nextStep.label}}</text>
         <text class="policy-flag category-{{nextStep.category}}">{{nextStep.categoryLabel}}</text>
         <text>›</text>
@@ -90,7 +90,7 @@
         </view>
         <view class="policy-note">{{policyDecision.explanation}}</view>
       </block>
-      <view class="policy-entry" bindtap="goPolicy"><text>打开个人策略全流程</text><text>›</text></view>
+      <view class="policy-entry tappable" bindtap="goPolicy" hover-class="tap-card" hover-start-time="0" hover-stay-time="80"><text>打开个人策略全流程</text><text>›</text></view>
     </view>
 
     <!-- 区块 2：我现在处于什么状态（Health State） -->

@@ -7,7 +7,7 @@
     <view class="policy-lead">执行、观察来源与可比较性分开审视；一次个人周期不等同因果证据。</view>
   </view>
   <view wx:if="{{loading}}" class="policy-loading">正在核对来源与判定门槛…</view>
-  <view wx:elif="{{error && !episode}}" class="policy-card policy-error"><view class="policy-copy">{{error}}</view><button class="policy-button secondary" bindtap="retry">重新读取</button></view>
+  <view wx:elif="{{error && !episode}}" class="policy-card policy-error"><view class="policy-copy">{{error}}</view><button class="policy-button secondary tappable" bindtap="retry" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">重新读取</button></view>
   <block wx:if="{{episode}}">
     <view class="policy-card">
       <view class="policy-card-title">已冻结的协议</view>
@@ -46,27 +46,27 @@
       <view wx:for="{{repairTargets}}" wx:key="observation_ref_id" class="policy-list-item">
         <view class="policy-list-head"><text>{{item.endpointLabel}} · 第 {{item.slot + 1}} 条</text><text class="policy-pill">{{item.valueLabel}}</text></view>
         <view class="policy-list-sub">{{item.source_type === 'user_report' ? '本人自报' : '来源记录'}} · {{item.dateLabel}} · {{item.valid ? '当前有效' : '来源已失效'}}</view>
-        <button wx:if="{{item.can_replace_with_self_report}}" class="policy-button secondary" data-id="{{item.observation_ref_id}}" disabled="{{busy}}" bindtap="beginObservationRepair">更正这条本人自报</button>
+        <button wx:if="{{item.can_replace_with_self_report}}" class="policy-button secondary tappable" data-id="{{item.observation_ref_id}}" disabled="{{busy}}" bindtap="beginObservationRepair" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">更正这条本人自报</button>
       </view>
       <view wx:if="{{selectedRepairTarget}}" class="policy-repair-form">
         <view class="policy-copy">更正 {{selectedRepairTarget.endpointLabel}}第 {{selectedRepairTarget.slot + 1}} 条本人自评，发生时间保持不变。</view>
         <view class="policy-input-row"><text>负担评分</text><input type="digit" value="{{repairValue}}" placeholder="0–10" bindinput="inputRepairValue" /></view>
-        <button class="policy-button" loading="{{busy}}" disabled="{{busy}}" bindtap="saveObservationRepair">保存更正并撤回旧结论</button>
-        <button class="policy-button quiet" disabled="{{busy}}" bindtap="cancelObservationRepair">取消</button>
+        <button class="policy-button tappable" loading="{{busy}}" disabled="{{busy}}" bindtap="saveObservationRepair" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">保存更正并撤回旧结论</button>
+        <button class="policy-button quiet tappable" disabled="{{busy}}" bindtap="cancelObservationRepair" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">取消</button>
       </view>
     </view>
 
     <view wx:if="{{rereviewContext}}" class="policy-card">
       <view class="policy-card-title">按修复后的证据重新复查</view>
       <view class="policy-note policy-warning">旧复查版本已标记过时。系统会沿用原协议和原门槛，不会把重新复查直接变成支持结论。</view>
-      <button wx:if="{{!rereviewPreview}}" class="policy-button secondary" loading="{{busy}}" disabled="{{busy}}" bindtap="previewRereview">生成再复查预览</button>
+      <button wx:if="{{!rereviewPreview}}" class="policy-button secondary tappable" loading="{{busy}}" disabled="{{busy}}" bindtap="previewRereview" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">生成再复查预览</button>
       <block wx:if="{{rereviewPreview}}">
         <view class="policy-row"><text>总体结果</text><text class="policy-pill">{{rereviewPreview.conclusionLabel}}</text></view>
         <view class="policy-row"><text>执行记录</text><text>{{rereviewPreview.executionLabel}}</text></view>
         <view class="policy-row"><text>观察覆盖</text><text>{{rereviewPreview.availabilityLabel}}</text></view>
         <view class="policy-row"><text>预设方向</text><text>{{rereviewPreview.supportLabel}}</text></view>
         <view wx:for="{{rereviewPreview.reasons}}" wx:key="*this" class="policy-note">{{item}}</view>
-        <button class="policy-button" loading="{{busy}}" disabled="{{busy}}" bindtap="confirmRereview">确认生成新复查版本</button>
+        <button class="policy-button tappable" loading="{{busy}}" disabled="{{busy}}" bindtap="confirmRereview" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">确认生成新复查版本</button>
       </block>
     </view>
 
@@ -78,8 +78,8 @@
       </view>
     </view>
 
-    <button wx:if="{{canFinish}}" class="policy-button" loading="{{busy}}" disabled="{{busy}}" bindtap="finish">确认生成并保存复查</button>
-    <button class="policy-button secondary" bindtap="goHistory">查看历史与来源状态</button>
+    <button wx:if="{{canFinish}}" class="policy-button tappable" loading="{{busy}}" disabled="{{busy}}" bindtap="finish" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">确认生成并保存复查</button>
+    <button class="policy-button secondary tappable" bindtap="goHistory" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">查看历史与来源状态</button>
     <view wx:if="{{error}}" class="policy-note policy-error">{{error}}</view>
   </block>
 </view>

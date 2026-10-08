@@ -307,8 +307,7 @@ def dashboard(db: Session, user_id: int, days: int = 30):
         "benchmarks": latest,
         "experiment_outcomes": experiment_outcomes,
         "notes": [
-            "运行指标来自真实接口事件，不把“暂无样本”显示成 0。",
-            "准确率类比赛指标必须通过标注测试集写入 Benchmark，系统不会伪造准确率。",
-            "微实验只统计已确认启动的真实样本：数据库中的实验记录全部来自用户确认，不含预览或演示行。",
+            "运行数据统计近 30 天的服务请求。",
+            "个人尝试只统计你确认开始的周期。",
         ],
     }

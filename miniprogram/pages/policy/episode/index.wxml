@@ -7,7 +7,7 @@
     <view class="policy-lead">只报告已经发生的执行情况。来源更正后，旧证据会失效并提示重新补充。</view>
   </view>
   <view wx:if="{{loading}}" class="policy-loading">正在读取周期与证据…</view>
-  <view wx:elif="{{error && !episode}}" class="policy-card policy-error"><view class="policy-copy">{{error}}</view><button class="policy-button secondary" bindtap="retry">重新读取</button></view>
+  <view wx:elif="{{error && !episode}}" class="policy-card policy-error"><view class="policy-copy">{{error}}</view><button class="policy-button secondary tappable" bindtap="retry" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">重新读取</button></view>
   <block wx:if="{{episode}}">
     <view class="policy-card">
       <view class="policy-card-title">{{episode.statusLabel}}</view>
@@ -27,7 +27,7 @@
       <checkbox-group bindchange="toggleAcquisitionConsent">
         <label class="policy-consent"><checkbox value="agree" checked="{{acquisitionConsent}}" />我同意本周期按上述预算进行主动核查</label>
       </checkbox-group>
-      <button class="policy-button" loading="{{acquisitionBusy}}" disabled="{{acquisitionBusy || !acquisitionConsent}}" bindtap="startAcquisition">开启按需核查</button>
+      <button class="policy-button tappable" loading="{{acquisitionBusy}}" disabled="{{acquisitionBusy || !acquisitionConsent}}" bindtap="startAcquisition" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">开启按需核查</button>
     </view>
     <view wx:if="{{acquisition}}" class="policy-card">
       <view class="policy-list-head"><text class="policy-card-title">核查状态</text><text class="policy-pill">{{acquisition.session_status === 'paused' ? '已暂停' : acquisition.decision_state}}</text></view>
@@ -38,28 +38,28 @@
         <view class="policy-card-title">{{acquisition.decision.question.prompt}}</view>
         <view class="policy-copy">{{acquisition.decision.question.why}}</view>
         <view wx:if="{{pendingAcquisitionAnswer}}" class="policy-note policy-warning">上次答复结果未确认。为避免重复或替换答复，请用保存的原内容安全重试。</view>
-        <button wx:if="{{pendingAcquisitionAnswer}}" class="policy-button" loading="{{acquisitionBusy}}" disabled="{{acquisitionBusy}}" bindtap="retryAcquisitionAnswer">安全重试上次答复</button>
+        <button wx:if="{{pendingAcquisitionAnswer}}" class="policy-button tappable" loading="{{acquisitionBusy}}" disabled="{{acquisitionBusy}}" bindtap="retryAcquisitionAnswer" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">安全重试上次答复</button>
         <block wx:else>
           <block wx:if="{{acquisition.decision.question.kind === 'execution_confirmation'}}">
-            <button class="policy-button secondary" data-response="answered" data-value="completed" loading="{{acquisitionBusy}}" disabled="{{acquisitionBusy}}" bindtap="answerAcquisition">确认：已完成</button>
-            <button class="policy-button secondary" data-response="answered" data-value="explicitly_not_completed" loading="{{acquisitionBusy}}" disabled="{{acquisitionBusy}}" bindtap="answerAcquisition">确认：未完成</button>
+            <button class="policy-button secondary tappable" data-response="answered" data-value="completed" loading="{{acquisitionBusy}}" disabled="{{acquisitionBusy}}" bindtap="answerAcquisition" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">确认：已完成</button>
+            <button class="policy-button secondary tappable" data-response="answered" data-value="explicitly_not_completed" loading="{{acquisitionBusy}}" disabled="{{acquisitionBusy}}" bindtap="answerAcquisition" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">确认：未完成</button>
           </block>
           <block wx:elif="{{acquisition.decision.question.kind === 'burden_baseline' || acquisition.decision.question.kind === 'burden_followup'}}">
             <view class="policy-note">必须是已经真实发生的观察。可选日期：{{acquisitionBurdenDateMin}} 至 {{acquisitionBurdenDateMax}}；不会根据执行情况推算评分。</view>
             <view class="policy-input-row"><text>真实发生日期</text><picker mode="date" value="{{acquisitionBurdenDate}}" start="{{acquisitionBurdenDateMin}}" end="{{acquisitionBurdenDateMax}}" bindchange="chooseAcquisitionBurdenDate"><view>{{acquisitionBurdenDate || '请选择日期'}}　⌄</view></picker></view>
             <view class="policy-input-row"><text>主观负担</text><input type="digit" value="{{acquisitionBurdenValue}}" placeholder="0–10" bindinput="inputAcquisitionBurden" /></view>
-            <button class="policy-button secondary" data-response="answered" loading="{{acquisitionBusy}}" disabled="{{acquisitionBusy}}" bindtap="answerAcquisition">确认本人自评</button>
+            <button class="policy-button secondary tappable" data-response="answered" loading="{{acquisitionBusy}}" disabled="{{acquisitionBusy}}" bindtap="answerAcquisition" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">确认本人自评</button>
           </block>
-          <button class="policy-button quiet" data-response="unknown" loading="{{acquisitionBusy}}" disabled="{{acquisitionBusy}}" bindtap="answerAcquisition">不记得</button>
-          <button class="policy-button quiet" data-response="declined" loading="{{acquisitionBusy}}" disabled="{{acquisitionBusy}}" bindtap="answerAcquisition">暂不回答</button>
-          <button class="policy-button quiet" data-response="unavailable" loading="{{acquisitionBusy}}" disabled="{{acquisitionBusy}}" bindtap="answerAcquisition">没有可用记录</button>
+          <button class="policy-button quiet tappable" data-response="unknown" loading="{{acquisitionBusy}}" disabled="{{acquisitionBusy}}" bindtap="answerAcquisition" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">不记得</button>
+          <button class="policy-button quiet tappable" data-response="declined" loading="{{acquisitionBusy}}" disabled="{{acquisitionBusy}}" bindtap="answerAcquisition" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">暂不回答</button>
+          <button class="policy-button quiet tappable" data-response="unavailable" loading="{{acquisitionBusy}}" disabled="{{acquisitionBusy}}" bindtap="answerAcquisition" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">没有可用记录</button>
         </block>
       </view>
-      <button wx:if="{{acquisition.session_status === 'active' && acquisition.decision.action !== 'ask' && acquisition.decision.action !== 'needs_repair'}}" class="policy-button" loading="{{acquisitionBusy}}" disabled="{{acquisitionBusy}}" bindtap="nextAcquisitionQuestion">{{acquisition.decision.action === 'sufficient' ? '继续查看独立结果证据' : '核查下一项'}}</button>
-      <button wx:if="{{acquisition.session_status === 'active'}}" class="policy-button quiet" loading="{{acquisitionBusy}}" disabled="{{acquisitionBusy}}" bindtap="setAcquisitionPaused" data-paused="true">暂停核查</button>
-      <button wx:if="{{acquisition.session_status === 'paused'}}" class="policy-button secondary" loading="{{acquisitionBusy}}" disabled="{{acquisitionBusy}}" bindtap="setAcquisitionPaused" data-paused="false">本人操作后恢复核查</button>
-      <button wx:if="{{acquisition.decision.action === 'needs_repair'}}" class="policy-button secondary" loading="{{acquisitionBusy}}" disabled="{{acquisitionBusy}}" bindtap="repairAcquisition">{{pendingAcquisitionRepair ? '安全重试上次修复' : '重新核验当前依据'}}</button>
-      <button wx:if="{{acquisition.decision.action === 'needs_repair'}}" class="policy-button secondary" bindtap="openReview">查看记录与复查状态</button>
+      <button wx:if="{{acquisition.session_status === 'active' && acquisition.decision.action !== 'ask' && acquisition.decision.action !== 'needs_repair'}}" class="policy-button tappable" loading="{{acquisitionBusy}}" disabled="{{acquisitionBusy}}" bindtap="nextAcquisitionQuestion" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">{{acquisition.decision.action === 'sufficient' ? '继续查看独立结果证据' : '核查下一项'}}</button>
+      <button wx:if="{{acquisition.session_status === 'active'}}" class="policy-button quiet tappable" loading="{{acquisitionBusy}}" disabled="{{acquisitionBusy}}" bindtap="setAcquisitionPaused" data-paused="true" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">暂停核查</button>
+      <button wx:if="{{acquisition.session_status === 'paused'}}" class="policy-button secondary tappable" loading="{{acquisitionBusy}}" disabled="{{acquisitionBusy}}" bindtap="setAcquisitionPaused" data-paused="false" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">本人操作后恢复核查</button>
+      <button wx:if="{{acquisition.decision.action === 'needs_repair'}}" class="policy-button secondary tappable" loading="{{acquisitionBusy}}" disabled="{{acquisitionBusy}}" bindtap="repairAcquisition" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">{{pendingAcquisitionRepair ? '安全重试上次修复' : '重新核验当前依据'}}</button>
+      <button wx:if="{{acquisition.decision.action === 'needs_repair'}}" class="policy-button secondary tappable" bindtap="openReview" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">查看记录与复查状态</button>
       <view wx:if="{{acquisitionError}}" class="policy-note policy-error">{{acquisitionError}}</view>
     </view>
 
@@ -68,7 +68,7 @@
       <view wx:for="{{opportunities}}" wx:key="id" class="policy-list-item">
         <view class="policy-list-head"><text>第 {{item.slot + 1}} 天</text><text class="policy-pill">{{item.executionLabel}}</text></view>
         <view class="policy-list-sub">计划日期：{{item.dateLabel}}</view>
-        <button wx:if="{{item.canReport}}" class="policy-button secondary" data-id="{{item.id}}" loading="{{busy}}" disabled="{{busy}}" bindtap="reportExecution">记录这一天的情况</button>
+        <button wx:if="{{item.canReport}}" class="policy-button secondary tappable" data-id="{{item.id}}" loading="{{busy}}" disabled="{{busy}}" bindtap="reportExecution" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">记录这一天的情况</button>
         <view wx:if="{{!item.report_id && !item.canReport}}" class="policy-list-sub">到计划日期后可记录，不接受提前填写。</view>
       </view>
     </view>
@@ -81,8 +81,8 @@
       <view class="policy-input-row"><text>第几条</text><picker mode="selector" range="{{slots}}" value="{{slot}}" disabled="{{pendingObservation}}" bindchange="chooseSlot"><view>{{slots[slot]}}　⌄</view></picker></view>
       <view class="policy-input-row"><text>主观负担</text><input type="digit" value="{{value}}" disabled="{{pendingObservation}}" placeholder="0–10" bindinput="inputValue" /></view>
       <view wx:if="{{pendingObservation}}" class="policy-note policy-warning">上次提交结果未确认。为避免重复或改写记录，请先用原内容安全重试；也可以放弃本机重试信息。</view>
-      <button class="policy-button" loading="{{busy}}" disabled="{{busy}}" bindtap="saveObservation">{{pendingObservation ? '安全重试上次自报' : '保存为本人自报'}}</button>
-      <button wx:if="{{pendingObservation}}" class="policy-button secondary" disabled="{{busy}}" bindtap="discardPendingObservation">放弃本机重试信息</button>
+      <button class="policy-button tappable" loading="{{busy}}" disabled="{{busy}}" bindtap="saveObservation" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">{{pendingObservation ? '安全重试上次自报' : '保存为本人自报'}}</button>
+      <button wx:if="{{pendingObservation}}" class="policy-button secondary tappable" disabled="{{busy}}" bindtap="discardPendingObservation" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">放弃本机重试信息</button>
       <view wx:if="{{error}}" class="policy-note policy-error">{{error}}</view>
     </view>
 
@@ -95,8 +95,8 @@
       </view>
     </view>
 
-    <button wx:if="{{canReview}}" class="policy-button" bindtap="openReview">查看复查预览</button>
-    <button wx:if="{{canStop}}" class="policy-button danger" loading="{{busy}}" disabled="{{busy}}" bindtap="stopEpisode">停止周期</button>
+    <button wx:if="{{canReview}}" class="policy-button tappable" bindtap="openReview" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">查看复查预览</button>
+    <button wx:if="{{canStop}}" class="policy-button danger tappable" loading="{{busy}}" disabled="{{busy}}" bindtap="stopEpisode" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">停止周期</button>
     <view class="policy-note policy-warning">若训练中出现不适，请立即停止，不要为了完成记录继续训练；本页面不作医疗判断。</view>
   </block>
 </view>

@@ -10,6 +10,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.time import utc_now, utc_iso
+from app.services.storage import S3Storage, StorageError, get_storage
 from app.models import (
     AIJob,
     AIWorkerNode,
@@ -415,6 +416,11 @@ def job_source(db: Session, job: AIJob) -> dict:
     if not asset:
         return {}
     url = (asset.source_url or "").strip()
+    if asset.storage_backend == "s3":
+        try:
+            url = S3Storage().public_url(asset.storage_key)
+        except StorageError:
+            url = ""
     if not url and asset.storage_backend == "local" and not settings.is_production:
         url = f"{settings.public_base_url.rstrip('/')}/uploads/{asset.storage_key.lstrip('/')}"
     return {
@@ -461,6 +467,23 @@ def public_job(job: AIJob) -> dict:
             encoded = frame.pop("image_b64", None)
             if encoded:
                 frame["url"] = f"data:image/jpeg;base64,{encoded}"
+
+    error = None
+    if job.error_message:
+        if job.status == "queued":
+            error = "任务暂时中断，正在重新安排。"
+        elif job.status == "waiting_source_refresh":
+            error = "媒体访问地址需要刷新，刷新后会继续处理。"
+        elif job.status == "failed":
+            if job.job_type == "food_analysis":
+                error = "餐食识别没有完成，可以手动填写饮食记录。"
+            elif job.job_type in {"motion_unified", "motion_pose", "kinetics400"}:
+                error = "视频分析没有完成，请重新选择视频后再试。"
+            else:
+                error = "任务没有完成，请稍后重试。"
+        elif job.status == "cancelled":
+            error = "任务已取消。"
+
     return {
         "job_id": job.id,
         "job_type": job.job_type,
@@ -469,7 +492,10 @@ def public_job(job: AIJob) -> dict:
         "progress": job.progress,
         "attempts": job.attempts,
         "error_code": job.error_code or None,
-        "error": job.error_message or None,
+        # Worker diagnostics stay in the database for operators; never return
+        # arbitrary worker text (which may contain endpoints or stack details)
+        # to user-facing job pages.
+        "error": error,
         "result": result,
         "created_at": utc_iso(job.created_at),
         "started_at": utc_iso(job.started_at),

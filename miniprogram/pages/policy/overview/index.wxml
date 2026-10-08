@@ -11,13 +11,13 @@
   <view wx:elif="{{error}}" class="policy-card policy-error">
     <view class="policy-card-title">暂时无法读取</view>
     <view class="policy-copy">{{error}}</view>
-    <button class="policy-button secondary" bindtap="retry">重新读取</button>
+    <button class="policy-button secondary tappable" bindtap="retry" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">重新读取</button>
   </view>
 
   <block wx:else>
     <view wx:if="{{warning}}" class="policy-card policy-warning">
       <view class="policy-copy">{{warning}}</view>
-      <button class="policy-button secondary" bindtap="openCapabilities">查看能力授权设置</button>
+      <button class="policy-button secondary tappable" bindtap="openCapabilities" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">查看能力授权设置</button>
     </view>
     <view wx:if="{{current}}" class="policy-card">
       <view class="policy-card-title">正在进行的 7 天周期</view>
@@ -26,7 +26,7 @@
       <view class="policy-row"><text>执行记录</text><text>{{current.completed}} / {{current.total}} 次完成</text></view>
       <view class="policy-progress"><view style="width: {{current.ratio}}%;"></view></view>
       <view class="policy-muted">结束时间：{{current.endLabel}}</view>
-      <button class="policy-button" bindtap="openEpisode">继续记录与查看证据</button>
+      <button class="policy-button tappable" bindtap="openEpisode" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">继续记录与查看证据</button>
     </view>
     <view wx:else class="policy-card">
       <view class="policy-card-title">现在可开始的协议</view>
@@ -36,18 +36,18 @@
         <view class="policy-note">观察指标：{{item.metric_label}}。周期 7 天；基线与周期内各至少记录 5 次。</view>
       </block>
       <view wx:for="{{candidate.reasons}}" wx:key="*this" class="policy-note policy-warning">{{item}}</view>
-      <button class="policy-button" disabled="{{!candidate.can_compile || !candidate.can_propose}}" bindtap="openProtocol">查看并设置协议</button>
-      <button wx:if="{{!candidate.can_compile || !candidate.can_propose}}" class="policy-button secondary" bindtap="openCapabilities">查看能力授权设置</button>
+      <button class="policy-button tappable" disabled="{{!candidate.can_compile || !candidate.can_propose}}" bindtap="openProtocol" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">查看并设置协议</button>
+      <button wx:if="{{!candidate.can_compile || !candidate.can_propose}}" class="policy-button secondary tappable" bindtap="openCapabilities" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">查看能力授权设置</button>
     </view>
 
     <view class="policy-section">最近的个人周期</view>
     <view class="policy-card">
       <view wx:if="{{!history.length}}" class="policy-copy">完成的周期会保存在这里；数据不足时会明确标记，不会补造结论。</view>
-      <view wx:for="{{history}}" wx:key="id" class="policy-list-item" data-id="{{item.id}}" bindtap="openHistoryItem">
+      <view wx:for="{{history}}" wx:key="id" class="policy-list-item tappable" data-id="{{item.id}}" bindtap="openHistoryItem" hover-class="tap-card" hover-start-time="0" hover-stay-time="80">
         <view class="policy-list-head"><text>{{item.date}}</text><text class="policy-pill">{{item.status}}</text></view>
         <view class="policy-list-sub {{item.revoked ? 'policy-warning' : ''}}">{{item.conclusion}}</view>
       </view>
-      <view class="policy-link" bindtap="openHistory"><text>查看全部历史与记忆管理</text><text>›</text></view>
+      <view class="policy-link tappable" bindtap="openHistory" hover-class="tap-chip" hover-start-time="0" hover-stay-time="80"><text>查看全部历史与记忆管理</text><text>›</text></view>
     </view>
 
     <view class="policy-note">个人策略只整理你明确记录的执行和观察；可以停止周期、撤回过时证据或重置当前经验，原始健康记录不会被改写。</view>

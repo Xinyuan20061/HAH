@@ -106,6 +106,31 @@ def test_confirm_label_accepts_real_string_canonical_id(api, migrated_engine):
     assert body["canonical_id"] == "squat"
 
 
+def test_confirm_label_is_idempotent_and_rejects_key_reuse_with_new_payload(api, migrated_engine):
+    with Session(migrated_engine) as db:
+        run_id = _seed_run(api, db, result=dict(_V2_RESULT))
+    url = f"/api/v1/media/motion-analyses/{run_id}/confirm-label"
+    headers = {"Idempotency-Key": "confirm-label-test-0001"}
+    first = api.post(url, json={"canonical_id": "squat"}, headers=headers)
+    second = api.post(url, json={"canonical_id": "squat"}, headers=headers)
+    assert first.status_code == second.status_code == 200
+    assert first.json()["feedback_id"] == second.json()["feedback_id"]
+    with Session(migrated_engine) as db:
+        rows = db.scalars(
+            select(MotionUserFeedback).where(MotionUserFeedback.run_id == run_id)
+        ).all()
+        assert len(rows) == 1
+
+    conflict = api.post(url, json={"canonical_id": "pushup"}, headers=headers)
+    assert conflict.status_code == 409
+    assert conflict.json()["code"] == "IDEMPOTENCY_CONFLICT"
+    with Session(migrated_engine) as db:
+        rows = db.scalars(
+            select(MotionUserFeedback).where(MotionUserFeedback.run_id == run_id)
+        ).all()
+        assert len(rows) == 1
+
+
 def test_confirm_label_rejects_placeholder_user_confirmed(api, migrated_engine):
     with Session(migrated_engine) as db:
         run_id = _seed_run(api, db, result=dict(_V2_RESULT))

@@ -9,27 +9,27 @@
   <view wx:if="{{loading}}" class="policy-loading">正在核对安全与授权条件…</view>
   <view wx:elif="{{error && !compiled}}" class="policy-card policy-error">
     <view class="policy-card-title">暂时无法继续</view><view class="policy-copy">{{error}}</view>
-    <button class="policy-button secondary" bindtap="retry">重新读取</button>
-    <button wx:if="{{capabilityBlocked}}" class="policy-button secondary" bindtap="openCapabilities">查看能力授权设置</button>
+    <button class="policy-button secondary tappable" bindtap="retry" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">重新读取</button>
+    <button wx:if="{{capabilityBlocked}}" class="policy-button secondary tappable" bindtap="openCapabilities" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">查看能力授权设置</button>
   </view>
   <block wx:elif="{{candidate}}">
     <view class="policy-card">
       <view class="policy-card-title">协议内容</view>
       <view class="policy-copy">尝试把单次训练固定为以下时长，连续 7 天记录是否完成，以及训练负担自评。</view>
       <view class="policy-grid">
-        <view wx:for="{{choices}}" wx:key="minutes" class="policy-choice {{selectedMinutes === item.minutes ? 'selected' : ''}}" data-minutes="{{item.minutes}}" bindtap="chooseMinutes">{{item.label}}</view>
+        <view wx:for="{{choices}}" wx:key="minutes" class="policy-choice {{selectedMinutes === item.minutes ? 'selected' : ''}} tappable" data-minutes="{{item.minutes}}" bindtap="chooseMinutes" hover-class="tap-chip" hover-start-time="0" hover-stay-time="80">{{item.label}}</view>
       </view>
       <view class="policy-row"><text>主要观察</text><text>训练负担自评（0–10）</text></view>
       <view class="policy-row"><text>周期长度</text><text>7 天</text></view>
       <view class="policy-row"><text>最低记录要求</text><text>基线 5 次 · 周期内 5 次</text></view>
       <view class="policy-note">训练负担是你的主观自报，不是动作质量或健康指标。缺少记录时，系统会给出“证据不足”，不会用 0 补齐。</view>
-      <button wx:if="{{!compiled}}" class="policy-button" loading="{{busy}}" disabled="{{busy || !candidate.can_compile || !candidate.can_propose}}" bindtap="compile">生成并冻结协议</button>
+      <button wx:if="{{!compiled}}" class="policy-button tappable" loading="{{busy}}" disabled="{{busy || !candidate.can_compile || !candidate.can_propose}}" bindtap="compile" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">生成并冻结协议</button>
       <view wx:if="{{compiled}}" class="policy-note">协议已生成。协议摘要已固定；再次确认后才会开始周期。</view>
       <view wx:for="{{candidate.reasons}}" wx:key="*this" class="policy-note policy-warning">{{item}}</view>
       <view wx:if="{{!candidate.can_compile || !candidate.can_propose}}" class="policy-note policy-warning">如需继续，可先处理上方缺口或查看能力授权设置。</view>
-      <button wx:if="{{!candidate.can_compile || !candidate.can_propose}}" class="policy-button secondary" bindtap="openCapabilities">查看能力授权设置</button>
+      <button wx:if="{{!candidate.can_compile || !candidate.can_propose}}" class="policy-button secondary tappable" bindtap="openCapabilities" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">查看能力授权设置</button>
       <view wx:if="{{error}}" class="policy-note policy-error">{{error}}</view>
-      <button wx:if="{{error && capabilityBlocked}}" class="policy-button secondary" bindtap="openCapabilities">查看能力授权设置</button>
+      <button wx:if="{{error && capabilityBlocked}}" class="policy-button secondary tappable" bindtap="openCapabilities" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">查看能力授权设置</button>
     </view>
 
     <view wx:if="{{compiled}}" class="policy-card">
@@ -37,8 +37,8 @@
       <view class="policy-row"><text>单次时长</text><text>{{selectedMinutes}} 分钟</text></view>
       <view class="policy-row"><text>开始条件</text><text>你明确确认后开始</text></view>
       <view class="policy-copy">这是个人描述性记录，不用于诊断，也不能证明训练时长导致了任何健康变化。</view>
-      <button wx:if="{{!proposal}}" class="policy-button secondary" loading="{{busy}}" disabled="{{busy}}" bindtap="createProposal">准备开始确认</button>
-      <button wx:if="{{proposal}}" class="policy-button" loading="{{busy}}" disabled="{{busy}}" bindtap="confirmStart">确认开始 7 天周期</button>
+      <button wx:if="{{!proposal}}" class="policy-button secondary tappable" loading="{{busy}}" disabled="{{busy}}" bindtap="createProposal" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">准备开始确认</button>
+      <button wx:if="{{proposal}}" class="policy-button tappable" loading="{{busy}}" disabled="{{busy}}" bindtap="confirmStart" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">确认开始 7 天周期</button>
       <view wx:if="{{proposal}}" class="policy-muted">确认申请有效期内可执行；暂不确认不会开始观察窗口。</view>
     </view>
   </block>

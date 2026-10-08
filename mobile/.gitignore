@@ -1,0 +1,14 @@
+node_modules/
+dist/
+android/.gradle/
+android/local.properties
+android/.idea/
+android/app/build/
+android/build/
+.env
+.env.*
+!.env.example
+!.env.production.example
+*.jks
+*.keystore
+capacitor.config.local.ts

@@ -58,7 +58,30 @@ async def lifespan(app: FastAPI):
                     db.close()
             except Exception:  # noqa: BLE001 - consumer must survive one bad cycle
                 logger.exception("motion stage consumer cycle failed")
-            stop.wait(settings.motion_stage_poll_seconds)
+        stop.wait(settings.motion_stage_poll_seconds)
+
+    def _media_deletion_retry_loop():
+        """Retry encrypted remote-media deletion references on a bounded cadence."""
+        from app.core.database import SessionLocal
+        from app.services.media_reconciliation import retry_pending_deletions
+        from app.services.mobile_uploads import reconcile_expired_mobile_uploads
+
+        while not stop.is_set():
+            db = SessionLocal()
+            try:
+                upload_cleanup = reconcile_expired_mobile_uploads(db, limit=100)
+                result = retry_pending_deletions(db, limit=100)
+                if result["verified"] or result["failed"] or upload_cleanup["scheduled"]:
+                    logger.info(
+                        "media maintenance uploads=%s deletions=%s",
+                        json.dumps(upload_cleanup),
+                        json.dumps(result),
+                    )
+            except Exception:  # noqa: BLE001 - maintenance loop must survive one bad cycle
+                logger.exception("media deletion retry cycle failed")
+            finally:
+                db.close()
+            stop.wait(settings.media_deletion_retry_seconds)
 
     if settings.motion_stage_consumer_enabled:
         thread = threading.Thread(
@@ -66,6 +89,17 @@ async def lifespan(app: FastAPI):
         )
         thread.start()
         logger.info("motion stage consumer started (poll=%.1fs)", settings.motion_stage_poll_seconds)
+    if settings.env.lower() != "test":
+        deletion_thread = threading.Thread(
+            target=_media_deletion_retry_loop,
+            name="media-deletion-retry",
+            daemon=True,
+        )
+        deletion_thread.start()
+        logger.info(
+            "media deletion retry started (poll=%ds)",
+            settings.media_deletion_retry_seconds,
+        )
     yield
     stop.set()
     engine.dispose()

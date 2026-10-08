@@ -1,5 +1,7 @@
 from .models import (
     User,
+    UserIdentity,
+    UserIdentityLinkCode,
     HealthProfile,
     UserAIConfig,
     DietRecord,
@@ -11,6 +13,7 @@ from .models import (
     ChatMessage,
     HealthTimelineEvent,
     MediaAsset,
+    MobileMediaUploadSession,
     MotionAnalysisJob,
     HealthGoalAdjustment,
     HealthAgentRun,

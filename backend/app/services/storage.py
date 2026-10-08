@@ -45,12 +45,7 @@ class LocalStorage:
 
 
 class CloudReferenceStorage:
-    """CloudBase media is owned by wx.cloud, not by the Cloud Run container.
-
-    The backend stores only cloud:// file IDs and short-lived download URLs. Mutating the
-    actual object must be done by the mini program (or a separately authorized CloudBase SDK),
-    which prevents accidental writes to the container's ephemeral filesystem.
-    """
+    """CloudBase media stays in CloudBase and is managed through its admin API."""
 
     def _unsupported(self, *_args, **_kwargs):
         raise StorageError("cloud_ref media must be managed through wx.cloud APIs")
@@ -74,13 +69,6 @@ class S3Storage:
             region_name=settings.s3_region,
         )
         self.bucket = settings.s3_bucket
-        try:
-            self.client.head_bucket(Bucket=self.bucket)
-        except Exception:
-            try:
-                self.client.create_bucket(Bucket=self.bucket)
-            except Exception:
-                pass
 
     def put_bytes(self, key, data, content_type=None):
         args = {"Bucket": self.bucket, "Key": key, "Body": data}
@@ -89,6 +77,43 @@ class S3Storage:
         self.client.put_object(**args)
         return key
 
+    def presigned_upload_url(self, key, content_type, size_bytes, expires_in=300):
+        return self.client.generate_presigned_url(
+            "put_object",
+            Params={
+                "Bucket": self.bucket,
+                "Key": key,
+                "ContentType": content_type,
+                "ContentLength": size_bytes,
+            },
+            ExpiresIn=expires_in,
+        )
+
+    def object_metadata(self, key):
+        return self.client.head_object(Bucket=self.bucket, Key=key)
+
+    def object_prefix(self, key, byte_count=32):
+        response = self.client.get_object(
+            Bucket=self.bucket,
+            Key=key,
+            Range=f"bytes=0-{max(0, int(byte_count) - 1)}",
+        )
+        body = response["Body"]
+        try:
+            return body.read(max(1, int(byte_count)))
+        finally:
+            body.close()
+
+    def copy_object(self, source_key, destination_key, content_type):
+        """Commit a verified staging object to a server-only final key."""
+        return self.client.copy_object(
+            Bucket=self.bucket,
+            Key=destination_key,
+            CopySource={"Bucket": self.bucket, "Key": source_key},
+            MetadataDirective="REPLACE",
+            ContentType=content_type,
+        )
+
     def local_path(self, key):
         tmp = Path("/tmp/healthmate-media") / key
         tmp.parent.mkdir(parents=True, exist_ok=True)
@@ -96,8 +121,8 @@ class S3Storage:
         return tmp
 
     def public_url(self, key):
-        if settings.s3_public_base_url:
-            return settings.s3_public_base_url.rstrip("/") + "/" + key
+        # Health and movement media are private user data. Always return a
+        # short-lived signature, even when a public CDN base URL is configured.
         return self.client.generate_presigned_url(
             "get_object", Params={"Bucket": self.bucket, "Key": key}, ExpiresIn=3600
         )

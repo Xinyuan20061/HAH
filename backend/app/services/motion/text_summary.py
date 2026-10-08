@@ -97,9 +97,9 @@ def fallback_summary(decision_state: str, label_id: str | None, reason_code: str
         )
     if decision_state == "uncertain":
         mapping = {
-            "REVIEW_UNAVAILABLE_OR_UNCERTAIN": "AI 视觉复核暂不可用或证据不足，暂时不能确定动作类别。",
-            "UNSUPPORTED_REVIEW": "AI 复核结果与本地候选不一致，已按谨慎原则保留判断。",
-            "MODEL_DISAGREEMENT": "本地姿态识别与 AI 视觉复核意见不一致，暂不下结论。",
+            "REVIEW_UNAVAILABLE_OR_UNCERTAIN": "画面线索不足，暂时无法确认动作类别。请重新拍摄，或手动选择动作。",
+            "UNSUPPORTED_REVIEW": "不同画面线索不一致，暂时无法确认动作类别。建议重新拍摄或手动选择动作。",
+            "MODEL_DISAGREEMENT": "不同画面线索不一致，暂时无法确认动作类别。建议重新拍摄或手动选择动作。",
         }
         return mapping.get(reason_code, "暂时不能确定动作，建议重新拍摄或手动选择动作类别。")
 

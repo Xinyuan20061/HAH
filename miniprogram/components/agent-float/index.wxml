@@ -47,7 +47,7 @@
         <image src="/assets/icons/mic.png" mode="aspectFit"/>
       </view>
       <textarea class="dialog-input" value="{{input}}" bindinput="onInput" auto-height maxlength="1000" show-confirm-bar="{{false}}" cursor-spacing="16" placeholder="告诉{{actor.name}}你想做什么"/>
-      <view class="dialog-send tappable {{canSend||sending?'ready':'inactive'}}" bindtap="composerAction" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80" aria-label="{{sending?'停止生成':'发送'}}" aria-disabled="{{!canSend&&!sending}}">
+      <view class="dialog-send tappable {{canSend||sending?'ready':''}}" bindtap="composerAction" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80" aria-label="{{sending?'停止生成':'发送'}}" aria-disabled="{{!canSend&&!sending}}">
         <view wx:if="{{sending}}" class="dialog-stop"></view>
         <view wx:else class="dialog-send-arrow"><view class="dialog-send-head"></view><view class="dialog-send-stem"></view></view>
       </view>

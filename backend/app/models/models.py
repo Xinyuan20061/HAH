@@ -30,7 +30,10 @@ class TimestampMixin:
 class User(Base, TimestampMixin):
     __tablename__ = "users"
     id: Mapped[int] = mapped_column(primary_key=True)
-    openid: Mapped[str] = mapped_column(String(128), unique=True, index=True)
+    # Nullable for accounts whose first identity is a mobile WeChat identity.
+    # Verified provider identities live in UserIdentity; this legacy column is
+    # retained for mini-program compatibility and the existing admin allowlist.
+    openid: Mapped[str | None] = mapped_column(String(128), unique=True, index=True, nullable=True)
     nickname: Mapped[str] = mapped_column(String(64), default="")
     avatar_url: Mapped[str] = mapped_column(String(500), default="")
     profile: Mapped["HealthProfile|None"] = relationship(
@@ -39,6 +42,36 @@ class User(Base, TimestampMixin):
     ai_config: Mapped["UserAIConfig|None"] = relationship(
         back_populates="user", uselist=False, cascade="all, delete-orphan"
     )
+
+
+class UserIdentity(Base):
+    __tablename__ = "user_identities"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    provider: Mapped[str] = mapped_column(String(40), nullable=False)
+    issuer: Mapped[str] = mapped_column(String(191), nullable=False)
+    subject: Mapped[str] = mapped_column(String(191), nullable=False)
+    union_subject: Mapped[str | None] = mapped_column(String(191), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, nullable=False)
+    __table_args__ = (
+        UniqueConstraint("provider", "issuer", "subject", name="uq_user_identity_scope_subject"),
+        Index("ix_user_identities_user_provider", "user_id", "provider"),
+        Index("ix_user_identities_provider_subject", "provider", "subject"),
+    )
+
+
+class UserIdentityLinkCode(Base):
+    __tablename__ = "user_identity_link_codes"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    code_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    source_user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, index=True)
+    consumed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, nullable=False)
 
 
 class HealthProfile(Base, TimestampMixin):
@@ -234,6 +267,39 @@ class MediaAsset(Base, TimestampMixin):
     content_type: Mapped[str] = mapped_column(String(120), default="")
     size_bytes: Mapped[int] = mapped_column(Integer, default=0)
     status: Mapped[str] = mapped_column(String(30), default="ready")
+
+
+class MobileMediaUploadSession(Base, TimestampMixin):
+    """Durable server-owned staging state for Android object uploads."""
+
+    __tablename__ = "mobile_media_upload_sessions"
+    __table_args__ = (
+        UniqueConstraint("user_id", "request_id", name="uq_mobile_upload_user_request"),
+        UniqueConstraint("media_asset_id", name="uq_mobile_upload_media_asset"),
+    )
+    id: Mapped[int] = mapped_column(primary_key=True)
+    # Sessions survive account deletion only long enough to remove staging
+    # objects after every previously issued PUT URL has expired.
+    user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    media_asset_id: Mapped[int | None] = mapped_column(
+        ForeignKey("media_assets.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    request_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    staging_key: Mapped[str | None] = mapped_column(String(700), nullable=True, unique=True)
+    purpose: Mapped[str] = mapped_column(String(40), nullable=False)
+    original_name: Mapped[str] = mapped_column(String(255), default="")
+    media_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    content_type: Mapped[str] = mapped_column(String(120), nullable=False)
+    size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[str] = mapped_column(String(30), default="pending", index=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, index=True)
+    cleanup_after: Mapped[datetime] = mapped_column(DateTime, nullable=False, index=True)
+    cleanup_completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    cleanup_attempts: Mapped[int] = mapped_column(Integer, default=0)
+    last_error_code: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    ready_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
 class MotionAnalysisJob(Base, TimestampMixin):
@@ -558,7 +624,7 @@ class PrivacyAudit(Base, TimestampMixin):
 
 
 class AIJob(Base, TimestampMixin):
-    """Database-backed job queue shared by WeChat Cloud Run and the local GPU worker."""
+    """Database-backed job queue shared by WeChat Cloud Hosting and the local GPU worker."""
 
     __tablename__ = "ai_jobs"
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -1111,6 +1177,13 @@ class MotionUserFeedback(Base):
     """
 
     __tablename__ = "motion_user_feedback"
+    __table_args__ = (
+        Index(
+            "uq_motion_user_feedback_request",
+            "run_id", "user_id", "idempotency_key",
+            unique=True,
+        ),
+    )
     id: Mapped[int] = mapped_column(primary_key=True)
     run_id: Mapped[int] = mapped_column(
         ForeignKey("motion_analysis_runs.id"), index=True
@@ -1120,6 +1193,7 @@ class MotionUserFeedback(Base):
     frame_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
     corrected_label: Mapped[str | None] = mapped_column(String(120), nullable=True)
     comment: Mapped[str | None] = mapped_column(Text, nullable=True)
+    idempotency_key: Mapped[str | None] = mapped_column(String(120), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, index=True)
 
 
@@ -1225,8 +1299,9 @@ class MediaDeletionTask(Base, TimestampMixin):
 
     A client receipt is supporting evidence only: ``verified`` requires the
     server to observe the object missing or to hold a platform success receipt.
-    Only a hash of the storage key is kept, so the ledger can reconcile an
-    orphaned object after account deletion without retaining a usable reference.
+    A non-reversible key hash remains in the audit ledger. A separately encrypted
+    provider reference exists only while retry is required and is cleared once
+    the deletion has been verified.
 
     ``user_id`` is deliberately NOT a foreign key: the ledger must outlive the
     account row it refers to (that is the "minimal audit reference" the spec
@@ -1242,6 +1317,8 @@ class MediaDeletionTask(Base, TimestampMixin):
     )
     storage_backend: Mapped[str] = mapped_column(String(30), default="")
     storage_key_hash: Mapped[str] = mapped_column(String(64), default="")
+    # Encrypted provider reference retained only while deletion needs retry.
+    encrypted_storage_reference: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(String(30), default="pending", index=True)
     provider_receipt_json: Mapped[str] = mapped_column(Text, default="{}")
     attempts: Mapped[int] = mapped_column(Integer, default=0)

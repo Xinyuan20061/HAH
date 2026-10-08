@@ -29,7 +29,7 @@ from app.services.evaluation import record_metric
 from app.services.agent.actions import execute_action
 from app.services.ai_jobs import create_ai_job, public_job, requeue_expired_jobs, json_loads
 from app.services.result_summary import generate_result_summary
-from app.services.storage import get_storage, StorageError
+from app.services.storage import get_storage, S3Storage, StorageError
 from app.services.vision.cloud_food import analyze_food_cloud, CloudFoodError
 from app.services.vision.finalize import (
     diet_record_snapshot,
@@ -58,7 +58,7 @@ def _food_image_bytes(asset: MediaAsset) -> bytes:
             raise CloudFoodError("media_unavailable", "图片暂时无法读取") from None
     elif asset.storage_backend == "s3":
         try:
-            data = get_storage().local_path(asset.storage_key).read_bytes()
+            data = S3Storage().local_path(asset.storage_key).read_bytes()
         except (OSError, StorageError):
             raise CloudFoodError("media_unavailable", "图片暂时无法读取") from None
     else:

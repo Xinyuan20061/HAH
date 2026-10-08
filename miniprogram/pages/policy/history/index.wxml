@@ -7,20 +7,20 @@
     <view class="policy-lead">每个周期都保留协议、来源有效性与判定限制。重置经验不会删除历史记录。</view>
   </view>
   <view wx:if="{{loading && !rows.length}}" class="policy-loading">正在读取个人历史…</view>
-  <view wx:elif="{{error && !rows.length}}" class="policy-card policy-error"><view class="policy-copy">{{error}}</view><button class="policy-button secondary" bindtap="retry">重新读取</button></view>
+  <view wx:elif="{{error && !rows.length}}" class="policy-card policy-error"><view class="policy-copy">{{error}}</view><button class="policy-button secondary tappable" bindtap="retry" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">重新读取</button></view>
   <view wx:elif="{{!rows.length}}" class="policy-card"><view class="policy-card-title">还没有历史周期</view><view class="policy-copy">完成一次协议周期后，结论与失效记录会显示在这里。</view></view>
   <view wx:else class="policy-card">
-    <view wx:for="{{rows}}" wx:key="id" class="policy-list-item" data-id="{{item.id}}" bindtap="openEpisode">
+    <view wx:for="{{rows}}" wx:key="id" class="policy-list-item tappable" data-id="{{item.id}}" bindtap="openEpisode" hover-class="tap-card" hover-start-time="0" hover-stay-time="80">
       <view class="policy-list-head"><text>{{item.date}}</text><text class="policy-pill">{{item.status}}</text></view>
       <view class="policy-list-sub {{item.invalidated ? 'policy-warning' : ''}}">{{item.conclusion}}</view>
       <view class="policy-list-sub">点开查看协议、判定解释和来源限制　›</view>
     </view>
-    <button wx:if="{{hasMore}}" class="policy-button secondary" loading="{{loading}}" disabled="{{loading}}" bindtap="loadMore">读取更早的周期</button>
+    <button wx:if="{{hasMore}}" class="policy-button secondary tappable" loading="{{loading}}" disabled="{{loading}}" bindtap="loadMore" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">读取更早的周期</button>
   </view>
   <view class="policy-card">
     <view class="policy-card-title">个人经验管理</view>
     <view class="policy-copy">重置只影响今后的个性化经验，不删除周期证据或健康数据；每次都需要单独确认。</view>
-    <button class="policy-button quiet" loading="{{busy}}" disabled="{{busy}}" bindtap="resetMemory">生成重置确认请求</button>
+    <button class="policy-button quiet tappable" loading="{{busy}}" disabled="{{busy}}" bindtap="resetMemory" hover-class="tap-btn" hover-start-time="0" hover-stay-time="80">生成重置确认请求</button>
     <view wx:if="{{error && rows.length}}" class="policy-note policy-error">{{error}}</view>
   </view>
 </view>

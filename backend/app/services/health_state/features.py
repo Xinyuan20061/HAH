@@ -39,7 +39,8 @@ from app.services.health_state.contracts import (
     confidence_from_coverage,
 )
 
-FEATURE_VERSION = "1.0.0"
+# Refresh saved snapshots so the evidence description stays clear in the app.
+FEATURE_VERSION = "1.0.1"
 
 
 @dataclass
@@ -449,8 +450,11 @@ def _data_reliability_score(ctx: FeatureContext) -> StateValue:
         unit="ratio",
         observed_days=sum(observed.values()),
         limitations=[
-            "该分数只反映记录覆盖度，不代表模型准确率",
-            f"覆盖情况：{observed}",
+            "表示近 7 天记录完整程度，不代表健康状况",
+            (
+                f"近 7 天有记录：健康打卡 {observed['checkin']} 天、"
+                f"饮食 {observed['diet']} 天、运动 {observed['exercise']} 天"
+            ),
         ],
     )
 
@@ -521,7 +525,7 @@ FEATURES: tuple[FeatureDefinition, ...] = (
         FEATURE_VERSION,
         ("checkin", "diet_record", "exercise_record"),
         _data_reliability_score,
-        "数据可信度",
+        "记录覆盖度",
     ),
 )
 

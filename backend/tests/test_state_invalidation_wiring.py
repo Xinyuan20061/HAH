@@ -174,6 +174,7 @@ def test_exercise_create_and_delete_invalidate_exercise_features(api, db):
     assert created.status_code in {200, 201}, created.text
     exercise_id = created.json()["id"]
 
+    db.rollback()
     _seed_features(db, api.user_id)
     removed = api.delete(f"/api/v1/exercise/records/{exercise_id}")
     assert removed.status_code == 200, removed.text
@@ -191,6 +192,7 @@ def test_editing_a_meal_does_not_discard_motion_features(api, db):
         "/api/v1/diet/records",
         json={"name": "米饭", "meal_type": "lunch", "calories": 300, "items": []},
     )
+    db.rollback()
     after = set(_features_now(db, api.user_id))
     # Exercise-derived features are recomputed by the snapshot rebuild, but they were
     # never deleted as a consequence of the diet change.
@@ -210,6 +212,7 @@ def test_deleted_record_values_no_longer_appear_in_state(api, db):
 
     api.delete(f"/api/v1/diet/records/{record_id}")
 
+    db.rollback()
     snapshot = build_snapshot(db, api.user_id, persist=False)
     value = snapshot.value("diet_calories_avg")
     # The 900 kcal record is gone, so the average must not still be built from it.

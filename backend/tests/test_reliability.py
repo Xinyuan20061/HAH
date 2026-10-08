@@ -21,6 +21,7 @@ from app.models import (
     MotionEvent,
     ExerciseResource,
     KnowledgeDocument,
+    MediaDeletionTask,
 )
 from app.services.ai_jobs import (
     claim_next_job,
@@ -83,6 +84,7 @@ def test_production_preflight_lists_all_missing_fields_and_never_selects_sqlite(
         "WORKER_TOKEN",
         "WECHAT_APP_ID",
         "STORAGE_BACKEND",
+        "MOBILE_UPLOAD_BACKEND",
     ]:
         assert name in errors
     assert not config.effective_database_url.startswith("sqlite")
@@ -228,6 +230,18 @@ def test_media_register_idempotency_and_ownership(api):
     assert api.post("/api/v1/media/register-cloud", json=data).status_code == 403
 
 
+def test_media_register_accepts_android_custom_login_namespace(api):
+    asset, data = register(api)
+    data["file_id"] = data["file_id"].replace(
+        f"/u{api.user_id}/", f"/hm_user_{api.user_id}/"
+    )
+
+    response = api.post("/api/v1/media/register-cloud", json=data)
+
+    assert response.status_code == 200, response.text
+    assert response.json()["media_id"] != asset["media_id"]
+
+
 @pytest.mark.parametrize(
     "change,status",
     [
@@ -310,6 +324,65 @@ def test_food_closed_loop_progress_complete_correct_finalize_and_privacy(
         and response.json()["cloud_media_deletion"] == "client_reported"
     )
     assert api.get("/api/v1/users/me").status_code == 401
+
+
+def test_cloudbase_account_deletion_retries_with_encrypted_reference(
+    api, migrated_engine, monkeypatch
+):
+    from app.services.cloudbase_storage import CloudBaseStorageAdmin
+    from app.services.media_reconciliation import retry_pending_deletions
+
+    asset, _ = register(api)
+    monkeypatch.setattr(
+        CloudBaseStorageAdmin,
+        "configured",
+        property(lambda _self: True),
+    )
+    monkeypatch.setattr(
+        CloudBaseStorageAdmin,
+        "delete_file_ids",
+        lambda _self, file_ids: {file_id: False for file_id in file_ids},
+    )
+
+    response = api.request(
+        "DELETE", "/api/v1/privacy/account", json={"confirmation": "DELETE MY DATA"}
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["cloud_media_deletion"] == "pending"
+    assert response.json()["verification"] == "pending"
+    assert response.json()["cloud_media_objects_pending"] == 1
+
+    with Session(migrated_engine) as db:
+        task = db.scalar(
+            select(MediaDeletionTask).where(
+                MediaDeletionTask.storage_key_hash
+                == hashlib.sha256(asset["cloud_file_id"].encode()).hexdigest()
+            )
+        )
+        assert task is not None
+        assert task.encrypted_storage_reference
+        assert task.encrypted_storage_reference != asset["cloud_file_id"]
+        task.next_attempt_at = utc_now() - timedelta(seconds=1)
+        db.commit()
+
+    monkeypatch.setattr(
+        CloudBaseStorageAdmin,
+        "delete_file_ids",
+        lambda _self, file_ids: {file_id: True for file_id in file_ids},
+    )
+    with Session(migrated_engine) as db:
+        result = retry_pending_deletions(db)
+        assert result["verified"] == 1
+
+    with Session(migrated_engine) as db:
+        task = db.scalar(
+            select(MediaDeletionTask).where(
+                MediaDeletionTask.storage_key_hash
+                == hashlib.sha256(asset["cloud_file_id"].encode()).hexdigest()
+            )
+        )
+        assert task.status == "verified"
+        assert task.encrypted_storage_reference is None
 
 
 def test_food_item_correction_recomputes_and_persists_evidence(

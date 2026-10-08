@@ -29,6 +29,7 @@ from app.models import (
     MediaAsset,
     MotionAnalysisFeedback,
     MotionAnalysisRun,
+    MotionUserFeedback,
     ProviderInvocation,
     User,
 )
@@ -628,6 +629,9 @@ def test_vision_failure_keeps_local_result_degrades_partial(migrated_engine, api
     # R03: local squat is KEPT, not discarded as uncertain.
     assert rec["state"] == "identified" and rec["canonical_id"] == "squat"
     assert view["result"]["summary"]["degraded"] is True
+    notice_copy = " ".join(item["text"] for item in view["result"]["notices"])
+    assert "动作已完成基础分析，详细讲解暂不可用" in notice_copy
+    assert "AI" not in notice_copy
 
 
 def test_no_consent_never_calls_vision(migrated_engine, api, monkeypatch):
@@ -680,6 +684,85 @@ def test_confirm_label_and_feedback_do_not_fabricate_score(migrated_engine, api)
 
     ev = api.get(f"/api/v1/media/motion-analyses/{run_id}/evidence")
     assert ev.status_code == 200
+
+
+def test_reanalyze_reuses_child_and_feedback_for_same_idempotency_key(migrated_engine, api):
+    media_id = _seed_asset(migrated_engine, api.user_id)
+    created = api.post(
+        "/api/v1/media/motion-analyses",
+        json={"media_id": media_id, "requested_exercise": "auto", "cloud_review_mode": "off"},
+        headers={"Idempotency-Key": "reanalyze-parent-0001"},
+    )
+    assert created.status_code == 202, created.text
+    parent_id = created.json()["analysis_id"]
+    with Session(migrated_engine) as db:
+        parent = db.get(MotionAnalysisRun, parent_id)
+        parent.status = "completed"
+        db.commit()
+
+    url = f"/api/v1/media/motion-analyses/{parent_id}/reanalyze"
+    headers = {"Idempotency-Key": "reanalyze-child-0001"}
+    body = {"cloud_review_mode": "off", "exercise_hint": "pushup"}
+    first = api.post(url, json=body, headers=headers)
+    second = api.post(url, json=body, headers=headers)
+    assert first.status_code == second.status_code == 200
+    assert first.json()["analysis_id"] == second.json()["analysis_id"]
+
+    with Session(migrated_engine) as db:
+        children = db.scalars(
+            select(MotionAnalysisRun).where(MotionAnalysisRun.parent_run_id == parent_id)
+        ).all()
+        feedback = db.scalars(
+            select(MotionUserFeedback).where(MotionUserFeedback.run_id == parent_id)
+        ).all()
+        assert len(children) == 1
+        assert len(feedback) == 1
+        assert feedback[0].corrected_label == "pushup"
+
+    conflict = api.post(
+        url,
+        json={"cloud_review_mode": "off", "exercise_hint": "squat"},
+        headers=headers,
+    )
+    assert conflict.status_code == 409
+    with Session(migrated_engine) as db:
+        children = db.scalars(
+            select(MotionAnalysisRun).where(MotionAnalysisRun.parent_run_id == parent_id)
+        ).all()
+        assert len(children) == 1
+
+
+def test_reanalyze_does_not_duplicate_a_preconfirmed_label(migrated_engine, api):
+    media_id = _seed_asset(migrated_engine, api.user_id)
+    created = api.post(
+        "/api/v1/media/motion-analyses",
+        json={"media_id": media_id, "requested_exercise": "auto", "cloud_review_mode": "off"},
+        headers={"Idempotency-Key": "reanalyze-confirm-parent-01"},
+    )
+    assert created.status_code == 202, created.text
+    parent_id = created.json()["analysis_id"]
+    with Session(migrated_engine) as db:
+        parent = db.get(MotionAnalysisRun, parent_id)
+        parent.status = "completed"
+        db.commit()
+
+    confirmed = api.post(
+        f"/api/v1/media/motion-analyses/{parent_id}/confirm-label",
+        json={"canonical_id": "pushup"},
+        headers={"Idempotency-Key": "reanalyze-confirm-label-01"},
+    )
+    assert confirmed.status_code == 200, confirmed.text
+    child = api.post(
+        f"/api/v1/media/motion-analyses/{parent_id}/reanalyze",
+        json={"cloud_review_mode": "off", "exercise_hint": "pushup", "correction_confirmed": True},
+        headers={"Idempotency-Key": "reanalyze-confirm-child-01"},
+    )
+    assert child.status_code == 200, child.text
+    with Session(migrated_engine) as db:
+        feedback = db.scalars(
+            select(MotionUserFeedback).where(MotionUserFeedback.run_id == parent_id)
+        ).all()
+        assert len(feedback) == 1
 
 
 def test_old_endpoints_still_registered_and_deprecated(api):

@@ -1,11 +1,13 @@
 from __future__ import annotations
 import json
 import re
+import hashlib
 from app.core.time import utc_now, utc_iso
 
 from datetime import datetime, timedelta
 from pathlib import Path
 from uuid import uuid4
+from typing import Literal
 
 from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, Request, Header
 from fastapi.responses import JSONResponse, Response
@@ -25,6 +27,7 @@ from app.core.security import decode_subject
 from app.models import (
     AIJob,
     MediaAsset,
+    MobileMediaUploadSession,
     MotionAnalysisFeedback,
     MotionAnalysisRun,
     MotionEvidenceFrame,
@@ -32,7 +35,15 @@ from app.models import (
     User,
 )
 from app.services.storage import get_storage
-from app.services.storage import StorageError
+from app.services.storage import S3Storage, StorageError
+from app.services.mobile_uploads import (
+    UPLOAD_URL_TTL_SECONDS,
+    MobileUploadValidationError,
+    cleanup_after_expiry,
+    mobile_upload_limit_bytes,
+    schedule_mobile_upload_cleanup,
+    verify_media_bytes,
+)
 from app.schemas.errors import ApiException
 from app.services.ai_jobs import (
     create_ai_job,
@@ -45,18 +56,11 @@ from app.services.timeline import add_event
 from app.services.result_summary import generate_result_summary
 from app.services.motion import catalog, feedback_store
 from app.services.motion.media_storage import (
+    InvalidPreviewSignature,
     PreviewExpired,
     PreviewForbidden,
     PreviewNotFound,
 )
-
-# B 包正在按冻结契约扩展 MediaStorage；InvalidPreviewSignature 可能尚未落地，
-# 这里做防御性导入——B 包落地后自动切到真实异常类。
-try:  # pragma: no cover - exercised via whichever symbol resolves
-    from app.services.motion.media_storage import InvalidPreviewSignature
-except ImportError:  # pragma: no cover - until B lands
-    class InvalidPreviewSignature(Exception):
-        """Raised when a preview upload/read signature is invalid or expired."""
 from app.services.motion.orchestrator import (
     PIPELINE_VERSION,
     create_unified_run,
@@ -69,6 +73,11 @@ V2_PIPELINE_VERSION = "motion-unified-v2"
 ALLOWED_CLOUD_REVIEW_MODES = {"off", "skeleton", "redacted_frames"}
 
 router = APIRouter(prefix="/media", tags=["media"])
+
+
+def _require_mobile_upload_enabled() -> None:
+    if not settings.mobile_upload_enabled:
+        raise HTTPException(503, "Android 媒体上传尚未启用")
 ALLOWED = {
     "video/mp4",
     ".mp4",
@@ -106,11 +115,339 @@ class CloudMediaIn(BaseModel):
     content_type: str = Field(default="", max_length=120)
     size_bytes: int = Field(ge=1)
     expires_in: int = Field(default=7200, ge=300, le=86400)
+    purpose: Literal["food_analysis", "motion_analysis"] | None = None
 
 
 class RefreshMediaIn(BaseModel):
     temp_url: str = Field(min_length=8, max_length=4000)
     expires_in: int = Field(default=7200, ge=300, le=86400)
+
+
+class MobileUploadSessionIn(BaseModel):
+    request_id: str = Field(min_length=12, max_length=64, pattern=r"^[A-Za-z0-9_-]+$")
+    original_name: str = Field(min_length=1, max_length=255)
+    content_type: str = Field(min_length=3, max_length=120)
+    media_type: str = Field(pattern="^(image|video)$")
+    size_bytes: int = Field(ge=1)
+    purpose: Literal["food_analysis", "motion_analysis"]
+
+
+def _validate_mobile_upload(body: MobileUploadSessionIn, user_id: int):
+    limit = mobile_upload_limit_bytes(body.purpose)
+    if body.size_bytes > limit:
+        raise HTTPException(413, "文件超过当前用途的服务端上传限制")
+    suffix = Path(body.original_name).suffix.lower()
+    expected = {
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".png": "image/png",
+        ".webp": "image/webp",
+        ".mp4": "video/mp4",
+        ".mov": "video/quicktime",
+    }.get(suffix)
+    if not expected or expected != body.content_type:
+        raise HTTPException(415, "文件扩展名和 Content-Type 必须匹配")
+    if body.media_type != ("video" if suffix in {".mp4", ".mov"} else "image"):
+        raise HTTPException(400, "媒体类型与文件扩展名不一致")
+    if (body.purpose == "food_analysis" and body.media_type != "image") or (
+        body.purpose == "motion_analysis" and body.media_type != "video"
+    ):
+        raise HTTPException(400, "媒体类型与上传用途不匹配")
+    safe_name = Path(body.original_name.replace("\\", "/")).name
+    if safe_name in {"", ".", ".."} or any(ord(char) < 32 for char in safe_name):
+        raise HTTPException(400, "文件名无效")
+    return safe_name, suffix
+
+
+@router.get("/mobile-upload/options")
+def mobile_upload_options(user=Depends(current_user)):
+    _require_mobile_upload_enabled()
+    limits = {
+        "food_analysis": mobile_upload_limit_bytes("food_analysis"),
+        "motion_analysis": mobile_upload_limit_bytes("motion_analysis"),
+    }
+    return {
+        "storage_backend": settings.effective_mobile_upload_backend,
+        "max_upload_bytes": max(limits.values()),
+        "max_upload_bytes_by_purpose": limits,
+    }
+
+
+@router.post("/mobile-upload/sessions")
+def create_mobile_upload_session(
+    body: MobileUploadSessionIn,
+    user=Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    _require_mobile_upload_enabled()
+    if settings.effective_mobile_upload_backend != "s3":
+        raise HTTPException(409, "当前媒体后端未启用 COS/S3 直传")
+    original_name, suffix = _validate_mobile_upload(body, user.id)
+    session = db.scalar(
+        select(MobileMediaUploadSession)
+        .where(
+            MobileMediaUploadSession.user_id == user.id,
+            MobileMediaUploadSession.request_id == body.request_id,
+        )
+        .with_for_update()
+    )
+    now = utc_now()
+    if session:
+        if (
+            session.purpose != body.purpose
+            or session.media_type != body.media_type
+            or session.content_type != body.content_type
+            or session.size_bytes != body.size_bytes
+            or session.original_name != original_name
+        ):
+            raise HTTPException(409, "上传编号已用于其他文件，请重新选择文件")
+        if session.status == "ready" and session.media_asset_id:
+            return {
+                "media_id": session.media_asset_id,
+                "storage_backend": "s3",
+                "already_completed": True,
+            }
+        if session.status == "verifying":
+            raise HTTPException(409, "上传会话已结束，请重新选择文件")
+        retry_terminal = session.status in {"cancelled", "rejected", "expired"} or (
+            session.status == "pending" and session.expires_at <= now
+        )
+        asset = db.get(MediaAsset, session.media_asset_id) if session.media_asset_id else None
+        if retry_terminal:
+            # Rotate both object keys. Any old PUT URL remains confined to the
+            # old staging key and is independently deleted after its expiry.
+            if session.staging_key and session.cleanup_completed_at is None:
+                schedule_mobile_upload_cleanup(db, session, reason="mobile_upload_retry_rotation")
+            key_id = uuid4().hex
+            if asset and asset.status != "ready":
+                asset.storage_key = f"u{user.id}/{body.media_type}/{key_id}{suffix}"
+                asset.original_name = original_name
+                asset.media_type = body.media_type
+                asset.content_type = body.content_type
+                asset.size_bytes = body.size_bytes
+                asset.status = "uploading"
+            else:
+                asset = MediaAsset(
+                    user_id=user.id,
+                    original_name=original_name,
+                    storage_key=f"u{user.id}/{body.media_type}/{key_id}{suffix}",
+                    storage_backend="s3",
+                    media_type=body.media_type,
+                    content_type=body.content_type,
+                    size_bytes=body.size_bytes,
+                    status="uploading",
+                )
+                db.add(asset)
+                db.flush()
+            session.media_asset_id = asset.id
+            session.staging_key = f"staging/u{user.id}/{body.purpose}/{key_id}{suffix}"
+            session.status = "pending"
+            session.cleanup_completed_at = None
+            session.cleanup_attempts = 0
+            session.last_error_code = None
+            session.expires_at = now + timedelta(seconds=UPLOAD_URL_TTL_SECONDS)
+            session.cleanup_after = cleanup_after_expiry(session.expires_at)
+        else:
+            if session.status != "pending" or not asset or not session.staging_key:
+                raise HTTPException(409, "上传会话状态无效，请重新选择文件")
+            session.expires_at = now + timedelta(seconds=UPLOAD_URL_TTL_SECONDS)
+            session.cleanup_after = cleanup_after_expiry(session.expires_at)
+    else:
+        key_id = uuid4().hex
+        final_key = f"u{user.id}/{body.media_type}/{key_id}{suffix}"
+        staging_key = f"staging/u{user.id}/{body.purpose}/{key_id}{suffix}"
+        asset = MediaAsset(
+            user_id=user.id,
+            original_name=original_name,
+            storage_key=final_key,
+            storage_backend="s3",
+            media_type=body.media_type,
+            content_type=body.content_type,
+            size_bytes=body.size_bytes,
+            status="uploading",
+        )
+        db.add(asset)
+        db.flush()
+        expires_at = now + timedelta(seconds=UPLOAD_URL_TTL_SECONDS)
+        session = MobileMediaUploadSession(
+            user_id=user.id,
+            media_asset_id=asset.id,
+            request_id=body.request_id,
+            staging_key=staging_key,
+            purpose=body.purpose,
+            original_name=original_name,
+            media_type=body.media_type,
+            content_type=body.content_type,
+            size_bytes=body.size_bytes,
+            status="pending",
+            expires_at=expires_at,
+            cleanup_after=cleanup_after_expiry(expires_at),
+        )
+        db.add(session)
+    try:
+        db.flush()
+        upload_url = S3Storage().presigned_upload_url(
+            session.staging_key,
+            body.content_type,
+            body.size_bytes,
+            expires_in=UPLOAD_URL_TTL_SECONDS,
+        )
+    except IntegrityError:
+        db.rollback()
+        # Concurrent retries with the same request id converge on the winner's
+        # durable session instead of creating duplicate media or a 500 response.
+        existing = db.scalar(
+            select(MobileMediaUploadSession).where(
+                MobileMediaUploadSession.user_id == user.id,
+                MobileMediaUploadSession.request_id == body.request_id,
+            )
+        )
+        if existing:
+            return create_mobile_upload_session(body, user, db)
+        raise HTTPException(409, "上传请求冲突，请重新选择文件") from None
+    except Exception:
+        db.rollback()
+        raise HTTPException(503, "COS/S3 上传授权暂时不可用，请检查服务端存储配置") from None
+    db.commit()
+    db.refresh(asset)
+    return {
+        "media_id": asset.id,
+        "storage_backend": "s3",
+        "upload_url": upload_url,
+        "method": "PUT",
+        "headers": {"Content-Type": body.content_type},
+        "expires_in": UPLOAD_URL_TTL_SECONDS,
+        "max_size_bytes": mobile_upload_limit_bytes(body.purpose),
+        "already_completed": False,
+    }
+
+
+@router.post("/mobile-upload/sessions/{media_id}/complete")
+def complete_mobile_upload_session(
+    media_id: int,
+    user=Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    _require_mobile_upload_enabled()
+    session = db.scalar(
+        select(MobileMediaUploadSession)
+        .where(MobileMediaUploadSession.media_asset_id == media_id)
+        .with_for_update()
+    )
+    if not session or session.user_id != user.id:
+        raise HTTPException(404, "上传任务不存在")
+    asset = db.get(MediaAsset, media_id)
+    if not asset or asset.user_id != user.id or asset.storage_backend != "s3":
+        raise HTTPException(404, "上传任务不存在")
+    if session.status == "ready" and asset.status == "ready":
+        return {"ok": True, "media_id": asset.id, "storage_backend": "s3", "size": asset.size_bytes}
+    if session.status != "pending" or asset.status != "uploading":
+        raise HTTPException(409, "上传任务已结束，请重新选择文件")
+    # Allow a delayed completion request after PUT expiry, while the cleanup
+    # grace remains open. The old URL can no longer change the staging object
+    # after expiry; the committed asset is still copied to a private final key.
+    if session.cleanup_after <= utc_now():
+        session.status = "expired"
+        session.last_error_code = "UPLOAD_URL_EXPIRED"
+        asset.status = "failed"
+        schedule_mobile_upload_cleanup(db, session, reason="mobile_upload_expired")
+        db.commit()
+        raise HTTPException(409, "上传授权已过期，请重新选择文件")
+    storage = S3Storage()
+    session.status = "verifying"
+    copied = False
+    try:
+        max_size = mobile_upload_limit_bytes(session.purpose)
+        verify_media_bytes(
+            storage,
+            key=session.staging_key,
+            expected_size=session.size_bytes,
+            expected_content_type=session.content_type,
+            max_size=max_size,
+        )
+        storage.copy_object(session.staging_key, asset.storage_key, session.content_type)
+        copied = True
+        verify_media_bytes(
+            storage,
+            key=asset.storage_key,
+            expected_size=session.size_bytes,
+            expected_content_type=session.content_type,
+            max_size=max_size,
+        )
+    except MobileUploadValidationError as error:
+        if error.status_code >= 500 or error.error_code == "UPLOAD_OBJECT_MISSING":
+            session.status = "pending"
+            db.commit()
+            raise HTTPException(error.status_code, error.public_message) from None
+        session.status = "rejected"
+        session.last_error_code = error.error_code
+        asset.status = "failed"
+        schedule_mobile_upload_cleanup(db, session, reason="mobile_upload_rejected")
+        if copied:
+            from app.services.media_reconciliation import enqueue_deletion
+
+            task = enqueue_deletion(
+                db,
+                user_id=user.id,
+                media_asset_id=asset.id,
+                storage_backend="s3",
+                storage_key=asset.storage_key,
+                reason="mobile_upload_rejected_final_object",
+            )
+            task.next_attempt_at = utc_now()
+        db.commit()
+        raise HTTPException(error.status_code, error.public_message) from None
+    except Exception:
+        # Leave the source session retryable. CopyObject is atomic; repeating it
+        # is safe, and a later complete call verifies the committed destination.
+        session.status = "pending"
+        db.commit()
+        raise HTTPException(503, "COS/S3 文件暂时无法提交，请稍后重试") from None
+    session.status = "ready"
+    session.ready_at = utc_now()
+    session.last_error_code = None
+    asset.status = "ready"
+    schedule_mobile_upload_cleanup(db, session, reason="mobile_upload_staging_cleanup")
+    refresh_waiting_jobs(db, asset.id)
+    add_event(
+        db,
+        user.id,
+        "media_uploaded",
+        {"media_type": asset.media_type, "storage": "s3", "size_bytes": asset.size_bytes},
+        source="android.upload",
+        ref_type="media_asset",
+        ref_id=asset.id,
+    )
+    db.commit()
+    return {"ok": True, "media_id": asset.id, "storage_backend": "s3", "size": asset.size_bytes}
+
+
+@router.delete("/mobile-upload/sessions/{media_id}")
+def abort_mobile_upload_session(
+    media_id: int,
+    user=Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    _require_mobile_upload_enabled()
+    session = db.scalar(
+        select(MobileMediaUploadSession)
+        .where(MobileMediaUploadSession.media_asset_id == media_id)
+        .with_for_update()
+    )
+    if not session or session.user_id != user.id:
+        raise HTTPException(404, "上传任务不存在")
+    asset = db.get(MediaAsset, media_id)
+    if not asset or asset.user_id != user.id or asset.storage_backend != "s3":
+        raise HTTPException(404, "上传任务不存在")
+    if session.status == "ready" or asset.status == "ready":
+        raise HTTPException(409, "文件已完成登记，不能作为未完成上传清理")
+    if session.status not in {"pending", "cancelled"}:
+        raise HTTPException(409, "上传任务已结束，无法取消")
+    session.status = "cancelled"
+    session.cleanup_after = cleanup_after_expiry(session.expires_at)
+    schedule_mobile_upload_cleanup(db, session, reason="mobile_upload_cancelled")
+    db.commit()
+    return {"ok": True, "deleted": False, "cleanup_pending": True, "cleanup_after": utc_iso(session.cleanup_after)}
 
 
 def _validate_upload_type(filename: str, content_type: str):
@@ -125,7 +462,13 @@ def validate_cloud_identity(file_id: str, temp_url: str, user_id: int, media_typ
     path = unquote(parsed.path).lstrip("/")
     if parsed.scheme != "cloud" or not parsed.netloc or parsed.query or parsed.fragment:
         raise HTTPException(400, "file_id 必须是 CloudBase 稳定文件引用")
-    if not path.startswith(f"healthmate/u{user_id}/{media_type}/") or any(
+    # Mini Program sessions keep their legacy `u{id}` namespace. Android uses
+    # CloudBase custom auth and the stable `hm_user_{id}` UID issued by /auth.
+    allowed_prefixes = (
+        f"healthmate/u{user_id}/{media_type}/",
+        f"healthmate/hm_user_{user_id}/{media_type}/",
+    )
+    if not path.startswith(allowed_prefixes) or any(
         x in path.split("/") for x in ["..", ".", ""]
     ):
         raise HTTPException(403, "云文件必须位于当前用户的 HealthMate 目录")
@@ -157,6 +500,13 @@ def register_cloud_media(
         )
     if body.size_bytes > settings.max_upload_mb * 1024 * 1024:
         raise HTTPException(413, f"文件请控制在 {settings.max_upload_mb}MB 以内")
+    if body.purpose:
+        if (body.purpose == "food_analysis" and body.media_type != "image") or (
+            body.purpose == "motion_analysis" and body.media_type != "video"
+        ):
+            raise HTTPException(400, "媒体类型与上传用途不匹配")
+        if body.size_bytes > mobile_upload_limit_bytes(body.purpose):
+            raise HTTPException(413, "文件超过当前用途的服务端上传限制")
     try:
         temp_url = validate_media_source_url(body.temp_url)
     except UnsafeMediaURL as exc:
@@ -319,7 +669,8 @@ def media_playback(media_id: int, user=Depends(current_user), db: Session = Depe
         }
 
     try:
-        url = get_storage().public_url(asset.storage_key)
+        storage = S3Storage() if asset.storage_backend == "s3" else get_storage()
+        url = storage.public_url(asset.storage_key)
     except StorageError:
         return {
             "state": "unavailable",
@@ -335,7 +686,9 @@ def media_playback(media_id: int, user=Depends(current_user), db: Session = Depe
     return {
         "state": "available",
         "playable_url": url,
-        "expires_at": None,
+        "expires_at": (now + timedelta(seconds=3600)).isoformat() + "Z"
+        if asset.storage_backend == "s3"
+        else None,
         "mime_type": asset.content_type or "video/mp4",
         "duration_ms": None,
     }
@@ -577,6 +930,9 @@ class ReanalyzeIn(BaseModel):
     # child run's requested_type (spec §7.4).
     exercise_hint: str | None = Field(default=None, max_length=60)
     reason: str = Field(default="user_request", max_length=60)
+    # The mobile client records its correction through /confirm-label first.
+    # This prevents a second feedback row when the child run is created.
+    correction_confirmed: bool = False
 
 
 class ConfirmLabelIn(BaseModel):
@@ -790,11 +1146,13 @@ def _spawn_child_run(
     run: MotionAnalysisRun,
     cloud_mode: str | None,
     exercise_hint: str | None = None,
+    idempotency_key: str | None = None,
+    correction_confirmed: bool = False,
 ) -> MotionAnalysisRun:
     """Create a child run that reuses the media asset + side-effect-free stages.
 
-    Always issues a fresh Idempotency-Key and a parent->child link; the new cloud
-    review mode never reuses the parent task's fingerprint or cloud mode. The
+    Reuses the caller's Idempotency-Key across retries and creates a parent->child
+    link; the new cloud review mode never reuses the parent's fingerprint. The
     actual stage reuse (re-running only the affected stages) is performed by the
     E-package stage queue (compare-and-set by run_id/stage/version).
 
@@ -803,34 +1161,72 @@ def _spawn_child_run(
     free text must never be written into the request model.
     """
     requested = run.requested_type
+    parent_run_id = run.id
     if exercise_hint:
         requested = _validated_catalog_id(exercise_hint)
     asset = db.get(MediaAsset, run.media_asset_id)
     mode = cloud_mode or run.cloud_review_mode or "redacted_frames"
     consent = mode != "off"
-    child, created, _ = create_unified_run(
-        db,
-        user_id=user.id,
-        asset=asset,
-        requested_exercise=requested,
-        consent_deepseek_frames=consent,
-        pipeline_version=run.pipeline_version,
-        idempotency_key=f"reanalyze:{run.id}:{uuid4().hex}",
-        parent_run_id=run.id,
+    effective_key = (
+        f"reanalyze:{parent_run_id}:{idempotency_key}"
+        if idempotency_key
+        else f"reanalyze:{parent_run_id}:{uuid4().hex}"
     )
+    try:
+        child, created, conflict = create_unified_run(
+            db,
+            user_id=user.id,
+            asset=asset,
+            requested_exercise=requested,
+            consent_deepseek_frames=consent,
+            pipeline_version=run.pipeline_version,
+            idempotency_key=effective_key,
+            parent_run_id=parent_run_id,
+        )
+    except IntegrityError:
+        # Two identical retries may pass the initial lookup at once. The unique
+        # dedupe key elects one creator; after the losing insert rolls back, load
+        # and return the winner's child instead of exposing a transient 500.
+        db.rollback()
+        run = db.get(MotionAnalysisRun, parent_run_id)
+        if run is None:
+            raise HTTPException(status_code=404, detail="原动作任务不存在")
+        asset = db.get(MediaAsset, run.media_asset_id)
+        if asset is None:
+            raise HTTPException(status_code=404, detail="原视频文件不存在")
+        child, created, conflict = create_unified_run(
+            db,
+            user_id=user.id,
+            asset=asset,
+            requested_exercise=requested,
+            consent_deepseek_frames=consent,
+            pipeline_version=run.pipeline_version,
+            idempotency_key=effective_key,
+            parent_run_id=parent_run_id,
+        )
+    if conflict:
+        raise HTTPException(status_code=409, detail=conflict)
     if created:
         child.cloud_review_mode = mode
         child.effective_pipeline_version = V2_PIPELINE_VERSION
         child.result_version = 1
         db.commit()
-    _record_feedback(
-        db,
-        user_id=user.id,
-        run_id=run.id,
-        kind="wrong_label",
-        corrected_label=requested,
-        comment="reanalyze",
-    )
+    if exercise_hint and not correction_confirmed:
+        feedback_key = hashlib.sha256(
+            f"reanalyze-feedback:{parent_run_id}:{effective_key}".encode()
+        ).hexdigest()
+        try:
+            _record_feedback(
+                db,
+                user_id=user.id,
+                run_id=parent_run_id,
+                kind="wrong_label",
+                corrected_label=requested,
+                comment="reanalyze",
+                idempotency_key=feedback_key,
+            )
+        except feedback_store.FeedbackIdempotencyConflict as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
     return child
 
 
@@ -842,16 +1238,18 @@ def _record_feedback(
     kind: str,
     corrected_label: str | None = None,
     comment: str | None = None,
+    idempotency_key: str | None = None,
 ) -> None:
     """Append to the independent feedback ledger (never rewrite the run result)."""
-    db.add(
-        MotionUserFeedback(
-            run_id=run_id,
-            user_id=user_id,
-            kind=kind,
-            corrected_label=(corrected_label or None),
-            comment=(comment or None)[:500] if comment else None,
-        )
+    run = db.get(MotionAnalysisRun, run_id)
+    feedback_store.record_feedback(
+        db,
+        run=run,
+        user_id=user_id,
+        kind=kind,
+        corrected_label=(corrected_label or None),
+        comment=(comment or None)[:500] if comment else None,
+        idempotency_key=idempotency_key,
     )
     db.commit()
 
@@ -878,6 +1276,7 @@ def retry_motion_analysis(
     analysis_id: int,
     body: ReanalyzeIn,
     request: Request,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key", min_length=8, max_length=120),
     user=Depends(current_user),
     db: Session = Depends(get_db),
 ):
@@ -892,6 +1291,8 @@ def retry_motion_analysis(
             run=run,
             cloud_mode=body.cloud_review_mode,
             exercise_hint=body.exercise_hint,
+            idempotency_key=idempotency_key,
+            correction_confirmed=body.correction_confirmed,
         )
         return {"analysis_id": child.id, "parent_run_id": run.id, "status": child.status}
     return _motion_error(
@@ -905,6 +1306,7 @@ def reanalyze_motion_analysis(
     analysis_id: int,
     body: ReanalyzeIn,
     request: Request,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key", min_length=8, max_length=120),
     user=Depends(current_user),
     db: Session = Depends(get_db),
 ):
@@ -928,6 +1330,8 @@ def reanalyze_motion_analysis(
         run=run,
         cloud_mode=body.cloud_review_mode,
         exercise_hint=body.exercise_hint,
+        idempotency_key=idempotency_key,
+        correction_confirmed=body.correction_confirmed,
     )
     return {
         "analysis_id": child.id,
@@ -942,6 +1346,7 @@ def confirm_motion_label(
     analysis_id: int,
     body: ConfirmLabelIn,
     request: Request,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key", min_length=8, max_length=120),
     user=Depends(current_user),
     db: Session = Depends(get_db),
 ):
@@ -965,14 +1370,18 @@ def confirm_motion_label(
     # The correction is stored as an INDEPENDENT feedback row (spec §7.4). The
     # computed result snapshot is never rewritten: ``source=user_selected`` can
     # therefore never be mistaken for a model recognition success or a score.
-    row = feedback_store.record_feedback(
-        db,
-        run=run,
-        user_id=user.id,
-        kind="wrong_label" if canonical else "unhelpful_advice",
-        corrected_label=canonical or novel or None,
-        comment=(body.correction_reason or "user_label_correction")[:500],
-    )
+    try:
+        row = feedback_store.record_feedback(
+            db,
+            run=run,
+            user_id=user.id,
+            kind="wrong_label" if canonical else "unhelpful_advice",
+            corrected_label=canonical or novel or None,
+            comment=(body.correction_reason or "user_label_correction")[:500],
+            idempotency_key=idempotency_key,
+        )
+    except feedback_store.FeedbackIdempotencyConflict as exc:
+        return _motion_error(request, 409, "IDEMPOTENCY_CONFLICT", str(exc))
     db.commit()
     return {
         "ok": True,

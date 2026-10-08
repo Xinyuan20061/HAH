@@ -109,7 +109,7 @@ def build_weekly_facts(
             else "medium"
             if coverage["checkin_days"] >= 3
             else "low",
-            "note": "未记录的日期不会被当作真实的 0；平均值只基于有记录的日期。",
+            "note": "平均值仅按有记录的日期计算。",
         },
     }
     facts["highlights"] = programmatic_highlights(facts)

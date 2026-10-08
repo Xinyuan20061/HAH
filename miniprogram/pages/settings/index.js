@@ -19,6 +19,7 @@ Page({
     ai: {},
     services: serviceStatus(),
     backendOnline: null,
+    busy: false,
     companion: 'xiaojian',
     isXiaojian: true,
     isXiaokang: false,
@@ -79,5 +80,40 @@ Page({
   privacy() { wx.navigateTo({ url: '/pages/settings/privacy/index' }) },
   evaluation() { wx.navigateTo({ url: '/pages/evaluation/index' }) },
   capabilities() { wx.navigateTo({ url: '/pages/settings/capabilities/index' }) },
-  dietRecords() { wx.navigateTo({ url: '/pages/records/diet' }) }
+  dietRecords() { wx.navigateTo({ url: '/pages/records/diet' }) },
+  async linkAndroid() {
+    if (this.data.busy) return
+    this.setData({ busy: true })
+    try {
+      await api.ensureToken()
+      const result = await api.post('/auth/link/start', {})
+      let copied = false
+      try {
+        await new Promise((resolve, reject) => wx.setClipboardData({
+          data: result.link_code,
+          success: resolve,
+          fail: reject
+        }))
+        copied = true
+      } catch {
+        // Keep the one-time code visible so the user can still enter it manually.
+      }
+      await new Promise(resolve => wx.showModal({
+        title: copied ? 'Android 账号关联码已复制' : 'Android 账号关联码已生成',
+        content: `${result.link_code}\n\n${copied ? '已复制到剪贴板。' : '复制失败，请手动输入上方代码。'}请在 Android 客户端的“关联微信小程序账号”页面输入。关联码 10 分钟内有效且只能使用一次。`,
+        showCancel: false,
+        confirmText: '知道了',
+        complete: resolve
+      }))
+    } catch (error) {
+      await new Promise(resolve => wx.showModal({
+        title: '关联码生成失败',
+        content: error.message || '请确认小程序已登录并重试。',
+        showCancel: false,
+        complete: resolve
+      }))
+    } finally {
+      this.setData({ busy: false })
+    }
+  }
 })

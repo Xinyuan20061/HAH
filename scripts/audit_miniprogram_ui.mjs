@@ -15,7 +15,7 @@
  */
 
 import { readFileSync, readdirSync, statSync } from 'node:fs'
-import { join, dirname, relative } from 'node:path'
+import { join, dirname, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
@@ -88,9 +88,12 @@ const rel = (p) => relative(ROOT, p).replace(/\\/g, '/')
 /** 页面唯一名：home / records / records/diet / settings/ai / profile/edit */
 const pageName = (p) => {
   const r = rel(p)
-  const m = r.match(/miniprogram\/pages\/(.+)\.(?:wxml|wxss|js)$/)
-  if (!m) return 'pages'
-  return m[1].replace(/\/index$/, '')
+  const page = r.match(/miniprogram\/pages\/(.+)\.(?:wxml|wxss|js)$/)
+  if (page) return page[1].replace(/\/index$/, '')
+  const component = r.match(/miniprogram\/components\/(.+)\.(?:wxml|wxss|js)$/)
+  if (component) return `component/${component[1].replace(/\/index$/, '')}`
+  if (r.startsWith('miniprogram/custom-tab-bar/')) return 'custom-tab-bar'
+  return r
 }
 
 /* ------------------------------------------------------------------ *
@@ -101,7 +104,8 @@ const pageName = (p) => {
 const stripComments = (css) => css.replace(/\/\*[\s\S]*?\*\//g, '')
 
 function parseWxss(text) {
-  const css = stripComments(text)
+  // @import URLs are file names, not CSS class selectors (for example shared.wxss).
+  const css = stripComments(text).replace(/@import\s+(?:url\(\s*)?["'][^"']+["']\s*\)?\s*;/g, '')
   const declared = new Set()
   // 类选择器（含 .a.b 形式的复合选择器，逐段收集）
   for (const m of css.matchAll(/\.([A-Za-z_][\w-]*)/g)) declared.add(m[1])
@@ -147,6 +151,26 @@ function parseWxss(text) {
   return { declared, keyframes, animationRefs, animationNameDecls, transitions, hexColors, progressRulesWithoutTransition, offScaleSpacing: [...offScaleSpacing].sort((a, b) => a - b) }
 }
 
+function collectWxssDefinitions(file, seen = new Set()) {
+  const declared = new Set()
+  const keyframes = new Set()
+  if (seen.has(file)) return { declared, keyframes }
+  seen.add(file)
+  const source = readFileSync(file, 'utf8')
+  const local = parseWxss(source)
+  for (const name of local.declared) declared.add(name)
+  for (const name of local.keyframes) keyframes.add(name)
+  for (const match of stripComments(source).matchAll(/@import\s+(?:url\(\s*)?["']([^"']+\.wxss)["']\s*\)?\s*;/g)) {
+    const importedFile = resolve(dirname(file), match[1])
+    const relativeToMiniprogram = relative(MP, importedFile)
+    if (relativeToMiniprogram.startsWith('..') || relativeToMiniprogram.startsWith('/')) continue
+    const imported = collectWxssDefinitions(importedFile, seen)
+    for (const name of imported.declared) declared.add(name)
+    for (const name of imported.keyframes) keyframes.add(name)
+  }
+  return { declared, keyframes }
+}
+
 const TIMING_KEYWORDS = /^(linear|ease|ease-in|ease-out|ease-in-out|step-start|step-end|infinite|normal|reverse|alternate|alternate-reverse|forwards|backwards|both|none|running|paused|inherit|initial)$/
 function firstAnimationName(value) {
   for (const tok of value.trim().split(/\s+/)) {
@@ -175,6 +199,8 @@ function parseWxml(text) {
     // {{...}} 内的字符串字面量视为候选类名
     for (const e of value.matchAll(/\{\{([\s\S]*?)\}\}/g)) {
       for (const s of e[1].matchAll(/'([^']*)'|"([^"]*)"/g)) {
+        // A string on the right of a comparison is a data value, not a class.
+        if (/(?:===?|!==?)\s*$/.test(e[1].slice(0, s.index))) continue
         const lit = (s[1] ?? s[2] ?? '').trim()
         for (const tok of lit.split(/\s+/)) if (tok) used.add(tok)
       }
@@ -212,7 +238,7 @@ for (const f of allFiles) {
 const classOwners = new Map()
 for (const { page, wxss } of pageDirs) {
   let parsed
-  try { parsed = parseWxss(readFileSync(wxss, 'utf8')) } catch { continue }
+  try { parsed = collectWxssDefinitions(wxss) } catch { continue }
   for (const c of parsed.declared) {
     if (!classOwners.has(c)) classOwners.set(c, new Set())
     classOwners.get(c).add(page)
@@ -225,8 +251,9 @@ for (const { page, wxml, wxss, js } of pageDirs) {
   const hasJs = (() => { try { return statSync(js).isFile() } catch { return false } })()
   const wxmlParsed = parseWxml(readFileSync(wxml, 'utf8'))
   const wxssParsed = hasWxss ? parseWxss(readFileSync(wxss, 'utf8')) : null
+  const availableWxss = hasWxss ? collectWxssDefinitions(wxss) : null
 
-  const locallyDefined = wxssParsed ? wxssParsed.declared : new Set()
+  const locallyDefined = availableWxss ? availableWxss.declared : new Set()
   const isCoveredByPrefix = (name) =>
     [...wxmlParsed.dynamicPrefixes].some((pre) => name.startsWith(pre))
 
@@ -255,18 +282,18 @@ for (const { page, wxml, wxss, js } of pageDirs) {
     }
     // --- 死 CSS
     const { used, dynamicPrefixes } = wxmlParsed
-    const dead = [...locallyDefined].filter(
+    const dead = [...wxssParsed.declared].filter(
       (c) => !used.has(c) && !appWxss.declared.has(c) && ![...dynamicPrefixes].some((p) => c.startsWith(p))
     )
-    const ratio = locallyDefined.size ? dead.length / locallyDefined.size : 0
+    const ratio = wxssParsed.declared.size ? dead.length / wxssParsed.declared.size : 0
     if (dead.length) {
       record(ratio >= 0.3 ? MED : LOW, page, 'dead-css',
-        `${dead.length}/${locallyDefined.size} 个页面样式类未被本页 WXML 使用（${Math.round(ratio * 100)}%）`,
+        `${dead.length}/${wxssParsed.declared.size} 个页面样式类未被本页 WXML 使用（${Math.round(ratio * 100)}%）`,
         dead.slice(0, 40).join(', ') + (dead.length > 40 ? ` …(+${dead.length - 40})` : ''))
     }
     // --- 未定义关键帧
     const missingKf = [...wxssParsed.animationRefs, ...wxssParsed.animationNameDecls]
-      .filter((n) => !wxssParsed.keyframes.has(n) && !appWxss.keyframes.has(n))
+      .filter((n) => !availableWxss.keyframes.has(n) && !appWxss.keyframes.has(n))
     if (missingKf.length) {
       record(HIGH, page, 'missing-keyframes',
         `animation 引用了未声明的 @keyframes`, missingKf.join(', '))

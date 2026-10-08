@@ -1,0 +1,340 @@
+{
+  "source": "miniprogram/assets",
+  "assets": [
+    {
+      "path": "characters/xiaojian-gym-scene-v3.png",
+      "bytes": 176676,
+      "sha256": "df3d50778e062419c2a98c0de892983494abd1ed53ed4742669edaee4bf16a27"
+    },
+    {
+      "path": "characters/xiaojian-idle-curl-v1.png",
+      "bytes": 66605,
+      "sha256": "053673dfdb34ebf05504cf2223acf0ed27a48358d27bf2583b9dea6aec48fa06"
+    },
+    {
+      "path": "characters/xiaojian-idle-curl-v2.png",
+      "bytes": 84704,
+      "sha256": "c9dd4559d2d957fbd7f7caf946668614fa325543a25f27aa0525f44c5ff6952a"
+    },
+    {
+      "path": "characters/xiaojian-idle-curl-v3.png",
+      "bytes": 82052,
+      "sha256": "86f60eca65c4d2c592703bae036be1cd59bdb40a957848af0d3a53ae62032945"
+    },
+    {
+      "path": "characters/xiaojian-pixel-poses-v1.png",
+      "bytes": 56842,
+      "sha256": "34040a8bfec37be1cd190979fcbba8436a69e7e72c884541044ff0b6787d3767"
+    },
+    {
+      "path": "characters/xiaojian-portrait-v1.png",
+      "bytes": 14685,
+      "sha256": "f8b492bb91b3e78f8aed207751555e4af62f0f7ff01b973ec214311113ee509e"
+    },
+    {
+      "path": "characters/xiaokang-idle-read-v1.png",
+      "bytes": 73995,
+      "sha256": "454dc6081ee4250438acab22ad14b60c1c016fe9d5bcdaacc6621c239cb05e2f"
+    },
+    {
+      "path": "characters/xiaokang-idle-read-v2.png",
+      "bytes": 111590,
+      "sha256": "d0d27ac175d68ce9a1a7bbc6ad6bd019f2b01e13ea22662ca5d831d0f474f447"
+    },
+    {
+      "path": "characters/xiaokang-idle-read-v5.png",
+      "bytes": 107312,
+      "sha256": "92ce1d49133fd59a63cfc4464f1b806a1eef313f270826ce025ae7ff669dc1e7"
+    },
+    {
+      "path": "characters/xiaokang-pixel-poses-v1.png",
+      "bytes": 53393,
+      "sha256": "0eec9b3d23a9261cd952de4ffe8aefc4765b82cab9053edc6e7796cd03954fb1"
+    },
+    {
+      "path": "characters/xiaokang-portrait-v1.png",
+      "bytes": 15957,
+      "sha256": "08d59773deae348c1869efd27ec72ffe93e826f979491b9865f83ba2c98ce331"
+    },
+    {
+      "path": "characters/xiaokang-wellness-scene-v2.png",
+      "bytes": 183653,
+      "sha256": "2ee7d6e7a1ad800709e45e3f6b8313f74c4ccf956bee0184850fab8d5653ddeb"
+    },
+    {
+      "path": "home-hero.jpg",
+      "bytes": 276020,
+      "sha256": "0db31ecf2392f70777a78825cdbc1051a3e28db7e037e154eca4fd2498070b25"
+    },
+    {
+      "path": "icons/activity.png",
+      "bytes": 2225,
+      "sha256": "8fb9547e6ce308a43480d92b81d4d4dd0db1c87a4412395b2c58a23c80a61683"
+    },
+    {
+      "path": "icons/add.png",
+      "bytes": 625,
+      "sha256": "790d161352274a626ea1673f5eab7cf098c3ad03067b498888647897f8edb070"
+    },
+    {
+      "path": "icons/agent-steward.png",
+      "bytes": 7448,
+      "sha256": "bd1952b88e777215d130b30b9d02d69afce7dee5baad085dd3e62500bf76b117"
+    },
+    {
+      "path": "icons/agent-xiaojian.png",
+      "bytes": 5246,
+      "sha256": "53aa81f1dbb1aec1eafbc7fc6218117a32d2eef8dc2eedc8ee682217a68cdd12"
+    },
+    {
+      "path": "icons/agent-xiaokang.png",
+      "bytes": 7437,
+      "sha256": "eb5b3d7a0766227b8871864fe26c25ad5dcf787afce0425bde68d68f15bcdbc9"
+    },
+    {
+      "path": "icons/bell.png",
+      "bytes": 2693,
+      "sha256": "f7fdeb77671b2ee30529685868e0c200b80bea18bd256e8188d5c7c6f7130535"
+    },
+    {
+      "path": "icons/breathe.png",
+      "bytes": 3949,
+      "sha256": "5702049373c71b4d09214aa9e8fc74d2bc77fcc974e3be53c76be6aab2187174"
+    },
+    {
+      "path": "icons/calendar.png",
+      "bytes": 2589,
+      "sha256": "538657e7e0cf451c8ac19bf44574032dc8fde179c95d44c6dbc3c0117ecaa5c7"
+    },
+    {
+      "path": "icons/calories.png",
+      "bytes": 3374,
+      "sha256": "5aff6f3d36d4827e4718f8fdd7958835c8e5c9ce0584da7048aea8cfc4fbff8a"
+    },
+    {
+      "path": "icons/camera.png",
+      "bytes": 3081,
+      "sha256": "ad584fb6aebea005993fdb8a3ce4ef10729d5024cd18c4ecaa1822633ae53aef"
+    },
+    {
+      "path": "icons/check.png",
+      "bytes": 1377,
+      "sha256": "44c13e2308b9f7492388e97a445ac9be55719756956b8218084fe5d88a79129e"
+    },
+    {
+      "path": "icons/chevron.png",
+      "bytes": 778,
+      "sha256": "9a7e2a18c9a206aedcea63dc9bc0cf98e1215ddc21a8abc9412a3275185a79fd"
+    },
+    {
+      "path": "icons/close.png",
+      "bytes": 1090,
+      "sha256": "775476228ba7a67898c0278cdb472c39e0da08911729877bc7d2827f4faf8867"
+    },
+    {
+      "path": "icons/copy.png",
+      "bytes": 1833,
+      "sha256": "845aef0189832c7d63f054e431fd04c57c5521cf099122abe05b30509962ebbb"
+    },
+    {
+      "path": "icons/delete.png",
+      "bytes": 1252,
+      "sha256": "74c5bad0136499230f954cd64fd48602689ec696279c55a0ecb06e649aa6a8e9"
+    },
+    {
+      "path": "icons/edit.png",
+      "bytes": 1768,
+      "sha256": "09e909b23b6e1a472ba4684f5db4c3151660dd54646927168c0cd66e46c58b3f"
+    },
+    {
+      "path": "icons/meal.png",
+      "bytes": 2375,
+      "sha256": "d311a454881cb3e7f548e169444f768e9027ba4f2efb20f030a7445691cb048f"
+    },
+    {
+      "path": "icons/mic.png",
+      "bytes": 3178,
+      "sha256": "bc8f1069e50093b98bfe638968be12223e7e83e7fba4720159003099787abf57"
+    },
+    {
+      "path": "icons/profile-card.png",
+      "bytes": 2692,
+      "sha256": "6102bba5726b5d92192757d1d8c50b1653de0ed791f2930caa1c2e6d39dbdf82"
+    },
+    {
+      "path": "icons/protein.png",
+      "bytes": 3170,
+      "sha256": "851f33268fc325e912f5d1f2773c3870fe7a12b27784cb78acfb0957962ac96c"
+    },
+    {
+      "path": "icons/recovery.png",
+      "bytes": 2515,
+      "sha256": "fdf84758217261338422c8a2a913885be5429cc98a14842da15c65af26f5599e"
+    },
+    {
+      "path": "icons/report.png",
+      "bytes": 1251,
+      "sha256": "a7f16737f5afd4f7b12245876afb3bf5d8b02c9f0a26368eff821b46cc86b37b"
+    },
+    {
+      "path": "icons/send.png",
+      "bytes": 4253,
+      "sha256": "9770aefd80d653a796bf2a60ee509304ed431a0036398fc471bf04b3758f50b3"
+    },
+    {
+      "path": "icons/settings.png",
+      "bytes": 1261,
+      "sha256": "b791b1a3572701c459f62a6729462f88db939274118b79bb09dc88d53ef317c3"
+    },
+    {
+      "path": "icons/shield.png",
+      "bytes": 3721,
+      "sha256": "f15f6f6762898c70ff6cb812bf096496d479655a0a66dcb084a145b0c1290155"
+    },
+    {
+      "path": "icons/sleep.png",
+      "bytes": 2482,
+      "sha256": "ddc3071190a4d0bd256cda2478a6d3e9c22e4113708a69eca446e298ad270bef"
+    },
+    {
+      "path": "icons/spark.png",
+      "bytes": 6389,
+      "sha256": "dd0197914837c2a527f005d2644c1fc19d572bbfed7146d0febdaa6ca09123df"
+    },
+    {
+      "path": "icons/speaker.png",
+      "bytes": 2592,
+      "sha256": "973367af832820f8b244b8f900b60308693d6e1a25d5b7d564b8b0f01bc6ac1e"
+    },
+    {
+      "path": "icons/steps.png",
+      "bytes": 2715,
+      "sha256": "e39ae024f695bb6090fdfada669f25d804465262a57d3c1cc0831637e1988503"
+    },
+    {
+      "path": "icons/target.png",
+      "bytes": 4994,
+      "sha256": "742ee04a4d86c743ab2c57aaca846a4cc0d1bad8d5145e015d6ff85af8d18222"
+    },
+    {
+      "path": "icons/trend.png",
+      "bytes": 1817,
+      "sha256": "5b04a694ccfa33279f6ab54bd5ceb92104ff67c865b6949d1c0bfebb38e7713a"
+    },
+    {
+      "path": "icons/upload.png",
+      "bytes": 1218,
+      "sha256": "b11857037b50547fad3c99b545859df3f7062f82261710fb2632f977be824737"
+    },
+    {
+      "path": "icons/warning.png",
+      "bytes": 2532,
+      "sha256": "5e57b15ccc136164a7534c4264077d12807a25d08b704955bf170b8cef32460a"
+    },
+    {
+      "path": "icons/water.png",
+      "bytes": 2268,
+      "sha256": "28b4598e60cb0f0f280abdd611bf78b241919ac5e1e8349554a605030458d754"
+    },
+    {
+      "path": "icons/workout.png",
+      "bytes": 1130,
+      "sha256": "0a2f995df5c9bc65d4ee691387583db3c499f7f866e44089fba4c17a03062b88"
+    },
+    {
+      "path": "README.md",
+      "bytes": 1661,
+      "sha256": "aebba041c72066e5cc34832bfb7ff4f384b0e6189121404d7385514539f18c05"
+    },
+    {
+      "path": "tabbar/agent-active.png",
+      "bytes": 4185,
+      "sha256": "e4eb2d8eab33a275a946309b34d155ae63a5fdfa2bdd78ffcaddb6e889f81d6d"
+    },
+    {
+      "path": "tabbar/agent.png",
+      "bytes": 4772,
+      "sha256": "5fd2b9fce4d72e5b45e5d2d0e4ca6746bc64178a9eb7049841ccb15cc3e4145a"
+    },
+    {
+      "path": "tabbar/dashboard-active.png",
+      "bytes": 3404,
+      "sha256": "1a7f76f3e75bb76742ce2a1f4939aa6594b1835111d52ab89d7948e82fc33de6"
+    },
+    {
+      "path": "tabbar/dashboard.png",
+      "bytes": 4499,
+      "sha256": "f1c95196913d63db13a1a76a9f7d09ec3678b23317226dba704ce1965d40f226"
+    },
+    {
+      "path": "tabbar/gym-active.png",
+      "bytes": 1692,
+      "sha256": "44ad486a648985c08777dca7108c2d8964cf320a38d13116aa8809648c3e35c6"
+    },
+    {
+      "path": "tabbar/gym.png",
+      "bytes": 2253,
+      "sha256": "fc8375fb4862b2c981f46dd2e796cbecc89716a4ea59b4dbdc456467ef7a973c"
+    },
+    {
+      "path": "tabbar/home-active.png",
+      "bytes": 2923,
+      "sha256": "b5150042dd3d406deb149f9057f45781d9108e652bbf3be5492e93a81f80217d"
+    },
+    {
+      "path": "tabbar/home.png",
+      "bytes": 3135,
+      "sha256": "81fc858fed335bfb3f3e3aefe382e425c3a0b9c596140d886a065f8c7985e95b"
+    },
+    {
+      "path": "tabbar/plan-active.png",
+      "bytes": 2894,
+      "sha256": "ca79df4ad4c4dbfef29f80ccc2c6fe730a1c254e78d9579ad0d47d55ae6cce0a"
+    },
+    {
+      "path": "tabbar/plan.png",
+      "bytes": 3283,
+      "sha256": "a8304bd4848287fce7cb48c06dc98fdacc3e6bfa62f2b16a38ab6e8f4fe0930e"
+    },
+    {
+      "path": "tabbar/profile-active.png",
+      "bytes": 2803,
+      "sha256": "ccd3d24afe0e18e88effc2b81d0a3d4681b60760dc059f2a472c3169e5e2424c"
+    },
+    {
+      "path": "tabbar/profile.png",
+      "bytes": 2891,
+      "sha256": "28bbf31484bca70962ab24cfd8c84c72547f32310ede1355f6d0a1381c47b7c8"
+    },
+    {
+      "path": "tabbar/records-active.png",
+      "bytes": 3109,
+      "sha256": "c4ee421eb7ae56506b0c739b4c079a05f62c92c33d6666bcdfadceb284974861"
+    },
+    {
+      "path": "tabbar/records.png",
+      "bytes": 3379,
+      "sha256": "2a6b9cd4e15dcf02779cc2f3a335804433d23ecc4940a71e2fc339aa3a944d1f"
+    },
+    {
+      "path": "tabbar/steward-active.png",
+      "bytes": 4090,
+      "sha256": "5d3ecaf8e65c022b8205634ac6e35385278c0cd760464b69d30009fade7b4bbb"
+    },
+    {
+      "path": "tabbar/steward.png",
+      "bytes": 5461,
+      "sha256": "a1ca9136836e62156246958d712b9d45126c251e802f6e5b4e2e656f37339bed"
+    },
+    {
+      "path": "tabbar/wellness-space-active.png",
+      "bytes": 3825,
+      "sha256": "182aa5985be34091ae30bc091d067d6cb1ebf5a17a110aba93e58ae149350a15"
+    },
+    {
+      "path": "tabbar/wellness-space.png",
+      "bytes": 4179,
+      "sha256": "4a050e973c31e4c8b8121205329788e1f5cf0873d6ec5b2495ed1024e161e408"
+    }
+  ]
+}

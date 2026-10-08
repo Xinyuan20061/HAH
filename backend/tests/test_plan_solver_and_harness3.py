@@ -874,6 +874,7 @@ def test_confirmed_action_records_an_outcome(api, db):
     proposals_before = len(db.scalars(select(ActionOutcome)).all())
     applied = api.post(f"/api/v1/agent/runs/{run_id}/apply-plan", json={})
     assert applied.status_code == 200, applied.text
+    db.rollback()
     db.expire_all()
     outcomes = db.scalars(select(ActionOutcome)).all()
     assert len(outcomes) > proposals_before

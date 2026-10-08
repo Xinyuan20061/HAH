@@ -53,10 +53,14 @@ def claims_for_source_keys(db: Session, source_keys: list[str]) -> list[dict]:
     """Active atomic claims for the given reviewed chunks; empty when none."""
     if not source_keys:
         return []
-    rows = db.scalars(select(KnowledgeClaim).where(
-        KnowledgeClaim.source_key.in_(source_keys),
-        KnowledgeClaim.active.is_(True),
-    )).all()
+    rows = db.scalars(
+        select(KnowledgeClaim)
+        .where(
+            KnowledgeClaim.source_key.in_(source_keys),
+            KnowledgeClaim.active.is_(True),
+        )
+        .order_by(KnowledgeClaim.claim_id, KnowledgeClaim.id)
+    ).all()
     return [_claim_payload(row) for row in rows]
 
 

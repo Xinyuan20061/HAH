@@ -1265,5 +1265,5 @@ def agent_stats(db: Session, user_id: int, days: int = 30) -> dict:
             "target_met_rate_pct": round(target_met / conclusive * 100, 1) if conclusive else None,
             "note": "仅统计用户确认启动的真实微实验；达标表示实验期观察达到预设目标，不代表因果关系。",
         },
-        "note": "降级回退率以 rules-fallback 记录计数；无样本时显示暂无样本，不伪造为 0。",
+        "note": "比例统计近 30 天的服务记录；样本不足时暂不显示。",
     }

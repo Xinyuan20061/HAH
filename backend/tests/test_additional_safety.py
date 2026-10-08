@@ -1,32 +1,212 @@
-from datetime import datetime, date
-from sqlalchemy.orm import Session
-import pytest
+from datetime import date, datetime
+
 import httpx
-from app.core.config import settings, Settings
-from app.core.time import business_day, utc_day_bounds
-from app.services.health_data import daily_facts
-from app.models import DietRecord
-from test_reliability import job, claim, leased_body
+import pytest
+from sqlalchemy.orm import Session
+from test_reliability import claim, job, leased_body
+
+from app.core.config import Settings, settings
 from app.core.json_output import json_object
+from app.core.time import business_day, utc_day_bounds
+from app.models import DietRecord
+from app.services.health_data import daily_facts
 
 
 def test_fully_configured_production_is_valid():
     config = Settings(
         _env_file=None,
         env="production",
+        deployment_profile="dual_client_cloud",
+        mobile_auth_enabled=True,
+        mobile_upload_enabled=True,
         database_url="mysql+pymysql://test:test@localhost/db?charset=utf8mb4",
         storage_backend="cloud_ref",
+        mobile_upload_backend="s3",
+        s3_endpoint_url="https://cos.ap-shanghai.myqcloud.com",
+        s3_access_key="cos-access-key",
+        s3_secret_key="cos-secret-key",
+        s3_bucket="healthmate-test-1250000000",
+        s3_region="ap-shanghai",
+        secret_key="a" * 48,
+        credentials_encryption_key="b" * 48,
+        worker_token="c" * 48,
+        wechat_app_id="wx-test",
+        wechat_app_secret="test",
+        mobile_wechat_app_id="wx-mobile-test",
+        mobile_wechat_app_secret="mobile-test",
+        cloudbase_env_id="test-env",
+        cloudbase_custom_login_credentials_json='{"env_id":"test-env","private_key_id":"test-key","private_key":"test-pem"}',
+        cloudbase_storage_secret_id="test-storage-id",
+        cloudbase_storage_secret_key="test-storage-key",
+        cloudrun_service_name="healthmate-api",
+        public_base_url="https://test.example",
+    )
+    assert config.configuration_errors() == []
+    assert "test:test" not in str(config.safe_summary())
+
+
+def test_s3_cos_mobile_route_preserves_legacy_cloudbase_backend():
+    config = Settings(
+        _env_file=None,
+        env="production",
+        deployment_profile="dual_client_cloud",
+        mobile_auth_enabled=True,
+        mobile_upload_enabled=True,
+        database_url="mysql+pymysql://test:test@localhost/db?charset=utf8mb4",
+        storage_backend="cloud_ref",
+        mobile_upload_backend="s3",
+        s3_endpoint_url="https://cos.ap-shanghai.myqcloud.com",
+        s3_access_key="cos-access-key",
+        s3_secret_key="cos-secret-key",
+        s3_bucket="healthmate-test-1250000000",
+        s3_region="ap-shanghai",
+        secret_key="a" * 48,
+        credentials_encryption_key="b" * 48,
+        worker_token="c" * 48,
+        wechat_app_id="wx-test",
+        wechat_app_secret="test",
+        mobile_wechat_app_id="wx-mobile-test",
+        mobile_wechat_app_secret="mobile-test",
+        cloudbase_env_id="test-env",
+        cloudbase_custom_login_credentials_json='{"env_id":"test-env","private_key_id":"test-key","private_key":"test-pem"}',
+        cloudbase_storage_secret_id="test-storage-id",
+        cloudbase_storage_secret_key="test-storage-key",
+        cloudrun_service_name="healthmate-api",
+        public_base_url="https://test.example",
+    )
+    assert config.configuration_errors() == []
+    assert config.safe_summary()["s3_storage_configured"] is True
+    assert config.safe_summary()["storage_backend"] == "cloud_ref"
+    assert config.safe_summary()["mobile_upload_backend"] == "s3"
+
+
+def test_legacy_wechat_profile_does_not_require_mobile_or_cos_credentials():
+    config = Settings(
+        _env_file=None,
+        env="production",
+        deployment_profile="wechat_cloud",
+        database_url="mysql+pymysql://test:test@localhost/db?charset=utf8mb4",
+        storage_backend="cloud_ref",
+        mobile_upload_backend="cloud_ref",
         secret_key="a" * 48,
         credentials_encryption_key="b" * 48,
         worker_token="c" * 48,
         wechat_app_id="wx-test",
         wechat_app_secret="test",
         cloudbase_env_id="test-env",
+        cloudbase_storage_secret_id="test-storage-id",
+        cloudbase_storage_secret_key="test-storage-key",
         cloudrun_service_name="healthmate-api",
         public_base_url="https://test.example",
     )
     assert config.configuration_errors() == []
-    assert "test:test" not in str(config.safe_summary())
+
+
+def test_s3_cos_production_rejects_missing_storage_credentials():
+    config = Settings(
+        _env_file=None,
+        env="production",
+        deployment_profile="dual_client_cloud",
+        mobile_auth_enabled=True,
+        mobile_upload_enabled=True,
+        database_url="mysql+pymysql://test:test@localhost/db?charset=utf8mb4",
+        storage_backend="cloud_ref",
+        mobile_upload_backend="s3",
+        secret_key="a" * 48,
+        credentials_encryption_key="b" * 48,
+        worker_token="c" * 48,
+        wechat_app_id="wx-test",
+        wechat_app_secret="test",
+        mobile_wechat_app_id="wx-mobile-test",
+        mobile_wechat_app_secret="mobile-test",
+        cloudbase_env_id="test-env",
+        cloudbase_custom_login_credentials_json='{"env_id":"test-env","private_key_id":"test-key","private_key":"test-pem"}',
+        cloudrun_service_name="healthmate-api",
+        public_base_url="https://test.example",
+    )
+    errors = "\n".join(config.configuration_errors())
+    assert "S3_ACCESS_KEY" in errors
+    assert "S3_SECRET_KEY" in errors
+
+
+@pytest.mark.parametrize(
+    "bucket",
+    [
+        "healthmate-media",
+        "HealthMate-1250000000",
+        "healthmate-media-",
+        "healthmate-media-１２３４５６",
+    ]
+)
+def test_android_cos_production_requires_bucket_name_with_app_id(bucket):
+    config = Settings(
+        _env_file=None,
+        env="production",
+        deployment_profile="dual_client_cloud",
+        mobile_upload_enabled=True,
+        mobile_upload_backend="s3",
+        s3_bucket=bucket,
+    )
+
+    assert any("S3_BUCKET" in error for error in config.configuration_errors())
+
+
+def test_android_cos_production_rejects_endpoint_region_mismatch():
+    config = Settings(
+        _env_file=None,
+        env="production",
+        deployment_profile="dual_client_cloud",
+        mobile_upload_enabled=True,
+        mobile_upload_backend="s3",
+        s3_bucket="healthmate-media-1250000000",
+        s3_endpoint_url="https://cos.ap-shanghai.myqcloud.com",
+        s3_region="ap-beijing",
+    )
+
+    assert any("S3_REGION" in error for error in config.configuration_errors())
+
+
+def test_mobile_production_profile_requires_explicit_feature_flags():
+    config = Settings(
+        _env_file=None,
+        env="production",
+        deployment_profile="dual_client_cloud",
+        database_url="mysql+pymysql://test:test@localhost/db?charset=utf8mb4",
+        storage_backend="cloud_ref",
+        mobile_upload_backend="s3",
+        secret_key="a" * 48,
+        credentials_encryption_key="b" * 48,
+        worker_token="c" * 48,
+        wechat_app_id="wx-test",
+        wechat_app_secret="test",
+        cloudbase_env_id="test-env",
+        cloudbase_storage_secret_id="storage-id",
+        cloudbase_storage_secret_key="storage-secret",
+        cloudrun_service_name="healthmate-api",
+        public_base_url="https://test.example",
+    )
+    errors = "\n".join(config.configuration_errors())
+    assert "MOBILE_AUTH_ENABLED" in errors
+    assert "MOBILE_UPLOAD_ENABLED" in errors
+
+
+def test_unset_production_profile_preserves_legacy_wechat_behavior():
+    config = Settings(_env_file=None, env="production")
+    assert config.effective_deployment_profile == "wechat_cloud"
+    assert config.safe_summary()["mobile_auth_enabled"] is False
+    assert config.safe_summary()["mobile_upload_enabled"] is False
+
+
+def test_cloudbase_admin_credentials_must_be_paired():
+    config = Settings(
+        _env_file=None,
+        env="development",
+        cloudbase_storage_secret_id="only-one-half",
+    )
+    assert any(
+        "CLOUDBASE_STORAGE_SECRET_ID" in error
+        for error in config.configuration_errors()
+    )
 
 
 def test_health_days_use_beijing_calendar_and_utc_storage(api, migrated_engine):
@@ -211,6 +391,7 @@ def test_food_requires_explicit_confirmation(api, food_result):
 
 def test_utc_boundary_accepts_offset_and_serializes_z():
     from pydantic import TypeAdapter
+
     from app.core.time import UTCDateTime
 
     adapter = TypeAdapter(UTCDateTime)

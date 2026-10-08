@@ -1,0 +1,253 @@
+{
+  "pages": [
+    {
+      "page": "component/agent-character",
+      "declared": 36,
+      "used": 27,
+      "keyframes": 14
+    },
+    {
+      "page": "component/agent-float",
+      "declared": 50,
+      "used": 49,
+      "keyframes": 3
+    },
+    {
+      "page": "component/page-transition/first-paint",
+      "declared": 0,
+      "used": 4,
+      "keyframes": 0
+    },
+    {
+      "page": "component/page-transition",
+      "declared": 6,
+      "used": 6,
+      "keyframes": 3
+    },
+    {
+      "page": "custom-tab-bar",
+      "declared": 32,
+      "used": 31,
+      "keyframes": 2
+    },
+    {
+      "page": "chat",
+      "declared": 104,
+      "used": 110,
+      "keyframes": 6
+    },
+    {
+      "page": "checkin",
+      "declared": 13,
+      "used": 28,
+      "keyframes": 0
+    },
+    {
+      "page": "evaluation",
+      "declared": 33,
+      "used": 49,
+      "keyframes": 0
+    },
+    {
+      "page": "exercise-detail",
+      "declared": 17,
+      "used": 24,
+      "keyframes": 1
+    },
+    {
+      "page": "goals",
+      "declared": 31,
+      "used": 41,
+      "keyframes": 1
+    },
+    {
+      "page": "home",
+      "declared": 54,
+      "used": 59,
+      "keyframes": 5
+    },
+    {
+      "page": "insights",
+      "declared": 78,
+      "used": 79,
+      "keyframes": 1
+    },
+    {
+      "page": "media",
+      "declared": 157,
+      "used": 87,
+      "keyframes": 2
+    },
+    {
+      "page": "plan",
+      "declared": 57,
+      "used": 69,
+      "keyframes": 2
+    },
+    {
+      "page": "policy/episode",
+      "declared": 3,
+      "used": 28,
+      "keyframes": 0
+    },
+    {
+      "page": "policy/history",
+      "declared": 0,
+      "used": 23,
+      "keyframes": 0
+    },
+    {
+      "page": "policy/overview",
+      "declared": 3,
+      "used": 28,
+      "keyframes": 0
+    },
+    {
+      "page": "policy/protocol",
+      "declared": 0,
+      "used": 23,
+      "keyframes": 0
+    },
+    {
+      "page": "policy/review",
+      "declared": 1,
+      "used": 26,
+      "keyframes": 0
+    },
+    {
+      "page": "profile/edit",
+      "declared": 5,
+      "used": 11,
+      "keyframes": 0
+    },
+    {
+      "page": "profile",
+      "declared": 60,
+      "used": 73,
+      "keyframes": 0
+    },
+    {
+      "page": "records/diet",
+      "declared": 46,
+      "used": 62,
+      "keyframes": 3
+    },
+    {
+      "page": "records/exercise",
+      "declared": 13,
+      "used": 34,
+      "keyframes": 0
+    },
+    {
+      "page": "records",
+      "declared": 43,
+      "used": 56,
+      "keyframes": 2
+    },
+    {
+      "page": "report",
+      "declared": 45,
+      "used": 62,
+      "keyframes": 1
+    },
+    {
+      "page": "scan",
+      "declared": 80,
+      "used": 82,
+      "keyframes": 4
+    },
+    {
+      "page": "settings/ai",
+      "declared": 39,
+      "used": 46,
+      "keyframes": 1
+    },
+    {
+      "page": "settings/capabilities",
+      "declared": 63,
+      "used": 75,
+      "keyframes": 0
+    },
+    {
+      "page": "settings",
+      "declared": 36,
+      "used": 48,
+      "keyframes": 1
+    },
+    {
+      "page": "settings/privacy",
+      "declared": 20,
+      "used": 35,
+      "keyframes": 0
+    },
+    {
+      "page": "state",
+      "declared": 75,
+      "used": 92,
+      "keyframes": 1
+    },
+    {
+      "page": "trends",
+      "declared": 19,
+      "used": 36,
+      "keyframes": 1
+    },
+    {
+      "page": "workout",
+      "declared": 20,
+      "used": 28,
+      "keyframes": 1
+    }
+  ],
+  "findings": [
+    {
+      "severity": "LOW",
+      "page": "component/agent-float",
+      "kind": "dead-css",
+      "message": "1/50 个页面样式类未被本页 WXML 使用（2%）",
+      "detail": "user"
+    },
+    {
+      "severity": "LOW",
+      "page": "evaluation",
+      "kind": "dead-css",
+      "message": "1/33 个页面样式类未被本页 WXML 使用（3%）",
+      "detail": "hero-sub"
+    },
+    {
+      "severity": "LOW",
+      "page": "goals",
+      "kind": "dead-css",
+      "message": "5/31 个页面样式类未被本页 WXML 使用（16%）",
+      "detail": "adaptive-desc, rule-policy, increase, reduce, reason"
+    },
+    {
+      "severity": "MEDIUM",
+      "page": "media",
+      "kind": "dead-css",
+      "message": "90/157 个页面样式类未被本页 WXML 使用（57%）",
+      "detail": "preview-img, actions, secondary, analysis-loading, scanner, scan-grid, scan-line, analysis-section, analysis-head, no-margin, motion-badge, motion-summary, hint, wave, frame-hero, frame-caption, mini-track, method, success, pose-card, pose-title, rep-badge, angle-grid, error-list, error-item, error-name, error-severity, pose-ok, worker-card, worker-state, online, offline, evidence-card, evidence-angle, frame-metric, model-state, score-card, score-title, overall-score, score-radar …(+50)"
+    },
+    {
+      "severity": "LOW",
+      "page": "report",
+      "kind": "dead-css",
+      "message": "2/45 个页面样式类未被本页 WXML 使用（4%）",
+      "detail": "hero-note, facts-note"
+    },
+    {
+      "severity": "LOW",
+      "page": "scan",
+      "kind": "dead-css",
+      "message": "19/80 个页面样式类未被本页 WXML 使用（24%）",
+      "detail": "item-evidence, item-index, item-name, item-kcal, item-evidence-text, derived-total, scan-corners, ingredients, tips, tips-title, estimate-range, evidence-block, evidence-tags, scan-beam, active, beam-line, correction-head, smalltxt, state-success"
+    },
+    {
+      "severity": "LOW",
+      "page": "settings/privacy",
+      "kind": "dead-css",
+      "message": "1/20 个页面样式类未被本页 WXML 使用（5%）",
+      "detail": "boundary-foot"
+    }
+  ]
+}
