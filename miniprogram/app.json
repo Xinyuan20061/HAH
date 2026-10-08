@@ -61,5 +61,15 @@
     ]
   },
   "style": "v2",
-  "sitemapLocation": "sitemap.json"
+  "sitemapLocation": "sitemap.json",
+  "packOptions": {
+    "ignore": [
+      { "type": "folder", "value": "tests" },
+      { "type": "folder", "value": "results" },
+      { "type": "file", "value": "assets/README.md" },
+      { "type": "file", "value": "pages/settings/ai/IMPLEMENTATION.md" },
+      { "type": "file", "value": "utils/CANVAS_CHART.md" },
+      { "type": "file", "value": "PRODUCT_UI.md" }
+    ]
+  }
 }

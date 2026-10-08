@@ -100,7 +100,7 @@ docker run --rm --env-file .\production.env healthmate-api alembic current
 
 连接云内数据库需要相应网络路径；本机 Docker 不会自动获得云内访问能力。可使用平台当前支持的单次执行环境或受控同网段主机运行迁移，不假定控制台提供某个具体按钮。
 
-4. 用 `python -m alembic heads` 查看源码 head；迁移完成后用 `python -m alembic current` 确认目标数据库 revision 与源码 head 一致。当前源码单一 head 为 `0043_mobile_media_upload_sessions`。对新库和已有 Alembic 旧库都执行 upgrade，不要用 stamp 掩盖缺表问题。
+4. 用 `python -m alembic heads` 查看源码 head；迁移完成后用 `python -m alembic current` 确认目标数据库 revision 与源码 head 一致。当前源码单一 head 为 `0044_motion_feedback_idempotency`。对新库和已有 Alembic 旧库都执行 upgrade，不要用 stamp 掩盖缺表问题。
 5. 发布默认启动命令的 Web 版本；先单实例检查，再扩容。
 6. 验证 live 200、ready 200，并检查 `deployment_profile=dual_client_cloud`、两个移动开关为 true、`database_backend=mysql`、`storage_backend=cloud_ref`、`mobile_upload_backend=s3`。小程序继续使用 CloudBase；Android 新上传走独立 COS 路由。
 7. 日志应含脱敏摘要 env/db/storage/port/worker；不能出现 SQLiteImpl 或每次重启 Running upgrade。
@@ -111,7 +111,7 @@ docker run --rm --env-file .\production.env healthmate-api alembic current
 
 `0002/0007` 去掉不兼容的 TEXT DEFAULT；source_url 先可空添加、回填旧行再设非空。`0008` 增加任务去重键、领取请求键、重试时间、调度索引，并扩大 storage_key 和 MySQL result_json 容量。已有任务的新增去重键为空，不会删除旧任务；迁移后创建的任务使用唯一键去重。旧不可恢复 URL 失败改为等待刷新。DATETIME 仍存 naive UTC，API 输出 Z，不更换整库时间类型。
 
-本工作包已在隔离 SQLite 和临时独立 MySQL 8.0.45 实例验证从 `0003_health_goals` 建立旧用户/饮食行、迁移到当前 head、重复升级及旧数据保留；MySQL 验收命令为 `MIGRATION_TEST_DATABASE_URL=mysql+pymysql://.../healthmate_incremental?charset=utf8mb4 python scripts/verify_migrations.py`。测试服务使用全新的临时数据目录，未连接项目 `.env` 中的非本机数据库，执行后已关闭。该结果证明迁移脚本在 MySQL 8.0.45 方言下可运行，但仓库 Compose 固定 MySQL 8.4，线上云数据库的精确版本也尚未确认，因此仍须在目标版本的独立测试库/备份副本验证升级、重复升级、关键旧数据保留和恢复方案；不得把 SQLite 或 MySQL 8.0.45 结果写成目标云数据库验收通过。
+本工作包已在隔离 SQLite 和临时独立 MySQL 8.0.45 实例验证从旧数据基线建立旧用户/饮食行、迁移到当前 head、重复升级及旧数据保留；MySQL 验收命令为 `MIGRATION_TEST_DATABASE_URL=mysql+pymysql://.../healthmate_incremental?charset=utf8mb4 python scripts/verify_migrations.py`。测试服务使用全新的临时数据目录，未连接项目 `.env` 中的非本机数据库，执行后已关闭。该结果证明迁移脚本在 MySQL 8.0.45 方言下可运行，但仓库 Compose 固定 MySQL 8.4，线上云数据库的精确版本也尚未确认，因此仍须在目标版本的独立测试库/备份副本验证升级、重复升级、关键旧数据保留和恢复方案；不得把 SQLite 或 MySQL 8.0.45 结果写成目标云数据库验收通过。
 
 云容器重启或扩容不会执行 create_all、不会复制本地 db/uploads。数据库短暂断开时 live 保持 200，ready 503，恢复后重新就绪。
 

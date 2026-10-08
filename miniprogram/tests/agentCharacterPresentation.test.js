@@ -80,8 +80,8 @@ test('idle companions inhabit distinct scenes with grounded frame animation', ()
   const view = read('components/agent-character/index.wxml')
   const css = read('components/agent-character/index.wxss')
   const assets = [
-    ['xiaojian-idle-curl-v3.png', 2048, 384, true],
-    ['xiaokang-idle-read-v5.png', 2048, 384, true],
+    ['xiaojian-idle-curl-v3.png', 1024, 192, true],
+    ['xiaokang-idle-read-v5.png', 1024, 192, true],
     ['xiaojian-gym-scene-v3.png', 768, 512, false],
     ['xiaokang-wellness-scene-v2.png', 768, 512, false]
   ]
@@ -230,10 +230,10 @@ test('runtime pixel pose atlases stay lightweight and statically packageable', (
     const png = fs.readFileSync(file)
     total += bytes
     assert.ok(bytes < 96 * 1024, `${name} 过大：${bytes} bytes`)
-    assert.equal(png.readUInt32BE(16), 1024, `${name} 图集宽度应为 1024px`)
-    assert.equal(png.readUInt32BE(20), 384, `${name} 图集高度应为 384px`)
+    assert.equal(png.readUInt32BE(16), 768, `${name} 图集宽度应为 768px`)
+    assert.equal(png.readUInt32BE(20), 288, `${name} 图集高度应为 288px`)
     assert.equal(png[24], 8, `${name} 应使用 8-bit 通道`)
-    assert.equal(png[25], 6, `${name} 应为 RGBA PNG`)
+    assert.equal(png[25], 3, `${name} 应为带 tRNS 透明的索引色 PNG`)
   }
   assert.ok(total < 192 * 1024, `两张像素角色图集总计过大：${total} bytes`)
 
